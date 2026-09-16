@@ -13,7 +13,6 @@ import {
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useApp } from '../context/AppContext';
-import { AnimatedPressable } from '../components/common/AnimatedPressable';
 import { updateService, CURRENT_APP_VERSION } from '../services/updateService';
 import { buildWhatsAppReminderMessage } from '../services/whatsapp';
 
@@ -75,7 +74,6 @@ export const SettingsScreen: React.FC = () => {
     updateStoreProfile,
     theme,
     themeMode,
-    setThemeMode,
     toggleThemeMode,
     user,
     logout,
@@ -83,7 +81,7 @@ export const SettingsScreen: React.FC = () => {
     setShowAuthModal,
   } = useApp();
 
-  // Store profile modal & fields
+  // Store profile modal & fields (REAL: updates store profile across app & Supabase)
   const [showStoreModal, setShowStoreModal] = useState(false);
   const [storeName, setStoreName] = useState(store.name || '');
   const [ownerName, setOwnerName] = useState(store.ownerName || '');
@@ -94,15 +92,7 @@ export const SettingsScreen: React.FC = () => {
   const [paperWidth, setPaperWidth] = useState<'58mm' | '80mm'>(store.paperWidth || '58mm');
   const [isSavingStore, setIsSavingStore] = useState(false);
 
-  // Preference switches
-  const [calendarSystem, setCalendarSystem] = useState<'BS' | 'AD'>('BS');
-  const [autoPrint, setAutoPrint] = useState(true);
-  const [scannerEnabled, setScannerEnabled] = useState(true);
-  const [soundboxEnabled, setSoundboxEnabled] = useState(true);
-  const [whatsappEnabled, setWhatsappEnabled] = useState(true);
-  const [autoBackup, setAutoBackup] = useState(true);
-
-  // Change Password state
+  // Change Password state (REAL: verifies current password via Supabase signIn & updates password)
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -113,7 +103,7 @@ export const SettingsScreen: React.FC = () => {
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
 
-  // WhatsApp Template Modal & fields
+  // WhatsApp Template Modal & fields (REAL: saved to store and used when generating WhatsApp reminder in Ledger)
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [messageTemplate, setMessageTemplate] = useState(
     store.whatsappTemplate || PREMADE_TEMPLATES[0].template
@@ -121,7 +111,7 @@ export const SettingsScreen: React.FC = () => {
   const [activePresetId, setActivePresetId] = useState<string>('friendly');
   const [isSavingTemplate, setIsSavingTemplate] = useState(false);
 
-  // Update check
+  // In-app update check (REAL: calls updateService to check GitHub/Supabase releases)
   const [checkingUpdate, setCheckingUpdate] = useState(false);
 
   useEffect(() => {
@@ -267,7 +257,7 @@ export const SettingsScreen: React.FC = () => {
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
     >
-      {/* Profile Header Card */}
+      {/* 1. Profile Header Card */}
       <View
         style={[
           styles.profileCard,
@@ -300,7 +290,7 @@ export const SettingsScreen: React.FC = () => {
         )}
       </View>
 
-      {/* 1. ACCOUNT & SECURITY */}
+      {/* 2. ACCOUNT & SECURITY */}
       <View style={styles.categoryBlock}>
         <Text style={[styles.categoryTitle, { color: theme.colors.textMuted }]}>
           ACCOUNT & SECURITY
@@ -311,7 +301,7 @@ export const SettingsScreen: React.FC = () => {
             { backgroundColor: theme.colors.card, borderColor: theme.colors.borderGlass },
           ]}
         >
-          {user && (
+          {user ? (
             <>
               <TouchableOpacity
                 style={styles.settingRow}
@@ -336,29 +326,6 @@ export const SettingsScreen: React.FC = () => {
               </TouchableOpacity>
 
               <View style={[styles.rowSeparator, { backgroundColor: theme.colors.borderGlass }]} />
-            </>
-          )}
-
-          <View style={styles.settingRow}>
-            <View style={styles.rowLeft}>
-              <View style={styles.iconContainer}>
-                <Feather name="cloud" size={18} color={theme.colors.textPrimary} />
-              </View>
-              <Text style={[styles.rowLabel, { color: theme.colors.textPrimary }]}>
-                Automatic Cloud Backup
-              </Text>
-            </View>
-            <Switch
-              value={autoBackup}
-              onValueChange={setAutoBackup}
-              trackColor={{ false: theme.colors.surface, true: '#FF4500' }}
-              thumbColor="#FFFFFF"
-            />
-          </View>
-
-          {user && (
-            <>
-              <View style={[styles.rowSeparator, { backgroundColor: theme.colors.borderGlass }]} />
 
               <TouchableOpacity style={styles.settingRow} onPress={handleLogout} activeOpacity={0.7}>
                 <View style={styles.rowLeft}>
@@ -372,14 +339,30 @@ export const SettingsScreen: React.FC = () => {
                 <Feather name="chevron-right" size={17} color={theme.colors.textMuted} />
               </TouchableOpacity>
             </>
+          ) : (
+            <TouchableOpacity
+              style={styles.settingRow}
+              onPress={() => setShowAuthModal(true)}
+              activeOpacity={0.7}
+            >
+              <View style={styles.rowLeft}>
+                <View style={styles.iconContainer}>
+                  <Feather name="log-in" size={18} color={theme.colors.primary} />
+                </View>
+                <Text style={[styles.rowLabel, { color: theme.colors.primary, fontWeight: '600' }]}>
+                  Sign In to Cloud Account
+                </Text>
+              </View>
+              <Feather name="chevron-right" size={17} color={theme.colors.textMuted} />
+            </TouchableOpacity>
           )}
         </View>
       </View>
 
-      {/* 2. STORE PROFILE & TAX */}
+      {/* 3. STORE & BUSINESS PROFILE */}
       <View style={styles.categoryBlock}>
         <Text style={[styles.categoryTitle, { color: theme.colors.textMuted }]}>
-          STORE PROFILE & TAX
+          STORE & BUSINESS PROFILE
         </Text>
         <View
           style={[
@@ -397,7 +380,7 @@ export const SettingsScreen: React.FC = () => {
                 <Feather name="shopping-bag" size={18} color={theme.colors.textPrimary} />
               </View>
               <Text style={[styles.rowLabel, { color: theme.colors.textPrimary }]}>
-                Store Details & Address
+                Store Details & PAN
               </Text>
             </View>
             <View style={styles.rowRight}>
@@ -405,7 +388,7 @@ export const SettingsScreen: React.FC = () => {
                 style={[styles.rowValueText, { color: theme.colors.textMuted }]}
                 numberOfLines={1}
               >
-                {store.name || 'Set Store'}
+                {store.name || 'Edit'}
               </Text>
               <Feather name="chevron-right" size={17} color={theme.colors.textMuted} />
             </View>
@@ -418,9 +401,14 @@ export const SettingsScreen: React.FC = () => {
               <View style={styles.iconContainer}>
                 <Feather name="file-text" size={18} color={theme.colors.textPrimary} />
               </View>
-              <Text style={[styles.rowLabel, { color: theme.colors.textPrimary }]}>
-                VAT Registered (13%)
-              </Text>
+              <View>
+                <Text style={[styles.rowLabel, { color: theme.colors.textPrimary }]}>
+                  VAT Registered (13%)
+                </Text>
+                <Text style={[styles.rowSubLabel, { color: theme.colors.textMuted }]}>
+                  Adds 13% VAT breakdown to invoices
+                </Text>
+              </View>
             </View>
             <Switch
               value={vatEnabled}
@@ -435,10 +423,10 @@ export const SettingsScreen: React.FC = () => {
         </View>
       </View>
 
-      {/* 3. DISPLAY & LOCALIZATION */}
+      {/* 4. APPEARANCE */}
       <View style={styles.categoryBlock}>
         <Text style={[styles.categoryTitle, { color: theme.colors.textMuted }]}>
-          DISPLAY & LOCALIZATION
+          APPEARANCE
         </Text>
         <View
           style={[
@@ -455,7 +443,7 @@ export const SettingsScreen: React.FC = () => {
                   color={theme.colors.textPrimary}
                 />
               </View>
-              <Text style={[styles.rowLabel, { color: theme.colors.textPrimary }]}>Dark Theme</Text>
+              <Text style={[styles.rowLabel, { color: theme.colors.textPrimary }]}>Dark Mode</Text>
             </View>
             <Switch
               value={themeMode === 'dark'}
@@ -464,51 +452,13 @@ export const SettingsScreen: React.FC = () => {
               thumbColor="#FFFFFF"
             />
           </View>
-
-          <View style={[styles.rowSeparator, { backgroundColor: theme.colors.borderGlass }]} />
-
-          <TouchableOpacity
-            style={styles.settingRow}
-            onPress={() => setCalendarSystem(calendarSystem === 'BS' ? 'AD' : 'BS')}
-            activeOpacity={0.7}
-          >
-            <View style={styles.rowLeft}>
-              <View style={styles.iconContainer}>
-                <Feather name="calendar" size={18} color={theme.colors.textPrimary} />
-              </View>
-              <Text style={[styles.rowLabel, { color: theme.colors.textPrimary }]}>
-                Calendar System
-              </Text>
-            </View>
-            <View style={styles.rowRight}>
-              <Text style={[styles.rowValueText, { color: theme.colors.textMuted }]}>
-                {calendarSystem === 'BS' ? 'Bikram Sambat (BS)' : 'Gregorian (AD)'}
-              </Text>
-              <Feather name="chevron-right" size={17} color={theme.colors.textMuted} />
-            </View>
-          </TouchableOpacity>
-
-          <View style={[styles.rowSeparator, { backgroundColor: theme.colors.borderGlass }]} />
-
-          <View style={styles.settingRow}>
-            <View style={styles.rowLeft}>
-              <View style={styles.iconContainer}>
-                <Feather name="globe" size={18} color={theme.colors.textPrimary} />
-              </View>
-              <Text style={[styles.rowLabel, { color: theme.colors.textPrimary }]}>Language</Text>
-            </View>
-            <View style={styles.rowRight}>
-              <Text style={[styles.rowValueText, { color: theme.colors.textMuted }]}>English</Text>
-              <Feather name="chevron-right" size={17} color={theme.colors.textMuted} />
-            </View>
-          </View>
         </View>
       </View>
 
-      {/* 4. HARDWARE & DEVICES */}
+      {/* 5. RECEIPT & BILLING */}
       <View style={styles.categoryBlock}>
         <Text style={[styles.categoryTitle, { color: theme.colors.textMuted }]}>
-          HARDWARE & DEVICES
+          RECEIPT & BILLING
         </Text>
         <View
           style={[
@@ -525,9 +475,14 @@ export const SettingsScreen: React.FC = () => {
               <View style={styles.iconContainer}>
                 <Feather name="printer" size={18} color={theme.colors.textPrimary} />
               </View>
-              <Text style={[styles.rowLabel, { color: theme.colors.textPrimary }]}>
-                Receipt Paper Width
-              </Text>
+              <View>
+                <Text style={[styles.rowLabel, { color: theme.colors.textPrimary }]}>
+                  Thermal Paper Width
+                </Text>
+                <Text style={[styles.rowSubLabel, { color: theme.colors.textMuted }]}>
+                  {paperWidth === '58mm' ? '58mm (Compact POS printer)' : '80mm (Standard invoice printer)'}
+                </Text>
+              </View>
             </View>
             <View style={styles.rowRight}>
               <Text style={[styles.rowValueText, { color: theme.colors.textMuted }]}>
@@ -536,51 +491,13 @@ export const SettingsScreen: React.FC = () => {
               <Feather name="chevron-right" size={17} color={theme.colors.textMuted} />
             </View>
           </TouchableOpacity>
-
-          <View style={[styles.rowSeparator, { backgroundColor: theme.colors.borderGlass }]} />
-
-          <View style={styles.settingRow}>
-            <View style={styles.rowLeft}>
-              <View style={styles.iconContainer}>
-                <Feather name="check-circle" size={18} color={theme.colors.textPrimary} />
-              </View>
-              <Text style={[styles.rowLabel, { color: theme.colors.textPrimary }]}>
-                Auto-Print on Checkout
-              </Text>
-            </View>
-            <Switch
-              value={autoPrint}
-              onValueChange={setAutoPrint}
-              trackColor={{ false: theme.colors.surface, true: '#FF4500' }}
-              thumbColor="#FFFFFF"
-            />
-          </View>
-
-          <View style={[styles.rowSeparator, { backgroundColor: theme.colors.borderGlass }]} />
-
-          <View style={styles.settingRow}>
-            <View style={styles.rowLeft}>
-              <View style={styles.iconContainer}>
-                <Feather name="maximize" size={18} color={theme.colors.textPrimary} />
-              </View>
-              <Text style={[styles.rowLabel, { color: theme.colors.textPrimary }]}>
-                Barcode Scanner Device
-              </Text>
-            </View>
-            <Switch
-              value={scannerEnabled}
-              onValueChange={setScannerEnabled}
-              trackColor={{ false: theme.colors.surface, true: '#FF4500' }}
-              thumbColor="#FFFFFF"
-            />
-          </View>
         </View>
       </View>
 
-      {/* 5. VOICE & NOTIFICATIONS */}
+      {/* 6. WHATSAPP NOTIFICATIONS */}
       <View style={styles.categoryBlock}>
         <Text style={[styles.categoryTitle, { color: theme.colors.textMuted }]}>
-          VOICE & NOTIFICATIONS
+          WHATSAPP NOTIFICATIONS
         </Text>
         <View
           style={[
@@ -588,73 +505,6 @@ export const SettingsScreen: React.FC = () => {
             { backgroundColor: theme.colors.card, borderColor: theme.colors.borderGlass },
           ]}
         >
-          <View style={styles.settingRow}>
-            <View style={styles.rowLeft}>
-              <View style={styles.iconContainer}>
-                <Feather name="volume-2" size={18} color={theme.colors.textPrimary} />
-              </View>
-              <Text style={[styles.rowLabel, { color: theme.colors.textPrimary }]}>
-                Voice Payment Chimes
-              </Text>
-            </View>
-            <Switch
-              value={soundboxEnabled}
-              onValueChange={setSoundboxEnabled}
-              trackColor={{ false: theme.colors.surface, true: '#FF4500' }}
-              thumbColor="#FFFFFF"
-            />
-          </View>
-
-          <View style={[styles.rowSeparator, { backgroundColor: theme.colors.borderGlass }]} />
-
-          <TouchableOpacity
-            style={styles.settingRow}
-            onPress={() => Alert.alert('Soundbox', 'Payment chime played successfully.')}
-            activeOpacity={0.7}
-          >
-            <View style={styles.rowLeft}>
-              <View style={styles.iconContainer}>
-                <Feather name="play-circle" size={18} color={theme.colors.textPrimary} />
-              </View>
-              <Text style={[styles.rowLabel, { color: theme.colors.textPrimary }]}>
-                Test Audio Chime
-              </Text>
-            </View>
-            <Feather name="chevron-right" size={17} color={theme.colors.textMuted} />
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* 6. KHATA & WHATSAPP */}
-      <View style={styles.categoryBlock}>
-        <Text style={[styles.categoryTitle, { color: theme.colors.textMuted }]}>
-          KHATA & WHATSAPP
-        </Text>
-        <View
-          style={[
-            styles.cardGroup,
-            { backgroundColor: theme.colors.card, borderColor: theme.colors.borderGlass },
-          ]}
-        >
-          <View style={styles.settingRow}>
-            <View style={styles.rowLeft}>
-              <View style={styles.iconContainer}>
-                <Feather name="message-circle" size={18} color={theme.colors.textPrimary} />
-              </View>
-              <Text style={[styles.rowLabel, { color: theme.colors.textPrimary }]}>
-                WhatsApp Dues Reminders
-              </Text>
-            </View>
-            <Switch
-              value={whatsappEnabled}
-              onValueChange={setWhatsappEnabled}
-              trackColor={{ false: theme.colors.surface, true: '#FF4500' }}
-              thumbColor="#FFFFFF"
-            />
-          </View>
-
-          <View style={[styles.rowSeparator, { backgroundColor: theme.colors.borderGlass }]} />
-
           <TouchableOpacity
             style={styles.settingRow}
             onPress={() => setShowTemplateModal(true)}
@@ -662,11 +512,16 @@ export const SettingsScreen: React.FC = () => {
           >
             <View style={styles.rowLeft}>
               <View style={styles.iconContainer}>
-                <Feather name="edit-3" size={18} color={theme.colors.textPrimary} />
+                <Feather name="message-circle" size={18} color={theme.colors.textPrimary} />
               </View>
-              <Text style={[styles.rowLabel, { color: theme.colors.textPrimary }]}>
-                Reminder Message Template
-              </Text>
+              <View>
+                <Text style={[styles.rowLabel, { color: theme.colors.textPrimary }]}>
+                  Dues Reminder Template
+                </Text>
+                <Text style={[styles.rowSubLabel, { color: theme.colors.textMuted }]}>
+                  Custom message when sending Khata reminders
+                </Text>
+              </View>
             </View>
             <View style={styles.rowRight}>
               <Text style={[styles.rowValueText, { color: theme.colors.textMuted }]}>
@@ -678,35 +533,17 @@ export const SettingsScreen: React.FC = () => {
         </View>
       </View>
 
-      {/* 7. DATA & SYSTEM */}
+      {/* 7. APP INFORMATION */}
       <View style={styles.categoryBlock}>
-        <Text style={[styles.categoryTitle, { color: theme.colors.textMuted }]}>DATA & SYSTEM</Text>
+        <Text style={[styles.categoryTitle, { color: theme.colors.textMuted }]}>
+          APP INFORMATION
+        </Text>
         <View
           style={[
             styles.cardGroup,
             { backgroundColor: theme.colors.card, borderColor: theme.colors.borderGlass },
           ]}
         >
-          <TouchableOpacity
-            style={styles.settingRow}
-            onPress={() =>
-              Alert.alert('Backup Export', 'Local data backup exported to documents directory.')
-            }
-            activeOpacity={0.7}
-          >
-            <View style={styles.rowLeft}>
-              <View style={styles.iconContainer}>
-                <Feather name="download" size={18} color={theme.colors.textPrimary} />
-              </View>
-              <Text style={[styles.rowLabel, { color: theme.colors.textPrimary }]}>
-                Export JSON Backup
-              </Text>
-            </View>
-            <Feather name="chevron-right" size={17} color={theme.colors.textMuted} />
-          </TouchableOpacity>
-
-          <View style={[styles.rowSeparator, { backgroundColor: theme.colors.borderGlass }]} />
-
           <TouchableOpacity
             style={styles.settingRow}
             onPress={handleCheckUpdate}
@@ -733,7 +570,7 @@ export const SettingsScreen: React.FC = () => {
       {/* FOOTER */}
       <View style={styles.footerNote}>
         <Text style={[styles.footerText, { color: theme.colors.textMuted }]}>
-          Byapar Retail OS • Fast, Modern, Offline-First
+          Byapar - Retail Management & Accounting
         </Text>
       </View>
 
@@ -1330,6 +1167,10 @@ const styles = StyleSheet.create({
     fontSize: 14.5,
     fontWeight: '500',
     letterSpacing: -0.2,
+  },
+  rowSubLabel: {
+    fontSize: 11.5,
+    marginTop: 1,
   },
   rowRight: {
     flexDirection: 'row',
