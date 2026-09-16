@@ -1,6 +1,7 @@
 import { Component, createSignal, createMemo, For } from 'solid-js';
-import { items, setItems, persistState } from '../db/localDb';
-import { formatNepaliCurrency, Item } from '@byapar/core';
+import { items, setItems, persistState, currentBusiness, categories } from '../db/localDb';
+import { formatNepaliCurrency, Item, CATEGORY_PRESETS, BusinessType } from '@byapar/core';
+import { supabase } from '../db/auth';
 import { IconPlus, IconSearch, IconX } from './icons';
 
 export const InventoryView: Component = () => {
@@ -8,6 +9,7 @@ export const InventoryView: Component = () => {
   const [showAddModal, setShowAddModal] = createSignal(false);
 
   const [name, setName] = createSignal('');
+  const [category, setCategory] = createSignal('General');
   const [barcode, setBarcode] = createSignal('');
   const [mrp, setMrp] = createSignal<number>(0);
   const [sellingPrice, setSellingPrice] = createSignal<number>(0);
@@ -15,6 +17,14 @@ export const InventoryView: Component = () => {
   const [purchaseCost, setPurchaseCost] = createSignal<number>(0);
   const [currentStock, setCurrentStock] = createSignal<number>(0);
   const [lowStockThreshold, setLowStockThreshold] = createSignal<number>(5);
+
+  const categorySuggestions = createMemo(() => {
+    if (categories && categories.length > 0) {
+      return categories.map((c) => c.name);
+    }
+    const bType = (currentBusiness.businessType || 'general') as BusinessType;
+    return CATEGORY_PRESETS[bType] || CATEGORY_PRESETS.general;
+  });
 
   const totalStockCount = createMemo(() => items.reduce((acc, i) => acc + i.currentStock, 0));
   const lowStockCount = createMemo(() => items.filter((i) => i.currentStock <= i.lowStockThreshold).length);
@@ -30,9 +40,14 @@ export const InventoryView: Component = () => {
     e.preventDefault();
     if (!name() || sellingPrice() <= 0) return;
 
+    const matchedCat = categories.find((c) => c.name.toLowerCase() === category().toLowerCase());
+    const newItemId = crypto.randomUUID();
+    const bizId = currentBusiness.id;
+
     const newItem: Item = {
-      id: crypto.randomUUID(),
-      businessId: 'a0000000-0000-0000-0000-000000000001',
+      id: newItemId,
+      businessId: bizId,
+      categoryId: matchedCat?.id,
       name: name(),
       barcode: barcode() || `890${Math.floor(1000000000 + Math.random() * 9000000000)}`,
       mrp: mrp() || sellingPrice(),
@@ -49,8 +64,36 @@ export const InventoryView: Component = () => {
 
     setItems((draft) => { draft.unshift(newItem); });
     persistState();
+
+    // Cloud insert to Supabase
+    supabase
+      .from('items')
+      .insert({
+        id: newItem.id,
+        business_id: bizId,
+        category_id: matchedCat?.id || null,
+        name: newItem.name,
+        barcode: newItem.barcode,
+        mrp: newItem.mrp,
+        selling_price: newItem.sellingPrice,
+        wholesale_price: newItem.wholesalePrice,
+        purchase_cost: newItem.purchaseCost,
+        current_stock: newItem.currentStock,
+        low_stock_threshold: newItem.lowStockThreshold,
+      })
+      .then(({ error }) => {
+        if (error) console.error('Cloud item insert error:', error);
+      });
+
     setShowAddModal(false);
-    setName(''); setBarcode(''); setMrp(0); setSellingPrice(0); setWholesalePrice(0); setPurchaseCost(0); setCurrentStock(0);
+    setName('');
+    setCategory('General');
+    setBarcode('');
+    setMrp(0);
+    setSellingPrice(0);
+    setWholesalePrice(0);
+    setPurchaseCost(0);
+    setCurrentStock(0);
   };
 
   const handleQuickAdjustStock = (itemId: string, delta: number) => {
@@ -169,6 +212,40 @@ export const InventoryView: Component = () => {
               <div>
                 <label class="block font-semibold text-gray-500 dark:text-neutral-300 mb-1">Product Full Name:</label>
                 <input type="text" required value={name()} onInput={(e) => setName(e.currentTarget.value)} placeholder="e.g. Wai Wai Instant Noodles 75g" class="input-field font-semibold" autofocus />
+              </div>
+
+              <div>
+                <div class="flex justify-between items-center mb-1">
+                  <label class="block font-semibold text-gray-500 dark:text-neutral-300">Category:</label>
+                  <span class="text-[10px] text-gray-400 dark:text-neutral-500 capitalize">Suggestions for {currentBusiness.businessType || 'General'}</span>
+                </div>
+                <input
+                  type="text"
+                  value={category()}
+                  onInput={(e) => setCategory(e.currentTarget.value)}
+                  placeholder="Select or type category..."
+                  class="input-field font-semibold mb-2"
+                />
+                <div class="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
+                  <For each={categorySuggestions()}>
+                    {(catName) => {
+                      const isSelected = category().toLowerCase() === catName.toLowerCase();
+                      return (
+                        <button
+                          type="button"
+                          onClick={() => setCategory(catName)}
+                          class={`px-2.5 py-1 rounded-full text-[11px] font-semibold transition ${
+                            isSelected
+                              ? 'bg-brand-500 text-white shadow-sm'
+                              : 'bg-gray-100 dark:bg-neutral-800 text-gray-600 dark:text-neutral-300 hover:bg-gray-200 dark:hover:bg-neutral-700'
+                          }`}
+                        >
+                          {catName}
+                        </button>
+                      );
+                    }}
+                  </For>
+                </div>
               </div>
 
               <div class="grid grid-cols-2 gap-3">

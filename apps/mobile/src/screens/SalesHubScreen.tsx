@@ -119,6 +119,7 @@ export const SalesHubScreen: React.FC = () => {
       partyId: payPartyId,
       partyName: party ? party.name : 'Unknown Customer',
       amount: amt,
+      type: 'in',
       paymentMode: payMode,
       accountId: payAccountId || undefined,
       date: new Date().toISOString().split('T')[0],
@@ -147,6 +148,7 @@ export const SalesHubScreen: React.FC = () => {
       partyPhone: quotePartyPhone.trim() || undefined,
       date: new Date().toISOString().split('T')[0],
       totalAmount: total,
+      status: 'draft',
       notes: quoteNotes || undefined,
       items: [
         {

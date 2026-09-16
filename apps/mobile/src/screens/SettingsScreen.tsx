@@ -8,6 +8,8 @@ import {
   Switch,
   Alert,
   TouchableOpacity,
+  Modal,
+  ActivityIndicator,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useApp } from '../context/AppContext';
@@ -28,12 +30,19 @@ const PREMADE_TEMPLATES: TemplatePreset[] = [
     name: 'Friendly Reminder',
     badge: 'Standard',
     template:
-      'Namaste {customer_name},\n\nThis is a gentle payment reminder from *{store_name}*.\nYour current pending ledger balance is *Rs. {amount}*.\n\nKindly settle the amount at your earliest convenience via Fonepay / QR or at our store counter.\n\nThank you for your business!',
+      'नमस्ते {name} जी, {store} बाट तपाईंको बाँकी हिसाब रु. {balance} रहेको छ। कृपया समयमै भुक्तानी गरिदिनुहोला। धन्यवाद!',
+  },
+  {
+    id: 'formal',
+    name: 'Formal Notice',
+    badge: 'Business',
+    template:
+      'Dear {name}, this is a gentle reminder from {store} regarding your pending ledger balance of Rs. {balance} as of {date}. Kindly clear the dues at your earliest convenience.',
   },
   {
     id: 'urgent',
     name: 'Urgent Overdue Notice',
-    badge: 'Overdue',
+    badge: 'Urgent',
     template:
       'IMPORTANT NOTICE: Namaste {customer_name},\n\nYour outstanding credit balance of *Rs. {amount}* with *{store_name}* is overdue as of {date}.\n\nPlease clear the pending amount immediately to ensure uninterrupted credit and delivery services.\n\nContact us directly for queries.',
   },
@@ -69,6 +78,7 @@ export const SettingsScreen: React.FC = () => {
     setThemeMode,
     user,
     logout,
+    changePassword,
     setShowAuthModal,
   } = useApp();
 
@@ -81,6 +91,55 @@ export const SettingsScreen: React.FC = () => {
   const [vatEnabled, setVatEnabled] = useState(store.vatEnabled || false);
   const [paperWidth, setPaperWidth] = useState<'58mm' | '80mm'>(store.paperWidth || '58mm');
   const [isSavingStore, setIsSavingStore] = useState(false);
+
+  // Change Password state
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [oldPassword, setOldPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showOldPassword, setShowOldPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [passwordLoading, setPasswordLoading] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+
+  const handleChangePasswordSubmit = async () => {
+    if (!oldPassword.trim()) {
+      setPasswordError('Please enter your current password.');
+      return;
+    }
+    if (!newPassword || newPassword.length < 6) {
+      setPasswordError('New password must be at least 6 characters.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError('New passwords do not match.');
+      return;
+    }
+    if (oldPassword === newPassword) {
+      setPasswordError('New password cannot be the same as your current password.');
+      return;
+    }
+
+    setPasswordLoading(true);
+    setPasswordError(null);
+    try {
+      const res = await changePassword(oldPassword, newPassword);
+      if (res.error) {
+        setPasswordError(res.error);
+      } else {
+        setShowPasswordModal(false);
+        setOldPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
+        Alert.alert('Success', 'Your password has been changed successfully.');
+      }
+    } catch (e: any) {
+      setPasswordError(e.message || 'Failed to change password.');
+    } finally {
+      setPasswordLoading(false);
+    }
+  };
 
   // Message template fields
   const [messageTemplate, setMessageTemplate] = useState(
@@ -237,14 +296,39 @@ export const SettingsScreen: React.FC = () => {
         </View>
 
         {user ? (
-          <AnimatedPressable
-            style={[styles.signOutBtn, { borderColor: theme.colors.rose }]}
-            onPress={handleLogout}
-            activeScale={0.96}
-          >
-            <Feather name="log-out" size={14} color={theme.colors.rose} />
-            <Text style={[styles.signOutBtnText, { color: theme.colors.rose }]}>Sign Out</Text>
-          </AnimatedPressable>
+          <View style={styles.accountActionBtnsRow}>
+            <AnimatedPressable
+              style={[
+                styles.changePasswordBtn,
+                {
+                  borderColor: theme.colors.borderGlass,
+                  backgroundColor: theme.colors.surface,
+                },
+              ]}
+              onPress={() => {
+                setOldPassword('');
+                setNewPassword('');
+                setConfirmPassword('');
+                setPasswordError(null);
+                setShowPasswordModal(true);
+              }}
+              activeScale={0.96}
+            >
+              <Feather name="lock" size={14} color={theme.colors.textPrimary} />
+              <Text style={[styles.changePasswordBtnText, { color: theme.colors.textPrimary }]}>
+                Change Password
+              </Text>
+            </AnimatedPressable>
+
+            <AnimatedPressable
+              style={[styles.signOutBtn, { borderColor: theme.colors.orange }]}
+              onPress={handleLogout}
+              activeScale={0.96}
+            >
+              <Feather name="log-out" size={14} color={theme.colors.orange} />
+              <Text style={[styles.signOutBtnText, { color: theme.colors.orange }]}>Sign Out</Text>
+            </AnimatedPressable>
+          </View>
         ) : (
           <AnimatedPressable
             style={[styles.primaryActionBtn, { backgroundColor: theme.colors.primary }]}
@@ -302,7 +386,7 @@ export const SettingsScreen: React.FC = () => {
                 themeMode === 'dark' && styles.toggleTabTextActive,
               ]}
             >
-              AMOLED Dark
+              Dark
             </Text>
           </TouchableOpacity>
 
@@ -329,7 +413,7 @@ export const SettingsScreen: React.FC = () => {
                 themeMode === 'light' && styles.toggleTabTextActive,
               ]}
             >
-              Daylight Light
+              Light
             </Text>
           </TouchableOpacity>
         </View>
@@ -699,6 +783,187 @@ export const SettingsScreen: React.FC = () => {
           </AnimatedPressable>
         </View>
       </View>
+
+      {/* 6. CHANGE PASSWORD MODAL */}
+      <Modal
+        visible={showPasswordModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowPasswordModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View
+            style={[
+              styles.modalCard,
+              {
+                backgroundColor: themeMode === 'dark' ? '#141414' : '#FFFFFF',
+                borderColor: themeMode === 'dark' ? '#262626' : '#E2E8F0',
+              },
+            ]}
+          >
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={[styles.modalTitle, { color: theme.colors.textPrimary }]}>
+                  Change Password
+                </Text>
+                <Text style={[styles.modalSubtitle, { color: theme.colors.textSecondary }]}>
+                  Verify old password to set a new password
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.modalCloseBtn}
+                onPress={() => setShowPasswordModal(false)}
+              >
+                <Feather name="x" size={18} color={theme.colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            {passwordError && (
+              <View style={styles.passwordErrorBox}>
+                <Feather name="alert-circle" size={15} color="#EF4444" />
+                <Text style={styles.passwordErrorText}>{passwordError}</Text>
+              </View>
+            )}
+
+            <View style={styles.modalForm}>
+              {/* CURRENT PASSWORD */}
+              <View style={styles.modalInputGroup}>
+                <Text style={[styles.modalInputLabel, { color: theme.colors.textSecondary }]}>
+                  Current Password *
+                </Text>
+                <View
+                  style={[
+                    styles.modalInputContainer,
+                    {
+                      backgroundColor: theme.colors.surface,
+                      borderColor: theme.colors.borderGlass,
+                    },
+                  ]}
+                >
+                  <TextInput
+                    style={[styles.modalTextInput, { color: theme.colors.textPrimary }]}
+                    placeholder="Enter current password"
+                    placeholderTextColor={theme.colors.textMuted}
+                    secureTextEntry={!showOldPassword}
+                    value={oldPassword}
+                    onChangeText={setOldPassword}
+                  />
+                  <TouchableOpacity
+                    onPress={() => setShowOldPassword(!showOldPassword)}
+                    style={styles.passwordEyeBtn}
+                  >
+                    <Feather
+                      name={showOldPassword ? 'eye-off' : 'eye'}
+                      size={15}
+                      color={theme.colors.textMuted}
+                    />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* NEW PASSWORD */}
+              <View style={styles.modalInputGroup}>
+                <Text style={[styles.modalInputLabel, { color: theme.colors.textSecondary }]}>
+                  New Password * (Min 6 characters)
+                </Text>
+                <View
+                  style={[
+                    styles.modalInputContainer,
+                    {
+                      backgroundColor: theme.colors.surface,
+                      borderColor: theme.colors.borderGlass,
+                    },
+                  ]}
+                >
+                  <TextInput
+                    style={[styles.modalTextInput, { color: theme.colors.textPrimary }]}
+                    placeholder="Enter new password"
+                    placeholderTextColor={theme.colors.textMuted}
+                    secureTextEntry={!showNewPassword}
+                    value={newPassword}
+                    onChangeText={setNewPassword}
+                  />
+                  <TouchableOpacity
+                    onPress={() => setShowNewPassword(!showNewPassword)}
+                    style={styles.passwordEyeBtn}
+                  >
+                    <Feather
+                      name={showNewPassword ? 'eye-off' : 'eye'}
+                      size={15}
+                      color={theme.colors.textMuted}
+                    />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* CONFIRM NEW PASSWORD */}
+              <View style={styles.modalInputGroup}>
+                <Text style={[styles.modalInputLabel, { color: theme.colors.textSecondary }]}>
+                  Confirm New Password *
+                </Text>
+                <View
+                  style={[
+                    styles.modalInputContainer,
+                    {
+                      backgroundColor: theme.colors.surface,
+                      borderColor: theme.colors.borderGlass,
+                    },
+                  ]}
+                >
+                  <TextInput
+                    style={[styles.modalTextInput, { color: theme.colors.textPrimary }]}
+                    placeholder="Re-type new password"
+                    placeholderTextColor={theme.colors.textMuted}
+                    secureTextEntry={!showConfirmPassword}
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
+                  />
+                  <TouchableOpacity
+                    onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                    style={styles.passwordEyeBtn}
+                  >
+                    <Feather
+                      name={showConfirmPassword ? 'eye-off' : 'eye'}
+                      size={15}
+                      color={theme.colors.textMuted}
+                    />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+
+            <View style={styles.modalActionsRow}>
+              <TouchableOpacity
+                style={[
+                  styles.modalCancelBtn,
+                  {
+                    backgroundColor: theme.colors.surface,
+                    borderColor: theme.colors.borderGlass,
+                  },
+                ]}
+                onPress={() => setShowPasswordModal(false)}
+                disabled={passwordLoading}
+              >
+                <Text style={[styles.modalCancelBtnText, { color: theme.colors.textSecondary }]}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.modalSubmitBtn, { backgroundColor: theme.colors.primary }]}
+                onPress={handleChangePasswordSubmit}
+                disabled={passwordLoading}
+              >
+                {passwordLoading ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.modalSubmitBtnText}>Update Password</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 };
@@ -779,7 +1044,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
   },
-  signOutBtn: {
+  accountActionBtnsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 6,
+  },
+  changePasswordBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -787,7 +1058,20 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 8,
     borderWidth: 1,
-    marginTop: 4,
+  },
+  changePasswordBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  signOutBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
   },
   signOutBtnText: {
     fontSize: 13,
@@ -1016,5 +1300,111 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '700',
+  },
+
+  /* Change Password Modal */
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 420,
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+  },
+  modalSubtitle: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  modalCloseBtn: {
+    padding: 4,
+  },
+  passwordErrorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.3)',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 14,
+  },
+  passwordErrorText: {
+    color: '#EF4444',
+    fontSize: 12,
+    fontWeight: '600',
+    flex: 1,
+  },
+  modalForm: {
+    gap: 12,
+  },
+  modalInputGroup: {
+    gap: 5,
+  },
+  modalInputLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  modalInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 8,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    height: 44,
+  },
+  modalTextInput: {
+    flex: 1,
+    fontSize: 14,
+    height: '100%',
+  },
+  passwordEyeBtn: {
+    padding: 6,
+  },
+  modalActionsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 18,
+  },
+  modalCancelBtn: {
+    flex: 1,
+    height: 44,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCancelBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  modalSubmitBtn: {
+    flex: 1.5,
+    height: 44,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalSubmitBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
   },
 });

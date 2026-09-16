@@ -17,7 +17,10 @@ import {
   PurchaseReturn,
   PaymentRecord,
   StaffMember,
+  CategoryItem,
+  BusinessType,
 } from '../types';
+import { generateUUID } from '../utils/uuid';
 import { getDefaultRolePermissions, StaffRole } from '../db/permissions';
 import { storage } from '../services/storage';
 import { ThemeMode, Theme, getTheme } from '../theme';
@@ -37,6 +40,7 @@ const INITIAL_STORE: StoreProfile = {
   vatEnabled: false,
   paperWidth: '58mm',
   whatsappTemplate: '',
+  businessType: 'general',
 };
 
 interface AppContextType {
@@ -53,11 +57,15 @@ interface AppContextType {
   completeOnboarding: (storeData: StoreProfile) => Promise<void>;
   resetOnboarding: () => Promise<void>;
 
-  // Cloud Auth
+  // Cloud Auth & Synchronization
   user: User | null;
+  activeBizId: string;
+  categories: CategoryItem[];
+  refreshFromCloud: () => Promise<void>;
   login: (email: string, pass: string) => Promise<{ data?: any; error?: any }>;
-  signUp: (email: string, pass: string, storeName: string, phone: string) => Promise<{ data?: any; error?: any }>;
+  signUp: (email: string, pass: string, storeName: string, phone: string, businessType?: BusinessType) => Promise<{ data?: any; error?: any }>;
   logout: () => Promise<void>;
+  changePassword: (oldPassword: string, newPassword: string) => Promise<{ error?: string }>;
   showAuthModal: boolean;
   setShowAuthModal: (visible: boolean) => void;
 
@@ -143,11 +151,12 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 // DB Mapping Utilities
 // ----------------------------------------------------------------------------
 function mapDbToProduct(row: any): Product {
+  const catName = row.categories?.name || row.category || 'General';
   return {
     id: row.id,
     name: row.name,
     barcode: row.barcode || '',
-    category: row.category || 'General',
+    category: catName,
     costPrice: Number(row.purchase_cost) || 0,
     salePrice: Number(row.selling_price) || 0,
     stock: Number(row.current_stock) || 0,
@@ -263,95 +272,185 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Staff Members
   const [staffList, setStaffList] = useState<StaffMember[]>([]);
 
-  const activeBizId = DEFAULT_BIZ_ID;
+  const [activeBizId, setActiveBizId] = useState<string>(DEFAULT_BIZ_ID);
+  const [categories, setCategories] = useState<CategoryItem[]>([]);
 
   // Hydrate Cloud Supabase data
-  const hydrateFromCloud = async () => {
+  const hydrateFromCloud = async (targetBizId?: string) => {
+    const bizId = targetBizId || activeBizId;
+    if (!bizId) return;
+
     try {
-      // 1. Products
+      // 1. Categories
+      const { data: dbCats } = await supabase
+        .from('categories')
+        .select('*')
+        .eq('business_id', bizId)
+        .is('deleted_at', null)
+        .order('created_at', { ascending: true });
+
+      if (dbCats && dbCats.length > 0) {
+        const mappedCats: CategoryItem[] = dbCats.map((c: any) => ({
+          id: c.id,
+          name: c.name,
+          color: c.color_code,
+        }));
+        setCategories(mappedCats);
+        await storage.set('categories', mappedCats);
+      } else {
+        // Automatically seed business categories if empty
+        try {
+          await supabase.rpc('seed_business_categories', {
+            p_biz_id: bizId,
+            p_type: store.businessType || 'general',
+          });
+          const { data: seededCats } = await supabase
+            .from('categories')
+            .select('*')
+            .eq('business_id', bizId)
+            .is('deleted_at', null)
+            .order('created_at', { ascending: true });
+          if (seededCats && seededCats.length > 0) {
+            const mappedCats: CategoryItem[] = seededCats.map((c: any) => ({
+              id: c.id,
+              name: c.name,
+              color: c.color_code,
+            }));
+            setCategories(mappedCats);
+            await storage.set('categories', mappedCats);
+          }
+        } catch (seedErr) {
+          console.warn('Auto seed categories non-fatal:', seedErr);
+        }
+      }
+
+      // 2. Products (with categories relationship join)
       const { data: dbItems } = await supabase
         .from('items')
-        .select('*')
-        .eq('business_id', activeBizId)
+        .select('*, categories(id, name, color_code)')
+        .eq('business_id', bizId)
         .is('deleted_at', null)
         .order('created_at', { ascending: false });
 
       if (dbItems) {
         const mapped = dbItems.map(mapDbToProduct);
         setProducts(mapped);
-        storage.set('products', mapped);
+        await storage.set('products', mapped);
       }
 
-      // 2. Parties
+      // 3. Parties
       const { data: dbParties } = await supabase
         .from('parties')
         .select('*')
-        .eq('business_id', activeBizId)
+        .eq('business_id', bizId)
         .is('deleted_at', null)
         .order('created_at', { ascending: false });
 
       if (dbParties) {
         const mapped = dbParties.map(mapDbToParty);
         setParties(mapped);
-        storage.set('parties', mapped);
+        await storage.set('parties', mapped);
       }
 
-      // 3. Khata Entries
+      // 4. Khata Entries
       const { data: dbKhata } = await supabase
         .from('khata_entries')
         .select('*')
-        .eq('business_id', activeBizId)
+        .eq('business_id', bizId)
         .is('deleted_at', null)
         .order('created_at', { ascending: false });
 
       if (dbKhata) {
         const mapped = dbKhata.map(mapDbToLedger);
         setLedgerEntries(mapped);
-        storage.set('ledger', mapped);
+        await storage.set('ledger', mapped);
       }
 
-      // 4. Invoices
+      // 5. Invoices
       const { data: dbInvoices } = await supabase
         .from('invoices')
         .select('*, invoice_items(*)')
-        .eq('business_id', activeBizId)
+        .eq('business_id', bizId)
         .is('deleted_at', null)
         .order('created_at', { ascending: false });
 
       if (dbInvoices) {
         const mapped = dbInvoices.map(mapDbToInvoice);
         setInvoices(mapped);
-        storage.set('invoices', mapped);
+        await storage.set('invoices', mapped);
       }
 
-      // 5. Bills
+      // 6. Bills
       const { data: dbBills } = await supabase
         .from('bills')
         .select('*')
-        .eq('business_id', activeBizId)
+        .eq('business_id', bizId)
         .order('created_at', { ascending: false });
 
       if (dbBills) {
         const mapped = dbBills.map(mapDbToBill);
         setBills(mapped);
-        storage.set('bills', mapped);
+        await storage.set('bills', mapped);
       }
 
-      // 6. Account Transactions
+      // 7. Account Transactions
       const { data: dbTxs } = await supabase
         .from('account_transactions')
         .select('*')
-        .eq('business_id', activeBizId)
+        .eq('business_id', bizId)
         .order('created_at', { ascending: false });
 
       if (dbTxs) {
         const mapped = dbTxs.map(mapDbToAccountTx);
         setAccountTransactions(mapped);
-        storage.set('account_txs', mapped);
+        await storage.set('account_txs', mapped);
       }
     } catch (err) {
       console.warn('Error hydrating mobile app from cloud:', err);
     }
+  };
+
+  const resolveUserBusiness = async (supabaseUser: User): Promise<string | null> => {
+    try {
+      const { data: membership } = await supabase
+        .from('business_members')
+        .select('business_id, role, businesses(*)')
+        .eq('user_id', supabaseUser.id)
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      if (membership?.business_id) {
+        const resolvedBizId = membership.business_id;
+        setActiveBizId(resolvedBizId);
+        await storage.set('active_biz_id', resolvedBizId);
+
+        const biz = (membership as any).businesses;
+        if (biz) {
+          const updatedStore: StoreProfile = {
+            ...store,
+            id: biz.id,
+            name: biz.name || store.name,
+            businessType: (biz.business_type as BusinessType) || store.businessType || 'general',
+            phone: biz.phone || store.phone,
+            address: biz.address_line || store.address,
+            panNumber: biz.pan_vat_number || store.panNumber,
+          };
+          setStore(updatedStore);
+          await storage.set('store', updatedStore);
+        }
+
+        await hydrateFromCloud(resolvedBizId);
+        return resolvedBizId;
+      }
+    } catch (e) {
+      console.warn('Error resolving user business:', e);
+    }
+    return null;
+  };
+
+  const refreshFromCloud = async () => {
+    await hydrateFromCloud(activeBizId);
   };
 
   useEffect(() => {
@@ -360,6 +459,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const storedOnboarded = await storage.get<boolean>('onboarded', true);
       const storedTheme = await storage.get<ThemeMode>('theme_mode', 'dark');
       const storedStore = await storage.get<StoreProfile>('store', INITIAL_STORE);
+      const storedBizId = await storage.get<string>('active_biz_id', DEFAULT_BIZ_ID);
+      const storedCategories = await storage.get<CategoryItem[]>('categories', []);
       const storedProducts = await storage.get<Product[]>('products', []);
       const storedParties = await storage.get<Party[]>('parties', []);
       const storedLedger = await storage.get<LedgerEntry[]>('ledger', []);
@@ -378,6 +479,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setIsOnboarded(storedOnboarded);
       setThemeModeState(storedTheme === 'light' ? 'light' : 'dark');
       setStore(storedStore);
+      setActiveBizId(storedBizId);
+      setCategories(storedCategories);
       setProducts(storedProducts);
       setParties(storedParties);
       setLedgerEntries(storedLedger);
@@ -399,6 +502,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const { data: sessionData } = await supabase.auth.getSession();
       if (sessionData?.session?.user) {
         setUser(sessionData.session.user);
+        await resolveUserBusiness(sessionData.session.user);
+      } else {
+        await hydrateFromCloud(storedBizId);
       }
 
       setIsReady(true);
@@ -406,65 +512,85 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // Auto-check for updates silently on launch
       updateService.checkForUpdates(true).catch(() => {});
 
-      // 2. Fetch live Cloud data
-      await hydrateFromCloud();
-
-      // 3. Subscribe to Supabase Realtime channel for bi-directional live sync
-      const channel = supabase
-        .channel(`mobile_realtime_${activeBizId}`)
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'items', filter: `business_id=eq.${activeBizId}` },
-          (payload) => {
-            if (payload.eventType === 'INSERT') {
-              const newProd = mapDbToProduct(payload.new);
-              setProducts((prev) => (prev.some((p) => p.id === newProd.id) ? prev : [newProd, ...prev]));
-            } else if (payload.eventType === 'UPDATE') {
-              const updated = mapDbToProduct(payload.new);
-              setProducts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
-            } else if (payload.eventType === 'DELETE') {
-              setProducts((prev) => prev.filter((p) => p.id !== (payload.old as any).id));
-            }
-          }
-        )
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'parties', filter: `business_id=eq.${activeBizId}` },
-          (payload) => {
-            if (payload.eventType === 'INSERT') {
-              const newParty = mapDbToParty(payload.new);
-              setParties((prev) => (prev.some((p) => p.id === newParty.id) ? prev : [newParty, ...prev]));
-            } else if (payload.eventType === 'UPDATE') {
-              const updated = mapDbToParty(payload.new);
-              setParties((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
-            } else if (payload.eventType === 'DELETE') {
-              setParties((prev) => prev.filter((p) => p.id !== (payload.old as any).id));
-            }
-          }
-        )
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'account_transactions', filter: `business_id=eq.${activeBizId}` },
-          (payload) => {
-            if (payload.eventType === 'INSERT') {
-              const newTx = mapDbToAccountTx(payload.new);
-              setAccountTransactions((prev) => (prev.some((t) => t.id === newTx.id) ? prev : [newTx, ...prev]));
-            }
-          }
-        )
-        .subscribe();
-
       // Listen for auth state changes
-      const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
-        setUser(session?.user || null);
+      const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
+        if (session?.user) {
+          setUser(session.user);
+          await resolveUserBusiness(session.user);
+        } else {
+          setUser(null);
+        }
       });
 
       return () => {
-        supabase.removeChannel(channel);
         authListener.subscription.unsubscribe();
       };
     })();
   }, []);
+
+  // Realtime updates subscription whenever activeBizId changes
+  useEffect(() => {
+    if (!activeBizId || activeBizId === DEFAULT_BIZ_ID) return;
+
+    const channel = supabase
+      .channel(`mobile_realtime_${activeBizId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'items', filter: `business_id=eq.${activeBizId}` },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            const newProd = mapDbToProduct(payload.new);
+            setProducts((prev) => (prev.some((p) => p.id === newProd.id) ? prev : [newProd, ...prev]));
+          } else if (payload.eventType === 'UPDATE') {
+            const updated = mapDbToProduct(payload.new);
+            setProducts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+          } else if (payload.eventType === 'DELETE') {
+            setProducts((prev) => prev.filter((p) => p.id !== (payload.old as any).id));
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'parties', filter: `business_id=eq.${activeBizId}` },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            const newParty = mapDbToParty(payload.new);
+            setParties((prev) => (prev.some((p) => p.id === newParty.id) ? prev : [newParty, ...prev]));
+          } else if (payload.eventType === 'UPDATE') {
+            const updated = mapDbToParty(payload.new);
+            setParties((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+          } else if (payload.eventType === 'DELETE') {
+            setParties((prev) => prev.filter((p) => p.id !== (payload.old as any).id));
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'categories', filter: `business_id=eq.${activeBizId}` },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            const c = payload.new as any;
+            const newCat: CategoryItem = { id: c.id, name: c.name, color: c.color_code };
+            setCategories((prev) => (prev.some((x) => x.id === newCat.id) ? prev : [...prev, newCat]));
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'account_transactions', filter: `business_id=eq.${activeBizId}` },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            const newTx = mapDbToAccountTx(payload.new);
+            setAccountTransactions((prev) => (prev.some((t) => t.id === newTx.id) ? prev : [newTx, ...prev]));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [activeBizId]);
 
   const setThemeMode = async (mode: ThemeMode) => {
     setThemeModeState(mode);
@@ -483,32 +609,105 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const res = await supabase.auth.signInWithPassword({ email, password: pass });
     if (res.data?.user) {
       setUser(res.data.user);
+      await resolveUserBusiness(res.data.user);
     }
     return res;
   };
 
-  const signUp = async (email: string, pass: string, storeName: string, phone: string) => {
+  const signUp = async (
+    email: string,
+    pass: string,
+    storeName: string,
+    phone: string,
+    businessType: BusinessType = 'general'
+  ) => {
     const res = await supabase.auth.signUp({
       email,
       password: pass,
       options: {
-        data: { store_name: storeName, phone },
+        data: { store_name: storeName, phone, business_type: businessType },
       },
     });
     if (res.data?.user) {
       setUser(res.data.user);
-      if (storeName) {
-        const updatedStore = { ...store, name: storeName, phone: phone || store.phone };
-        setStore(updatedStore);
-        storage.set('store', updatedStore);
-      }
+      const updatedStore = {
+        ...store,
+        name: storeName || store.name,
+        phone: phone || store.phone,
+        businessType,
+      };
+      setStore(updatedStore);
+      await storage.set('store', updatedStore);
+
+      // Resolve business created by PostgreSQL trigger
+      setTimeout(async () => {
+        if (res.data.user) {
+          await resolveUserBusiness(res.data.user);
+        }
+      }, 700);
     }
     return res;
+  };
+
+  const changePassword = async (oldPassword: string, newPassword: string): Promise<{ error?: string }> => {
+    if (!user?.email) {
+      return { error: 'No active user session found. Please sign in.' };
+    }
+    if (!oldPassword.trim()) {
+      return { error: 'Please enter your current password.' };
+    }
+    if (!newPassword || newPassword.length < 6) {
+      return { error: 'New password must be at least 6 characters long.' };
+    }
+    if (oldPassword === newPassword) {
+      return { error: 'New password cannot be the same as current password.' };
+    }
+
+    try {
+      // 1. Verify current password by re-authenticating with Supabase
+      const { error: verifyErr } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: oldPassword,
+      });
+
+      if (verifyErr) {
+        return { error: 'Incorrect current password. Please try again.' };
+      }
+
+      // 2. Update to new password
+      const { error: updateErr } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
+
+      if (updateErr) {
+        return { error: updateErr.message || 'Failed to update password.' };
+      }
+
+      return {};
+    } catch (e: any) {
+      return { error: e.message || 'An unexpected error occurred while updating password.' };
+    }
   };
 
   const logout = async () => {
     await supabase.auth.signOut();
     setUser(null);
+    setActiveBizId(DEFAULT_BIZ_ID);
+    await storage.set('active_biz_id', DEFAULT_BIZ_ID);
+    setProducts([]);
+    setParties([]);
+    setLedgerEntries([]);
+    setInvoices([]);
+    setBills([]);
+    setAccounts([]);
+    setAccountTransactions([]);
+    setCategories([]);
+    await storage.set('products', []);
+    await storage.set('parties', []);
+    await storage.set('ledger', []);
+    await storage.set('invoices', []);
+    await storage.set('bills', []);
+    await storage.set('categories', []);
   };
 
   // Store Profile
@@ -534,19 +733,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const addProduct = async (productData: Omit<Product, 'id'>) => {
     const newProduct: Product = {
       ...productData,
-      id: Math.random().toString(),
+      id: generateUUID(),
     };
     const updated = [newProduct, ...products];
     setProducts(updated);
     await storage.set('products', updated);
 
+    // Match category ID from categories
+    const matchedCategory = categories.find(
+      (c) => c.name.toLowerCase() === (newProduct.category || '').toLowerCase()
+    );
+
     await supabase.from('items').insert({
       id: newProduct.id,
       business_id: activeBizId,
+      category_id: matchedCategory?.id || null,
       name: newProduct.name,
       barcode: newProduct.barcode,
+      mrp: newProduct.salePrice,
       purchase_cost: newProduct.costPrice,
       selling_price: newProduct.salePrice,
+      wholesale_price: newProduct.salePrice,
       current_stock: newProduct.stock,
       image_url: newProduct.imageUri,
     });
@@ -557,16 +764,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setProducts(updated);
     await storage.set('products', updated);
 
-    await supabase
-      .from('items')
-      .update({
-        name: updates.name,
-        barcode: updates.barcode,
-        purchase_cost: updates.costPrice,
-        selling_price: updates.salePrice,
-        current_stock: updates.stock,
-      })
-      .eq('id', id);
+    const payload: any = {};
+    if (updates.name !== undefined) payload.name = updates.name;
+    if (updates.barcode !== undefined) payload.barcode = updates.barcode;
+    if (updates.costPrice !== undefined) payload.purchase_cost = updates.costPrice;
+    if (updates.salePrice !== undefined) {
+      payload.selling_price = updates.salePrice;
+      payload.mrp = updates.salePrice;
+    }
+    if (updates.stock !== undefined) payload.current_stock = updates.stock;
+    if (updates.imageUri !== undefined) payload.image_url = updates.imageUri;
+
+    if (updates.category) {
+      const matchedCategory = categories.find(
+        (c) => c.name.toLowerCase() === updates.category!.toLowerCase()
+      );
+      if (matchedCategory) {
+        payload.category_id = matchedCategory.id;
+      }
+    }
+
+    if (Object.keys(payload).length > 0) {
+      await supabase.from('items').update(payload).eq('id', id);
+    }
   };
 
   const deleteProduct = async (id: string) => {
@@ -581,7 +801,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const addParty = async (partyData: Omit<Party, 'id' | 'balance'>) => {
     const newParty: Party = {
       ...partyData,
-      id: Math.random().toString(),
+      id: generateUUID(),
       balance: 0,
     };
     const updated = [newParty, ...parties];
@@ -626,7 +846,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const addLedgerEntry = async (entryData: Omit<LedgerEntry, 'id'>) => {
     const newEntry: LedgerEntry = {
       ...entryData,
-      id: Math.random().toString(),
+      id: generateUUID(),
     };
     const updated = [newEntry, ...ledgerEntries];
     setLedgerEntries(updated);
@@ -701,7 +921,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const addBill = async (billData: Omit<BillImage, 'id'>) => {
     const newBill: BillImage = {
       ...billData,
-      id: Math.random().toString(),
+      id: generateUUID(),
     };
     const updated = [newBill, ...bills];
     setBills(updated);
@@ -767,7 +987,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const party = parties.find((p) => p.id === partyId);
 
     const newInvoice: Invoice = {
-      id: Math.random().toString(),
+      id: generateUUID(),
       invoiceNumber,
       date: today,
       partyName: party?.name || 'Cash Counter',
@@ -805,7 +1025,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     // Cloud insert
-    await supabase.from('invoices').insert({
+    const { error: invErr } = await supabase.from('invoices').insert({
       id: newInvoice.id,
       business_id: activeBizId,
       invoice_number: newInvoice.invoiceNumber,
@@ -814,6 +1034,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       payment_mode: mode,
       status: mode === 'credit' ? 'unpaid' : 'paid',
     });
+
+    if (!invErr && cart.length > 0) {
+      const invItems = cart.map((item) => ({
+        id: generateUUID(),
+        invoice_id: newInvoice.id,
+        item_id: item.id.length === 36 ? item.id : null,
+        item_name: item.name,
+        quantity: item.qty,
+        unit_price: item.salePrice,
+        total_amount: item.salePrice * item.qty,
+      }));
+      await supabase.from('invoice_items').insert(invItems);
+    }
 
     clearCart();
     setActiveInvoice(newInvoice);
@@ -824,7 +1057,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const addAccount = async (accData: Omit<BankAccount, 'id'>) => {
     const newAcc: BankAccount = {
       ...accData,
-      id: `acc-${Date.now()}`,
+      id: generateUUID(),
     };
     const updated = [...accounts, newAcc];
     setAccounts(updated);
@@ -856,7 +1089,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await editAccount(accountId, { balance: newBalance });
 
     const tx: AccountTransaction = {
-      id: Math.random().toString(),
+      id: generateUUID(),
       accountId,
       accountName: acc.name,
       transactionType: 'deposit',
@@ -899,7 +1132,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await editAccount(accountId, { balance: newBalance });
 
     const tx: AccountTransaction = {
-      id: Math.random().toString(),
+      id: generateUUID(),
       accountId,
       accountName: acc.name,
       transactionType: 'withdrawal',
@@ -951,7 +1184,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await storage.set('accounts', updatedAccounts);
 
     const txOut: AccountTransaction = {
-      id: Math.random().toString(),
+      id: generateUUID(),
       accountId: fromId,
       accountName: fromAcc.name,
       toAccountId: toId,
@@ -985,7 +1218,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Sales Vouchers
   const createQuotation = async (q: Omit<Quotation, 'id'>) => {
-    const newQ: Quotation = { ...q, id: Math.random().toString() };
+    const newQ: Quotation = { ...q, id: generateUUID() };
     const updated = [newQ, ...quotations];
     setQuotations(updated);
     await storage.set('quotations', updated);
@@ -993,7 +1226,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const createSalesReturn = async (sr: Omit<SalesReturn, 'id'>) => {
-    const newSR: SalesReturn = { ...sr, id: Math.random().toString() };
+    const newSR: SalesReturn = { ...sr, id: generateUUID() };
     const updated = [newSR, ...salesReturns];
     setSalesReturns(updated);
     await storage.set('sales_returns', updated);
@@ -1001,7 +1234,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const createPaymentIn = async (pay: Omit<PaymentRecord, 'id'>) => {
-    const newP: PaymentRecord = { ...pay, id: Math.random().toString() };
+    const newP: PaymentRecord = { ...pay, id: generateUUID() };
     const updated = [newP, ...paymentInRecords];
     setPaymentInRecords(updated);
     await storage.set('pay_in', updated);
@@ -1023,7 +1256,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Purchase Vouchers
   const createPurchaseBill = async (b: Omit<PurchaseBill, 'id'>) => {
-    const newB: PurchaseBill = { ...b, id: Math.random().toString() };
+    const newB: PurchaseBill = { ...b, id: generateUUID() };
     const updated = [newB, ...purchaseBills];
     setPurchaseBills(updated);
     await storage.set('purchase_bills', updated);
@@ -1039,7 +1272,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const createPurchaseReturn = async (pr: Omit<PurchaseReturn, 'id'>) => {
-    const newPR: PurchaseReturn = { ...pr, id: Math.random().toString() };
+    const newPR: PurchaseReturn = { ...pr, id: generateUUID() };
     const updated = [newPR, ...purchaseReturns];
     setPurchaseReturns(updated);
     await storage.set('purchase_returns', updated);
@@ -1055,7 +1288,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const createPaymentOut = async (pay: Omit<PaymentRecord, 'id'>) => {
-    const newP: PaymentRecord = { ...pay, id: Math.random().toString() };
+    const newP: PaymentRecord = { ...pay, id: generateUUID() };
     const updated = [newP, ...paymentOutRecords];
     setPaymentOutRecords(updated);
     await storage.set('pay_out', updated);
@@ -1140,9 +1373,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         completeOnboarding,
         resetOnboarding,
         user,
+        activeBizId,
+        categories,
+        refreshFromCloud,
         login,
         signUp,
         logout,
+        changePassword,
         showAuthModal,
         setShowAuthModal,
         products,

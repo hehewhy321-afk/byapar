@@ -8,6 +8,7 @@ import {
   toggleDarkMode,
   notifications,
   setShowProfileModal,
+  setShowChangePasswordModal,
   setShowSubscriptionModal,
   setShowKeyboardShortcutsModal,
   setShowAuthModal,
@@ -245,6 +246,19 @@ export const TopBar: Component = () => {
                   <IconSparkles class="w-4 h-4 text-amber-500" />
                   <span>Subscription Plan</span>
                 </button>
+
+                <Show when={currentUser()}>
+                  <button
+                    class="w-full text-left px-3.5 py-2 text-xs text-gray-700 dark:text-neutral-300 hover:bg-gray-50 dark:hover:bg-neutral-900 transition-colors flex items-center gap-2.5"
+                    onClick={() => {
+                      setProfileOpen(false);
+                      setShowChangePasswordModal(true);
+                    }}
+                  >
+                    <IconLock class="w-4 h-4 text-[#FF4500]" />
+                    <span>Change Password</span>
+                  </button>
+                </Show>
 
                 <button
                   class="w-full text-left px-3.5 py-2 text-xs text-brand-600 dark:text-emerald-400 hover:bg-gray-50 dark:hover:bg-neutral-900 transition-colors flex items-center gap-2.5"

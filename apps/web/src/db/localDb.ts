@@ -1,5 +1,15 @@
 import { createSignal, createMemo, createStore } from 'solid-js';
-import { Item, Party, Invoice, KhataEntry, CartItem, PaymentMode, InvoiceType } from '@byapar/core';
+import {
+  Item,
+  Party,
+  Invoice,
+  KhataEntry,
+  CartItem,
+  PaymentMode,
+  InvoiceType,
+  BusinessType,
+  CATEGORY_PRESETS,
+} from '@byapar/core';
 import { adToBs, getNepaliFiscalYear } from '@byapar/core';
 import { supabase, currentUser } from './auth';
 import { getDefaultRolePermissions, StaffRole } from './permissions';
@@ -9,6 +19,12 @@ export interface AppSettings {
   calendar: 'BS' | 'AD';
   voiceSoundboxEnabled: boolean;
   thermalPrinterWidth: '58mm' | '80mm';
+}
+
+export interface CategoryItem {
+  id: string;
+  name: string;
+  colorCode?: string;
 }
 
 // Helper to load from localStorage cache for instant UI rendering
@@ -24,6 +40,7 @@ function loadStored<T>(key: string, fallback: T): T {
 // ----------------------------------------------------------------------------
 // Local State Reactive Stores (Hydrated from Cloud Supabase in Realtime)
 // ----------------------------------------------------------------------------
+export const [categories, setCategories] = createStore<CategoryItem[]>(loadStored('categories', []));
 export const [items, setItems] = createStore<Item[]>(loadStored('items', []));
 export const [parties, setParties] = createStore<Party[]>(loadStored('parties', []));
 export const [khataEntries, setKhataEntries] = createStore<KhataEntry[]>(loadStored('khata', []));
@@ -333,6 +350,7 @@ export const [notes, setNotes] = createStore<NoteItem[]>(loadStored('notes', [])
 // Modals Global Signals
 export const [showAuthModal, setShowAuthModal] = createSignal(false);
 export const [showProfileModal, setShowProfileModal] = createSignal(false);
+export const [showChangePasswordModal, setShowChangePasswordModal] = createSignal(false);
 export const [showSubscriptionModal, setShowSubscriptionModal] = createSignal(false);
 export const [showKeyboardShortcutsModal, setShowKeyboardShortcutsModal] = createSignal(false);
 export const [showHelpModal, setShowHelpModal] = createSignal(false);
@@ -340,18 +358,48 @@ export const [showTutorialsModal, setShowTutorialsModal] = createSignal(false);
 export const [showWhatsNewModal, setShowWhatsNewModal] = createSignal(false);
 
 // Reactive Business Profile
-export const [currentBusiness, setCurrentBusiness] = createStore(
-  loadStored('current_business', {
+export const [currentBusiness, setCurrentBusiness] = createStore({
+  id: 'a0000000-0000-0000-0000-000000000001',
+  name: 'Shrestha Mart & General Store',
+  nameEn: 'Shrestha Mart & General Store',
+  ownerName: 'Suman Shrestha',
+  pan: '302918274',
+  address: 'New Road, Kathmandu',
+  phone: '9841234567',
+  businessType: 'general' as BusinessType,
+  isVatRegistered: true,
+  ...loadStored('current_business', {}),
+});
+
+export function resetAllLocalData() {
+  setItems([]);
+  setParties([]);
+  setKhataEntries([]);
+  setInvoices([]);
+  setAccounts([]);
+  setAccountTransactions([]);
+  setStaffList([]);
+  setCategories([]);
+  setCurrentBusiness({
     id: 'a0000000-0000-0000-0000-000000000001',
     name: 'Shrestha Mart & General Store',
     nameEn: 'Shrestha Mart & General Store',
     ownerName: 'Suman Shrestha',
-    pan: '302918274',
-    address: 'New Road, Kathmandu',
-    phone: '9841234567',
-    isVatRegistered: true,
-  })
-);
+    pan: '',
+    address: '',
+    phone: '',
+    businessType: 'general' as BusinessType,
+    isVatRegistered: false,
+  });
+  localStorage.removeItem('byapar_items');
+  localStorage.removeItem('byapar_parties');
+  localStorage.removeItem('byapar_khata');
+  localStorage.removeItem('byapar_invoices');
+  localStorage.removeItem('byapar_accounts');
+  localStorage.removeItem('byapar_account_txs');
+  localStorage.removeItem('byapar_categories');
+  localStorage.removeItem('byapar_current_business');
+}
 
 export function updateBusinessProfile(data: Partial<typeof currentBusiness>) {
   setCurrentBusiness((prev) => Object.assign(prev, data));
@@ -563,6 +611,38 @@ function mapDbStaff(row: any): StaffMember {
 export async function syncFromCloud() {
   const bizId = currentBusiness.id;
   try {
+    // 0. Categories
+    const { data: dbCats } = await supabase
+      .from('categories')
+      .select('*')
+      .eq('business_id', bizId)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: true });
+
+    if (dbCats && dbCats.length > 0) {
+      setCategories(dbCats.map((c: any) => ({ id: c.id, name: c.name, colorCode: c.color_code })));
+      localStorage.setItem('byapar_categories', JSON.stringify(categories));
+    } else {
+      try {
+        await supabase.rpc('seed_business_categories', {
+          p_biz_id: bizId,
+          p_type: currentBusiness.businessType || 'general',
+        });
+        const { data: seededCats } = await supabase
+          .from('categories')
+          .select('*')
+          .eq('business_id', bizId)
+          .is('deleted_at', null)
+          .order('created_at', { ascending: true });
+        if (seededCats && seededCats.length > 0) {
+          setCategories(seededCats.map((c: any) => ({ id: c.id, name: c.name, colorCode: c.color_code })));
+          localStorage.setItem('byapar_categories', JSON.stringify(categories));
+        }
+      } catch (seedErr) {
+        console.warn('Auto seed categories web non-fatal:', seedErr);
+      }
+    }
+
     // 1. Items
     const { data: dbItems } = await supabase
       .from('items')

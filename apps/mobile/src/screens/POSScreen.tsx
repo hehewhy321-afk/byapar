@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -16,19 +16,10 @@ import { AnimatedPressable } from '../components/common/AnimatedPressable';
 import { FadeInView } from '../components/common/FadeInView';
 import { EmptyState } from '../components/common/EmptyState';
 
-const CATEGORIES = [
-  'All',
-  'Grains',
-  'Oil & Ghee',
-  'Spices',
-  'Dairy',
-  'Snacks',
-  'Household',
-];
-
 export const POSScreen: React.FC = () => {
   const {
     products,
+    categories,
     cart,
     addToCart,
     updateCartQty,
@@ -40,6 +31,13 @@ export const POSScreen: React.FC = () => {
     theme,
     themeMode,
   } = useApp();
+
+  const dynamicCategories = useMemo(() => {
+    const catSet = new Set<string>();
+    categories.forEach((c) => { if (c.name) catSet.add(c.name); });
+    products.forEach((p) => { if (p.category) catSet.add(p.category); });
+    return ['All', ...Array.from(catSet)];
+  }, [categories, products]);
 
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
@@ -108,7 +106,7 @@ export const POSScreen: React.FC = () => {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.categoryScroll}
         >
-          {CATEGORIES.map((cat) => {
+          {dynamicCategories.map((cat) => {
             const isCatActive = selectedCategory === cat;
             return (
               <AnimatedPressable

@@ -18,11 +18,39 @@ import { Feather } from '@expo/vector-icons';
 import { useApp } from '../context/AppContext';
 import { supabase } from '../config/supabase';
 import { AnimatedPressable } from '../components/common/AnimatedPressable';
+import { BUSINESS_TYPES } from '@byapar/core';
+import { BusinessType } from '../types';
 
 interface AuthScreenProps {
   visible?: boolean;
   onClose?: () => void;
   fullscreen?: boolean;
+}
+
+// Map business type icon string to valid Feather glyph name
+function getCategoryIcon(iconName: string): keyof typeof Feather.glyphMap {
+  switch (iconName) {
+    case 'shopping-bag':
+      return 'shopping-bag';
+    case 'tag':
+      return 'tag';
+    case 'coffee':
+      return 'coffee';
+    case 'smartphone':
+      return 'smartphone';
+    case 'utensils':
+      return 'disc';
+    case 'home':
+      return 'home';
+    case 'activity':
+      return 'activity';
+    case 'tool':
+      return 'tool';
+    case 'smile':
+      return 'smile';
+    default:
+      return 'grid';
+  }
 }
 
 export const AuthScreen: React.FC<AuthScreenProps> = ({
@@ -32,6 +60,8 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
 }) => {
   const { user, login, signUp, logout, themeMode, store } = useApp();
   const [tab, setTab] = useState<'signin' | 'signup'>('signin');
+  const [signupStep, setSignupStep] = useState<1 | 2>(1);
+  const [selectedBusinessType, setSelectedBusinessType] = useState<BusinessType>('general');
 
   // Form Fields
   const [email, setEmail] = useState('');
@@ -55,7 +85,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
 
   const isDark = themeMode === 'dark';
 
-  // Strict Monochrome Palette per User Requirement: Pure Black & White as per mode
+  // Strict Monochrome Palette: Pure Black & White as per mode with #FF4500 brand button
   const colors = {
     bg: isDark ? '#000000' : '#FFFFFF',
     surface: isDark ? '#0A0A0A' : '#F8F9FA',
@@ -101,24 +131,54 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
     }
   };
 
-  const handleSignUp = async () => {
+  const handleProceedToCategory = () => {
+    if (!storeName.trim()) {
+      setErrorMsg('Please enter your business or store name.');
+      return;
+    }
     if (!email.trim() || !password.trim()) {
-      setErrorMsg('Please enter your email and password.');
+      setErrorMsg('Please enter both email and password.');
       return;
     }
     if (password.length < 6) {
       setErrorMsg('Password must be at least 6 characters.');
       return;
     }
+    setErrorMsg(null);
+    setSignupStep(2);
+  };
+
+  const handleSignUp = async () => {
+    if (!email.trim() || !password.trim()) {
+      setErrorMsg('Please enter your email and password.');
+      setSignupStep(1);
+      return;
+    }
+    if (password.length < 6) {
+      setErrorMsg('Password must be at least 6 characters.');
+      setSignupStep(1);
+      return;
+    }
+    if (!storeName.trim()) {
+      setErrorMsg('Please enter your store name.');
+      setSignupStep(1);
+      return;
+    }
 
     setLoading(true);
     setErrorMsg(null);
     try {
-      const res = await signUp(email.trim(), password, storeName.trim(), phone.trim());
+      const res = await signUp(
+        email.trim(),
+        password,
+        storeName.trim(),
+        phone.trim(),
+        selectedBusinessType
+      );
       if (res.error) {
         setErrorMsg(res.error.message || 'Failed to create account.');
       } else {
-        setSuccessMsg('Store registered successfully! Welcome to Byapar.');
+        setSuccessMsg('Store registered successfully! Preloaded category suggestions.');
         if (onClose) {
           setTimeout(() => {
             onClose();
@@ -196,7 +256,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
         </View>
         <Text style={[styles.brandTitle, { color: colors.textPrimary }]}>Byapar</Text>
         <Text style={[styles.brandTagline, { color: colors.textMuted }]}>
-          Retail Management & Accounting 
+          Retail Management & Accounting
         </Text>
       </View>
 
@@ -210,7 +270,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
           </View>
           <Text style={[styles.userEmail, { color: colors.textPrimary }]}>{user.email}</Text>
           <Text style={[styles.storeSubtitle, { color: colors.textMuted }]}>
-            {store.name || 'Registered Store'}
+            {store.name || 'Registered Store'} • {store.businessType ? store.businessType.toUpperCase() : 'GENERAL'}
           </Text>
 
           <TouchableOpacity style={styles.signOutBtn} onPress={handleSignOut}>
@@ -239,6 +299,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
               ]}
               onPress={() => {
                 setTab('signin');
+                setSignupStep(1);
                 setErrorMsg(null);
                 setSuccessMsg(null);
               }}
@@ -266,6 +327,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
               ]}
               onPress={() => {
                 setTab('signup');
+                setSignupStep(1);
                 setErrorMsg(null);
                 setSuccessMsg(null);
               }}
@@ -300,12 +362,120 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
             </View>
           )}
 
-          {/* SIGN UP EXTRA FIELDS */}
-          {tab === 'signup' && (
+          {/* SIGN IN VIEW */}
+          {tab === 'signin' && (
             <>
               <View style={styles.inputGroup}>
                 <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
-                  Business / Store Name
+                  Email Address
+                </Text>
+                <View
+                  style={[
+                    styles.inputContainer,
+                    {
+                      backgroundColor: colors.inputBg,
+                      borderColor: colors.border,
+                    },
+                  ]}
+                >
+                  <Feather
+                    name="mail"
+                    size={16}
+                    color={colors.textMuted}
+                    style={styles.inputIcon}
+                  />
+                  <TextInput
+                    style={[styles.input, { color: colors.textPrimary }]}
+                    placeholder="store@example.com"
+                    placeholderTextColor={colors.textMuted}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    value={email}
+                    onChangeText={setEmail}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
+                  Password
+                </Text>
+                <View
+                  style={[
+                    styles.inputContainer,
+                    {
+                      backgroundColor: colors.inputBg,
+                      borderColor: colors.border,
+                    },
+                  ]}
+                >
+                  <Feather
+                    name="lock"
+                    size={16}
+                    color={colors.textMuted}
+                    style={styles.inputIcon}
+                  />
+                  <TextInput
+                    style={[styles.input, { color: colors.textPrimary }]}
+                    placeholder="••••••••"
+                    placeholderTextColor={colors.textMuted}
+                    secureTextEntry={!showPassword}
+                    value={password}
+                    onChangeText={setPassword}
+                  />
+                  <TouchableOpacity
+                    onPress={() => setShowPassword(!showPassword)}
+                    style={styles.eyeBtn}
+                  >
+                    <Feather
+                      name={showPassword ? 'eye-off' : 'eye'}
+                      size={16}
+                      color={colors.textMuted}
+                    />
+                  </TouchableOpacity>
+                </View>
+
+                {/* FORGOT PASSWORD LINK BELOW PASSWORD FIELD */}
+                <TouchableOpacity
+                  style={styles.forgotPassBtn}
+                  onPress={() => {
+                    setForgotEmail(email);
+                    setForgotMsg(null);
+                    setForgotModalVisible(true);
+                  }}
+                >
+                  <Text style={[styles.forgotLink, { color: colors.textSecondary }]}>
+                    Forgot Password?
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              <AnimatedPressable
+                style={[styles.submitBtn, { backgroundColor: colors.buttonBg }]}
+                onPress={handleSignIn}
+                disabled={loading}
+                activeScale={0.96}
+              >
+                {loading ? (
+                  <ActivityIndicator color={colors.buttonText} size="small" />
+                ) : (
+                  <>
+                    <Feather name="log-in" size={17} color={colors.buttonText} />
+                    <Text style={[styles.submitBtnText, { color: colors.buttonText }]}>
+                      Sign In
+                    </Text>
+                  </>
+                )}
+              </AnimatedPressable>
+            </>
+          )}
+
+          {/* SIGN UP STEP 1: CREDENTIALS & STORE DETAILS */}
+          {tab === 'signup' && signupStep === 1 && (
+            <>
+              <View style={styles.inputGroup}>
+                <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
+                  Business / Store Name *
                 </Text>
                 <View
                   style={[
@@ -390,117 +560,205 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                   />
                 </View>
               </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
+                  Email Address *
+                </Text>
+                <View
+                  style={[
+                    styles.inputContainer,
+                    {
+                      backgroundColor: colors.inputBg,
+                      borderColor: colors.border,
+                    },
+                  ]}
+                >
+                  <Feather
+                    name="mail"
+                    size={16}
+                    color={colors.textMuted}
+                    style={styles.inputIcon}
+                  />
+                  <TextInput
+                    style={[styles.input, { color: colors.textPrimary }]}
+                    placeholder="store@example.com"
+                    placeholderTextColor={colors.textMuted}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    value={email}
+                    onChangeText={setEmail}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
+                  Password * (Min 6 characters)
+                </Text>
+                <View
+                  style={[
+                    styles.inputContainer,
+                    {
+                      backgroundColor: colors.inputBg,
+                      borderColor: colors.border,
+                    },
+                  ]}
+                >
+                  <Feather
+                    name="lock"
+                    size={16}
+                    color={colors.textMuted}
+                    style={styles.inputIcon}
+                  />
+                  <TextInput
+                    style={[styles.input, { color: colors.textPrimary }]}
+                    placeholder="••••••••"
+                    placeholderTextColor={colors.textMuted}
+                    secureTextEntry={!showPassword}
+                    value={password}
+                    onChangeText={setPassword}
+                  />
+                  <TouchableOpacity
+                    onPress={() => setShowPassword(!showPassword)}
+                    style={styles.eyeBtn}
+                  >
+                    <Feather
+                      name={showPassword ? 'eye-off' : 'eye'}
+                      size={16}
+                      color={colors.textMuted}
+                    />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <AnimatedPressable
+                style={[styles.submitBtn, { backgroundColor: colors.buttonBg }]}
+                onPress={handleProceedToCategory}
+                activeScale={0.96}
+              >
+                <Text style={[styles.submitBtnText, { color: colors.buttonText }]}>
+                  Continue: Business Category
+                </Text>
+                <Feather name="arrow-right" size={17} color={colors.buttonText} />
+              </AnimatedPressable>
             </>
           )}
 
-          {/* COMMON: EMAIL & PASSWORD */}
-          <View style={styles.inputGroup}>
-            <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
-              Email Address
-            </Text>
-            <View
-              style={[
-                styles.inputContainer,
-                {
-                  backgroundColor: colors.inputBg,
-                  borderColor: colors.border,
-                },
-              ]}
-            >
-              <Feather
-                name="mail"
-                size={16}
-                color={colors.textMuted}
-                style={styles.inputIcon}
-              />
-              <TextInput
-                style={[styles.input, { color: colors.textPrimary }]}
-                placeholder="store@example.com"
-                placeholderTextColor={colors.textMuted}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                value={email}
-                onChangeText={setEmail}
-              />
-            </View>
-          </View>
+          {/* SIGN UP STEP 2: BUSINESS CATEGORY SELECTION */}
+          {tab === 'signup' && signupStep === 2 && (
+            <View style={styles.categoryStepContainer}>
+              <View style={styles.stepHeaderRow}>
+                <TouchableOpacity
+                  onPress={() => {
+                    setErrorMsg(null);
+                    setSignupStep(1);
+                  }}
+                  style={styles.stepBackBtn}
+                >
+                  <Feather name="arrow-left" size={18} color={colors.textPrimary} />
+                  <Text style={[styles.stepBackText, { color: colors.textPrimary }]}>Back</Text>
+                </TouchableOpacity>
+                <View style={[styles.stepBadge, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                  <Text style={[styles.stepBadgeText, { color: colors.textSecondary }]}>Step 2 of 2</Text>
+                </View>
+              </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
-              Password
-            </Text>
-            <View
-              style={[
-                styles.inputContainer,
-                {
-                  backgroundColor: colors.inputBg,
-                  borderColor: colors.border,
-                },
-              ]}
-            >
-              <Feather
-                name="lock"
-                size={16}
-                color={colors.textMuted}
-                style={styles.inputIcon}
-              />
-              <TextInput
-                style={[styles.input, { color: colors.textPrimary }]}
-                placeholder="••••••••"
-                placeholderTextColor={colors.textMuted}
-                secureTextEntry={!showPassword}
-                value={password}
-                onChangeText={setPassword}
-              />
-              <TouchableOpacity
-                onPress={() => setShowPassword(!showPassword)}
-                style={styles.eyeBtn}
-              >
-                <Feather
-                  name={showPassword ? 'eye-off' : 'eye'}
-                  size={16}
-                  color={colors.textMuted}
-                />
-              </TouchableOpacity>
-            </View>
-            {tab === 'signin' && (
-              <TouchableOpacity
-                style={styles.forgotPassBtn}
-                onPress={() => {
-                  setForgotEmail(email);
-                  setForgotMsg(null);
-                  setForgotModalVisible(true);
-                }}
-              >
-                <Text style={[styles.forgotLink, { color: colors.textSecondary }]}>
-                  Forgot Password?
-                </Text>
-              </TouchableOpacity>
-            )}
-          </View>
+              <Text style={[styles.stepTitle, { color: colors.textPrimary }]}>
+                Choose Your Business Type
+              </Text>
+              <Text style={[styles.stepSubtitle, { color: colors.textMuted }]}>
+                We'll preload tailored product categories and inventory suggestions for your store.
+              </Text>
 
-          {/* MONOCHROME SUBMIT BUTTON */}
-          <AnimatedPressable
-            style={[styles.submitBtn, { backgroundColor: colors.buttonBg }]}
-            onPress={tab === 'signin' ? handleSignIn : handleSignUp}
-            disabled={loading}
-            activeScale={0.96}
-          >
-            {loading ? (
-              <ActivityIndicator color={colors.buttonText} size="small" />
-            ) : (
-              <>
-                <Feather
-                  name={tab === 'signin' ? 'log-in' : 'arrow-right'}
-                  size={17}
-                  color={colors.buttonText}
-                />
-                <Text style={[styles.submitBtnText, { color: colors.buttonText }]}>
-                  {tab === 'signin' ? 'Sign In' : 'Create Store Account'}
-                </Text>
-              </>
-            )}
-          </AnimatedPressable>
+              {/* Grid of Business Types */}
+              <View style={styles.categoryGrid}>
+                {BUSINESS_TYPES.map((bt) => {
+                  const isSelected = selectedBusinessType === bt.id;
+                  return (
+                    <TouchableOpacity
+                      key={bt.id}
+                      style={[
+                        styles.categoryCard,
+                        {
+                          backgroundColor: colors.surface,
+                          borderColor: isSelected ? '#FF4500' : colors.border,
+                          borderWidth: isSelected ? 2 : 1,
+                        },
+                      ]}
+                      onPress={() => setSelectedBusinessType(bt.id)}
+                      activeOpacity={0.75}
+                    >
+                      <View style={styles.categoryCardHeader}>
+                        <View
+                          style={[
+                            styles.categoryIconBox,
+                            {
+                              backgroundColor: isSelected ? '#FF4500' : isDark ? '#1F1F1F' : '#E2E8F0',
+                            },
+                          ]}
+                        >
+                          <Feather
+                            name={getCategoryIcon(bt.icon)}
+                            size={16}
+                            color={isSelected ? '#FFFFFF' : colors.textPrimary}
+                          />
+                        </View>
+                        <View
+                          style={[
+                            styles.radioCircle,
+                            {
+                              borderColor: isSelected ? '#FF4500' : colors.border,
+                              backgroundColor: isSelected ? '#FF4500' : 'transparent',
+                            },
+                          ]}
+                        >
+                          {isSelected && <Feather name="check" size={11} color="#FFFFFF" />}
+                        </View>
+                      </View>
+
+                      <Text
+                        style={[
+                          styles.categoryLabel,
+                          {
+                            color: isSelected ? colors.textPrimary : colors.textPrimary,
+                            fontWeight: isSelected ? '800' : '700',
+                          },
+                        ]}
+                      >
+                        {bt.label}
+                      </Text>
+                      <Text
+                        style={[styles.categorySub, { color: colors.textMuted }]}
+                        numberOfLines={2}
+                      >
+                        {bt.sub}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {/* Complete Registration Button */}
+              <AnimatedPressable
+                style={[styles.submitBtn, { backgroundColor: colors.buttonBg, marginTop: 18 }]}
+                onPress={handleSignUp}
+                disabled={loading}
+                activeScale={0.96}
+              >
+                {loading ? (
+                  <ActivityIndicator color={colors.buttonText} size="small" />
+                ) : (
+                  <>
+                    <Feather name="check-circle" size={17} color={colors.buttonText} />
+                    <Text style={[styles.submitBtnText, { color: colors.buttonText }]}>
+                      Complete & Launch Store
+                    </Text>
+                  </>
+                )}
+              </AnimatedPressable>
+            </View>
+          )}
         </View>
       )}
 
@@ -555,7 +813,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                     Reset Password
                   </Text>
                   <Text style={[styles.sheetSub, { color: colors.textMuted }]}>
-                    We will send a recovery link to your email
+                    We will send a reset link to your email
                   </Text>
                 </View>
               </View>
@@ -567,6 +825,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
               </TouchableOpacity>
             </View>
 
+            {/* Notification alert within shift-up sheet */}
             {forgotMsg && (
               <View
                 style={[
@@ -617,27 +876,27 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                   autoCapitalize="none"
                   value={forgotEmail}
                   onChangeText={setForgotEmail}
+                  autoFocus
                 />
               </View>
             </View>
 
-            <AnimatedPressable
+            <TouchableOpacity
               style={[styles.sheetSubmitBtn, { backgroundColor: colors.buttonBg }]}
               onPress={handleResetPassword}
               disabled={forgotLoading}
-              activeScale={0.96}
             >
               {forgotLoading ? (
                 <ActivityIndicator color={colors.buttonText} size="small" />
               ) : (
                 <>
-                  <Feather name="send" size={15} color={colors.buttonText} />
+                  <Feather name="send" size={16} color={colors.buttonText} />
                   <Text style={[styles.sheetSubmitBtnText, { color: colors.buttonText }]}>
-                    Send Recovery Link
+                    Send Recovery Email
                   </Text>
                 </>
               )}
-            </AnimatedPressable>
+            </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
       </Modal>
@@ -666,8 +925,8 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
   return (
     <Modal
       visible={visible}
-      transparent
       animationType="fade"
+      transparent
       onRequestClose={onClose}
     >
       <View style={styles.modalOverlay}>
@@ -743,32 +1002,75 @@ const styles = StyleSheet.create({
   },
   heroSection: {
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 20,
   },
   logoBadge: {
     width: 68,
     height: 68,
-    borderRadius: 34,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
     borderWidth: 1,
-    marginBottom: 12,
+    marginBottom: 10,
+    overflow: 'hidden',
   },
   logoImg: {
-    width: 52,
-    height: 52,
+    width: 50,
+    height: 50,
   },
   brandTitle: {
-    fontSize: 26,
+    fontSize: 22,
     fontWeight: '900',
-    letterSpacing: -0.6,
+    letterSpacing: -0.5,
   },
   brandTagline: {
-    fontSize: 13,
-    marginTop: 4,
+    fontSize: 12,
+    marginTop: 2,
     fontWeight: '500',
-    letterSpacing: 0.2,
+  },
+  loggedInBox: {
+    alignItems: 'center',
+    padding: 24,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginTop: 8,
+  },
+  userAvatar: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  userAvatarText: {
+    fontSize: 24,
+    fontWeight: '800',
+  },
+  userEmail: {
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  storeSubtitle: {
+    fontSize: 13,
+    marginBottom: 20,
+  },
+  signOutBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.25)',
+  },
+  signOutBtnText: {
+    color: '#EF4444',
+    fontSize: 13,
+    fontWeight: '700',
   },
   bodySection: {
     width: '100%',
@@ -776,16 +1078,16 @@ const styles = StyleSheet.create({
   tabSelector: {
     flexDirection: 'row',
     borderRadius: 12,
-    padding: 4,
+    padding: 3,
     borderWidth: 1,
-    marginBottom: 20,
+    marginBottom: 18,
   },
   tabBtn: {
     flex: 1,
     paddingVertical: 10,
+    borderRadius: 9,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 8,
   },
   tabBtnText: {
     fontSize: 13,
@@ -798,11 +1100,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: 'rgba(239, 68, 68, 0.12)',
-    borderColor: '#EF4444',
-    borderWidth: 1,
     padding: 12,
     borderRadius: 10,
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.25)',
     marginBottom: 14,
   },
   errorText: {
@@ -815,11 +1117,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: 'rgba(16, 185, 129, 0.12)',
-    borderColor: '#10B981',
-    borderWidth: 1,
     padding: 12,
     borderRadius: 10,
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.25)',
     marginBottom: 14,
   },
   successText: {
@@ -831,36 +1133,20 @@ const styles = StyleSheet.create({
   inputGroup: {
     marginBottom: 14,
   },
-  labelRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
   inputLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-    marginBottom: 6,
-  },
-  forgotPassBtn: {
-    alignSelf: 'flex-end',
-    marginTop: 8,
-    paddingVertical: 4,
-    paddingHorizontal: 2,
-  },
-  forgotLink: {
     fontSize: 12,
     fontWeight: '700',
+    marginBottom: 6,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: 10,
     borderWidth: 1,
+    paddingHorizontal: 12,
     height: 48,
-    paddingHorizontal: 14,
   },
   inputIcon: {
     marginRight: 10,
@@ -868,10 +1154,20 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     fontSize: 14,
-    padding: 0,
+    fontWeight: '500',
   },
   eyeBtn: {
     padding: 6,
+  },
+  forgotPassBtn: {
+    alignSelf: 'flex-end',
+    marginTop: 8,
+    paddingVertical: 2,
+  },
+  forgotLink: {
+    fontSize: 12,
+    fontWeight: '600',
+    textDecorationLine: 'underline',
   },
   submitBtn: {
     flexDirection: 'row',
@@ -879,56 +1175,90 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     height: 50,
-    borderRadius: 10,
-    marginTop: 14,
+    borderRadius: 12,
+    marginTop: 8,
   },
   submitBtnText: {
-    color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '800',
-    letterSpacing: 0.2,
   },
-  loggedInBox: {
+
+  /* Step 2 Category Selection */
+  categoryStepContainer: {
+    width: '100%',
+  },
+  stepHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 24,
-    borderRadius: 16,
-    borderWidth: 1,
-    gap: 6,
+    marginBottom: 10,
   },
-  userAvatar: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
-  },
-  userAvatarText: {
-    fontSize: 26,
-    fontWeight: '800',
-  },
-  userEmail: {
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  storeSubtitle: {
-    fontSize: 13,
-  },
-  signOutBtn: {
+  stepBackBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#EF4444',
-    marginTop: 14,
+    paddingVertical: 4,
+    paddingHorizontal: 2,
   },
-  signOutBtnText: {
-    color: '#EF4444',
+  stepBackText: {
     fontSize: 13,
     fontWeight: '700',
+  },
+  stepBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  stepBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  stepTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  stepSubtitle: {
+    fontSize: 12,
+    marginBottom: 14,
+    lineHeight: 17,
+  },
+  categoryGrid: {
+    gap: 10,
+  },
+  categoryCard: {
+    padding: 12,
+    borderRadius: 12,
+  },
+  categoryCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  categoryIconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  radioCircle: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  categoryLabel: {
+    fontSize: 14,
+    marginBottom: 2,
+  },
+  categorySub: {
+    fontSize: 11,
+    lineHeight: 15,
   },
 
   /* Shift-Up Bottom Sheet Styles */

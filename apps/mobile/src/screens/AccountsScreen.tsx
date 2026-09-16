@@ -12,6 +12,7 @@ import {
 import { Feather } from '@expo/vector-icons';
 import { useApp } from '../context/AppContext';
 import { BankAccount, AccountTransaction } from '../types';
+import { Theme, ThemeMode } from '../theme';
 
 export const AccountsScreen: React.FC = () => {
   const {
@@ -24,7 +25,10 @@ export const AccountsScreen: React.FC = () => {
     withdrawMoney,
     transferMoney,
     theme,
+    themeMode,
   } = useApp();
+
+  const styles = useMemo(() => createStyles(theme, themeMode), [theme, themeMode]);
 
   const [activeTab, setActiveTab] = useState<'accounts' | 'history'>('accounts');
   const [selectedAccountId, setSelectedAccountId] = useState<string>('all');
@@ -197,7 +201,7 @@ export const AccountsScreen: React.FC = () => {
           <Feather
             name="credit-card"
             size={16}
-            color={activeTab === 'accounts' ? '#FF4500' : '#888888'}
+            color={activeTab === 'accounts' ? theme.colors.primary : theme.colors.textMuted}
           />
           <Text style={[styles.tabText, activeTab === 'accounts' && styles.tabTextActive]}>
             Accounts ({accounts.length})
@@ -211,7 +215,7 @@ export const AccountsScreen: React.FC = () => {
           <Feather
             name="clock"
             size={16}
-            color={activeTab === 'history' ? '#FF4500' : '#888888'}
+            color={activeTab === 'history' ? theme.colors.primary : theme.colors.textMuted}
           />
           <Text style={[styles.tabText, activeTab === 'history' && styles.tabTextActive]}>
             Transaction History ({accountTransactions.length})
@@ -261,13 +265,13 @@ export const AccountsScreen: React.FC = () => {
                     style={styles.iconActionBtn}
                     onPress={() => openEditAccount(acc)}
                   >
-                    <Feather name="edit-2" size={15} color="#888888" />
+                    <Feather name="edit-2" size={15} color={theme.colors.textSecondary} />
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.iconActionBtn}
                     onPress={() => handleDeleteAccount(acc)}
                   >
-                    <Feather name="trash-2" size={15} color="#FF4D4F" />
+                    <Feather name="trash-2" size={15} color={themeMode === 'dark' ? '#FF4D4F' : '#DC2626'} />
                   </TouchableOpacity>
                 </View>
               </View>
@@ -284,7 +288,7 @@ export const AccountsScreen: React.FC = () => {
                   style={[styles.quickActionBtn, styles.btnDeposit]}
                   onPress={() => openMoneyModal(acc, 'deposit')}
                 >
-                  <Feather name="arrow-down-left" size={14} color="#10B981" />
+                  <Feather name="arrow-down-left" size={14} color={themeMode === 'dark' ? '#10B981' : '#059669'} />
                   <Text style={styles.btnDepositText}>+ Add Money</Text>
                 </TouchableOpacity>
 
@@ -292,7 +296,7 @@ export const AccountsScreen: React.FC = () => {
                   style={[styles.quickActionBtn, styles.btnWithdraw]}
                   onPress={() => openMoneyModal(acc, 'withdraw')}
                 >
-                  <Feather name="arrow-up-right" size={14} color="#FF4D4F" />
+                  <Feather name="arrow-up-right" size={14} color={themeMode === 'dark' ? '#FF4D4F' : '#DC2626'} />
                   <Text style={styles.btnWithdrawText}>- Reduce Money</Text>
                 </TouchableOpacity>
 
@@ -300,7 +304,7 @@ export const AccountsScreen: React.FC = () => {
                   style={[styles.quickActionBtn, styles.btnTransfer]}
                   onPress={() => openMoneyModal(acc, 'transfer')}
                 >
-                  <Feather name="repeat" size={14} color="#3B82F6" />
+                  <Feather name="repeat" size={14} color={themeMode === 'dark' ? '#3B82F6' : '#2563EB'} />
                   <Text style={styles.btnTransferText}>Transfer</Text>
                 </TouchableOpacity>
               </View>
@@ -357,7 +361,7 @@ export const AccountsScreen: React.FC = () => {
           <ScrollView contentContainerStyle={styles.txList} showsVerticalScrollIndicator={false}>
             {filteredTransactions.length === 0 ? (
               <View style={styles.emptyState}>
-                <Feather name="inbox" size={40} color="#444" />
+                <Feather name="inbox" size={40} color={theme.colors.textMuted} />
                 <Text style={styles.emptyStateText}>No transaction history found</Text>
               </View>
             ) : (
@@ -375,7 +379,7 @@ export const AccountsScreen: React.FC = () => {
                         <Feather
                           name={isPositive ? 'arrow-down-left' : 'arrow-up-right'}
                           size={16}
-                          color={isPositive ? '#10B981' : '#FF4D4F'}
+                          color={isPositive ? (themeMode === 'dark' ? '#10B981' : '#059669') : (themeMode === 'dark' ? '#FF4D4F' : '#DC2626')}
                         />
                       </View>
                       <View>
@@ -419,7 +423,7 @@ export const AccountsScreen: React.FC = () => {
                 {editingAccount ? 'Edit Account' : 'Add New Account'}
               </Text>
               <TouchableOpacity onPress={() => setShowAddAccountModal(false)}>
-                <Feather name="x" size={20} color="#888888" />
+                <Feather name="x" size={20} color={theme.colors.textSecondary} />
               </TouchableOpacity>
             </View>
 
@@ -428,7 +432,7 @@ export const AccountsScreen: React.FC = () => {
               <TextInput
                 style={styles.fieldInput}
                 placeholder="e.g. Main Cash Drawer, Nabil Bank"
-                placeholderTextColor="#555"
+                placeholderTextColor={theme.colors.textMuted}
                 value={accName}
                 onChangeText={setAccName}
               />
@@ -456,7 +460,7 @@ export const AccountsScreen: React.FC = () => {
                   <TextInput
                     style={styles.fieldInput}
                     placeholder="01234567890"
-                    placeholderTextColor="#555"
+                    placeholderTextColor={theme.colors.textMuted}
                     value={accNumber}
                     onChangeText={setAccNumber}
                   />
@@ -465,7 +469,7 @@ export const AccountsScreen: React.FC = () => {
                   <TextInput
                     style={styles.fieldInput}
                     placeholder="e.g. Nabil Bank, eSewa, Khalti"
-                    placeholderTextColor="#555"
+                    placeholderTextColor={theme.colors.textMuted}
                     value={bankName}
                     onChangeText={setBankName}
                   />
@@ -474,7 +478,7 @@ export const AccountsScreen: React.FC = () => {
                   <TextInput
                     style={styles.fieldInput}
                     placeholder="e.g. New Road"
-                    placeholderTextColor="#555"
+                    placeholderTextColor={theme.colors.textMuted}
                     value={branch}
                     onChangeText={setBranch}
                   />
@@ -487,7 +491,7 @@ export const AccountsScreen: React.FC = () => {
                   <TextInput
                     style={styles.fieldInput}
                     placeholder="0.00"
-                    placeholderTextColor="#555"
+                    placeholderTextColor={theme.colors.textMuted}
                     keyboardType="numeric"
                     value={openingBalance}
                     onChangeText={setOpeningBalance}
@@ -518,7 +522,7 @@ export const AccountsScreen: React.FC = () => {
                   : `Transfer from ${targetAccount?.name}`}
               </Text>
               <TouchableOpacity onPress={() => setShowMoneyModal(false)}>
-                <Feather name="x" size={20} color="#888888" />
+                <Feather name="x" size={20} color={theme.colors.textSecondary} />
               </TouchableOpacity>
             </View>
 
@@ -527,7 +531,7 @@ export const AccountsScreen: React.FC = () => {
               <TextInput
                 style={[styles.fieldInput, styles.amountInput]}
                 placeholder="0.00"
-                placeholderTextColor="#555"
+                placeholderTextColor={theme.colors.textMuted}
                 keyboardType="numeric"
                 value={moneyAmount}
                 onChangeText={setMoneyAmount}
@@ -567,7 +571,7 @@ export const AccountsScreen: React.FC = () => {
                   <TextInput
                     style={styles.fieldInput}
                     placeholder="e.g. Cash Injection, Owner Withdrawal, Sales Deposit"
-                    placeholderTextColor="#555"
+                    placeholderTextColor={theme.colors.textMuted}
                     value={moneyCategory}
                     onChangeText={setMoneyCategory}
                   />
@@ -578,7 +582,7 @@ export const AccountsScreen: React.FC = () => {
               <TextInput
                 style={styles.fieldInput}
                 placeholder="Optional notes"
-                placeholderTextColor="#555"
+                placeholderTextColor={theme.colors.textMuted}
                 value={moneyNotes}
                 onChangeText={setMoneyNotes}
               />
@@ -610,394 +614,402 @@ export const AccountsScreen: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#000000',
-  },
-  bannerCard: {
-    margin: 16,
-    padding: 18,
-    borderRadius: 16,
-    backgroundColor: '#111111',
-    borderWidth: 1,
-    borderColor: '#222222',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  bannerSubtitle: {
-    fontSize: 12,
-    color: '#888888',
-    fontWeight: '600',
-    textTransform: 'uppercase',
-  },
-  bannerAmount: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#10B981',
-    marginVertical: 4,
-  },
-  bannerInfo: {
-    fontSize: 12,
-    color: '#AAAAAA',
-  },
-  addAccountBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#FF4500',
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 10,
-  },
-  addAccountBtnText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  tabBar: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    marginBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#1a1a1a',
-  },
-  tab: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 10,
-    marginRight: 20,
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
-  },
-  tabActive: {
-    borderBottomColor: '#FF4500',
-  },
-  tabText: {
-    color: '#888888',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  tabTextActive: {
-    color: '#FFFFFF',
-  },
-  scrollList: {
-    padding: 16,
-    gap: 12,
-  },
-  accountCard: {
-    backgroundColor: '#0d0d0d',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#1f1f1f',
-    padding: 16,
-  },
-  accountHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-  },
-  accountTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    flex: 1,
-  },
-  accountIconBadge: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  badgeCash: {
-    backgroundColor: '#10B981',
-  },
-  badgeBank: {
-    backgroundColor: '#3B82F6',
-  },
-  badgeWallet: {
-    backgroundColor: '#8B5CF6',
-  },
-  accountName: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  accountDetails: {
-    fontSize: 12,
-    color: '#888888',
-    marginTop: 2,
-  },
-  accountActionsRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  iconActionBtn: {
-    padding: 6,
-    borderRadius: 6,
-    backgroundColor: '#1a1a1a',
-  },
-  balanceRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#1a1a1a',
-    marginTop: 8,
-  },
-  balanceLabel: {
-    fontSize: 12,
-    color: '#888888',
-  },
-  balanceValue: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-  quickActionsContainer: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 12,
-  },
-  quickActionBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  btnDeposit: {
-    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-    borderColor: 'rgba(16, 185, 129, 0.3)',
-  },
-  btnDepositText: {
-    color: '#10B981',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  btnWithdraw: {
-    backgroundColor: 'rgba(255, 77, 79, 0.1)',
-    borderColor: 'rgba(255, 77, 79, 0.3)',
-  },
-  btnWithdrawText: {
-    color: '#FF4D4F',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  btnTransfer: {
-    backgroundColor: 'rgba(59, 130, 246, 0.1)',
-    borderColor: 'rgba(59, 130, 246, 0.3)',
-  },
-  btnTransferText: {
-    color: '#3B82F6',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  historyContainer: {
-    flex: 1,
-  },
-  filterPills: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    gap: 8,
-  },
-  pill: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: '#141414',
-    borderWidth: 1,
-    borderColor: '#262626',
-  },
-  pillActive: {
-    backgroundColor: '#FF4500',
-    borderColor: '#FF4500',
-  },
-  pillText: {
-    fontSize: 12,
-    color: '#888888',
-    fontWeight: '600',
-  },
-  pillTextActive: {
-    color: '#FFFFFF',
-  },
-  txList: {
-    padding: 16,
-    gap: 10,
-  },
-  emptyState: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 60,
-    gap: 10,
-  },
-  emptyStateText: {
-    fontSize: 14,
-    color: '#666666',
-  },
-  txCard: {
-    backgroundColor: '#0d0d0d',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#1f1f1f',
-    padding: 14,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  txLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    flex: 1,
-  },
-  txIconBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  badgeGreen: {
-    backgroundColor: 'rgba(16, 185, 129, 0.15)',
-  },
-  badgeRed: {
-    backgroundColor: 'rgba(255, 77, 79, 0.15)',
-  },
-  txTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  txDate: {
-    fontSize: 11,
-    color: '#666666',
-    marginTop: 2,
-  },
-  txNotes: {
-    fontSize: 11,
-    color: '#888888',
-    marginTop: 2,
-  },
-  txRight: {
-    alignItems: 'flex-end',
-  },
-  txAmount: {
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  amountGreen: {
-    color: '#10B981',
-  },
-  amountRed: {
-    color: '#FF4D4F',
-  },
-  txBalanceAfter: {
-    fontSize: 11,
-    color: '#666666',
-    marginTop: 2,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: '#0e0e0e',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    borderWidth: 1,
-    borderColor: '#262626',
-    padding: 20,
-    maxHeight: '85%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  modalTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  modalForm: {
-    gap: 12,
-  },
-  fieldLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#AAAAAA',
-  },
-  fieldInput: {
-    backgroundColor: '#161616',
-    borderWidth: 1,
-    borderColor: '#2a2a2a',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    height: 44,
-    color: '#FFFFFF',
-    fontSize: 14,
-  },
-  amountInput: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#10B981',
-    textAlign: 'center',
-  },
-  typeRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  typeBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    alignItems: 'center',
-    backgroundColor: '#161616',
-    borderWidth: 1,
-    borderColor: '#2a2a2a',
-    borderRadius: 8,
-  },
-  typeBtnActive: {
-    borderColor: '#FF4500',
-    backgroundColor: '#261612',
-  },
-  typeBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#888888',
-  },
-  typeBtnTextActive: {
-    color: '#FF4500',
-  },
-  saveBtn: {
-    backgroundColor: '#FF4500',
-    borderRadius: 10,
-    height: 46,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 8,
-  },
-  btnGreen: {
-    backgroundColor: '#10B981',
-  },
-  btnRed: {
-    backgroundColor: '#FF4D4F',
-  },
-  btnBlue: {
-    backgroundColor: '#3B82F6',
-  },
-  saveBtnText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-});
+const createStyles = (theme: Theme, themeMode: ThemeMode) => {
+  const isDark = themeMode === 'dark';
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.bg,
+    },
+    bannerCard: {
+      margin: 16,
+      padding: 18,
+      borderRadius: 16,
+      backgroundColor: theme.colors.card,
+      borderWidth: 1,
+      borderColor: theme.colors.borderGlass,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    bannerSubtitle: {
+      fontSize: 12,
+      color: theme.colors.textMuted,
+      fontWeight: '700',
+      textTransform: 'uppercase',
+      letterSpacing: 0.4,
+    },
+    bannerAmount: {
+      fontSize: 24,
+      fontWeight: '800',
+      color: isDark ? '#10B981' : '#059669',
+      marginVertical: 4,
+    },
+    bannerInfo: {
+      fontSize: 12,
+      color: theme.colors.textSecondary,
+    },
+    addAccountBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      backgroundColor: theme.colors.primary,
+      paddingVertical: 10,
+      paddingHorizontal: 14,
+      borderRadius: 10,
+    },
+    addAccountBtnText: {
+      color: '#FFFFFF',
+      fontSize: 13,
+      fontWeight: '700',
+    },
+    tabBar: {
+      flexDirection: 'row',
+      paddingHorizontal: 16,
+      marginBottom: 8,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.borderGlass,
+    },
+    tab: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      paddingVertical: 10,
+      marginRight: 20,
+      borderBottomWidth: 2,
+      borderBottomColor: 'transparent',
+    },
+    tabActive: {
+      borderBottomColor: theme.colors.primary,
+    },
+    tabText: {
+      color: theme.colors.textMuted,
+      fontSize: 13,
+      fontWeight: '600',
+    },
+    tabTextActive: {
+      color: theme.colors.textPrimary,
+      fontWeight: '800',
+    },
+    scrollList: {
+      padding: 16,
+      gap: 12,
+    },
+    accountCard: {
+      backgroundColor: theme.colors.card,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: theme.colors.borderGlass,
+      padding: 16,
+    },
+    accountHeader: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+    },
+    accountTitleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      flex: 1,
+    },
+    accountIconBadge: {
+      width: 38,
+      height: 38,
+      borderRadius: 10,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    badgeCash: {
+      backgroundColor: '#10B981',
+    },
+    badgeBank: {
+      backgroundColor: '#3B82F6',
+    },
+    badgeWallet: {
+      backgroundColor: '#8B5CF6',
+    },
+    accountName: {
+      fontSize: 15,
+      fontWeight: '700',
+      color: theme.colors.textPrimary,
+    },
+    accountDetails: {
+      fontSize: 12,
+      color: theme.colors.textSecondary,
+      marginTop: 2,
+    },
+    accountActionsRow: {
+      flexDirection: 'row',
+      gap: 8,
+    },
+    iconActionBtn: {
+      padding: 6,
+      borderRadius: 6,
+      backgroundColor: isDark ? '#1C1C1E' : '#F1F5F9',
+      borderWidth: 1,
+      borderColor: isDark ? '#2A2A2A' : '#E2E8F0',
+    },
+    balanceRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingVertical: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.borderGlass,
+      marginTop: 8,
+    },
+    balanceLabel: {
+      fontSize: 12,
+      color: theme.colors.textSecondary,
+    },
+    balanceValue: {
+      fontSize: 18,
+      fontWeight: '800',
+      color: theme.colors.textPrimary,
+    },
+    quickActionsContainer: {
+      flexDirection: 'row',
+      gap: 8,
+      marginTop: 12,
+    },
+    quickActionBtn: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 4,
+      paddingVertical: 8,
+      borderRadius: 8,
+      borderWidth: 1,
+    },
+    btnDeposit: {
+      backgroundColor: isDark ? 'rgba(16, 185, 129, 0.12)' : 'rgba(16, 185, 129, 0.08)',
+      borderColor: isDark ? 'rgba(16, 185, 129, 0.3)' : 'rgba(16, 185, 129, 0.25)',
+    },
+    btnDepositText: {
+      color: isDark ? '#10B981' : '#059669',
+      fontSize: 11,
+      fontWeight: '700',
+    },
+    btnWithdraw: {
+      backgroundColor: isDark ? 'rgba(239, 68, 68, 0.12)' : 'rgba(239, 68, 68, 0.08)',
+      borderColor: isDark ? 'rgba(239, 68, 68, 0.3)' : 'rgba(239, 68, 68, 0.25)',
+    },
+    btnWithdrawText: {
+      color: isDark ? '#FF4D4F' : '#DC2626',
+      fontSize: 11,
+      fontWeight: '700',
+    },
+    btnTransfer: {
+      backgroundColor: isDark ? 'rgba(59, 130, 246, 0.12)' : 'rgba(59, 130, 246, 0.08)',
+      borderColor: isDark ? 'rgba(59, 130, 246, 0.3)' : 'rgba(59, 130, 246, 0.25)',
+    },
+    btnTransferText: {
+      color: isDark ? '#3B82F6' : '#2563EB',
+      fontSize: 11,
+      fontWeight: '700',
+    },
+    historyContainer: {
+      flex: 1,
+    },
+    filterPills: {
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      gap: 8,
+    },
+    pill: {
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 16,
+      backgroundColor: theme.colors.surface,
+      borderWidth: 1,
+      borderColor: theme.colors.borderGlass,
+    },
+    pillActive: {
+      backgroundColor: theme.colors.primary,
+      borderColor: theme.colors.primary,
+    },
+    pillText: {
+      fontSize: 12,
+      color: theme.colors.textSecondary,
+      fontWeight: '600',
+    },
+    pillTextActive: {
+      color: '#FFFFFF',
+      fontWeight: '700',
+    },
+    txList: {
+      padding: 16,
+      gap: 10,
+    },
+    emptyState: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 60,
+      gap: 10,
+    },
+    emptyStateText: {
+      fontSize: 14,
+      color: theme.colors.textMuted,
+    },
+    txCard: {
+      backgroundColor: theme.colors.card,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: theme.colors.borderGlass,
+      padding: 14,
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    txLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      flex: 1,
+    },
+    txIconBadge: {
+      width: 32,
+      height: 32,
+      borderRadius: 8,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    badgeGreen: {
+      backgroundColor: isDark ? 'rgba(16, 185, 129, 0.15)' : 'rgba(16, 185, 129, 0.12)',
+    },
+    badgeRed: {
+      backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : 'rgba(239, 68, 68, 0.12)',
+    },
+    txTitle: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: theme.colors.textPrimary,
+    },
+    txDate: {
+      fontSize: 11,
+      color: theme.colors.textMuted,
+      marginTop: 2,
+    },
+    txNotes: {
+      fontSize: 11,
+      color: theme.colors.textSecondary,
+      marginTop: 2,
+    },
+    txRight: {
+      alignItems: 'flex-end',
+    },
+    txAmount: {
+      fontSize: 14,
+      fontWeight: '800',
+    },
+    amountGreen: {
+      color: isDark ? '#10B981' : '#059669',
+    },
+    amountRed: {
+      color: isDark ? '#FF4D4F' : '#DC2626',
+    },
+    txBalanceAfter: {
+      fontSize: 11,
+      color: theme.colors.textMuted,
+      marginTop: 2,
+    },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: isDark ? 'rgba(0, 0, 0, 0.8)' : 'rgba(15, 23, 42, 0.6)',
+      justifyContent: 'flex-end',
+    },
+    modalContent: {
+      backgroundColor: theme.colors.card,
+      borderTopLeftRadius: 20,
+      borderTopRightRadius: 20,
+      borderWidth: 1,
+      borderColor: theme.colors.borderGlass,
+      padding: 20,
+      maxHeight: '85%',
+    },
+    modalHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 16,
+    },
+    modalTitle: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: theme.colors.textPrimary,
+    },
+    modalForm: {
+      gap: 12,
+    },
+    fieldLabel: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: theme.colors.textSecondary,
+    },
+    fieldInput: {
+      backgroundColor: theme.colors.surface,
+      borderWidth: 1,
+      borderColor: theme.colors.borderGlass,
+      borderRadius: 10,
+      paddingHorizontal: 14,
+      height: 44,
+      color: theme.colors.textPrimary,
+      fontSize: 14,
+    },
+    amountInput: {
+      fontSize: 20,
+      fontWeight: '700',
+      color: isDark ? '#10B981' : '#059669',
+      textAlign: 'center',
+    },
+    typeRow: {
+      flexDirection: 'row',
+      gap: 8,
+    },
+    typeBtn: {
+      flex: 1,
+      paddingVertical: 10,
+      alignItems: 'center',
+      backgroundColor: theme.colors.surface,
+      borderWidth: 1,
+      borderColor: theme.colors.borderGlass,
+      borderRadius: 8,
+    },
+    typeBtnActive: {
+      borderColor: theme.colors.primary,
+      backgroundColor: isDark ? 'rgba(255, 69, 0, 0.15)' : 'rgba(255, 69, 0, 0.10)',
+    },
+    typeBtnText: {
+      fontSize: 11,
+      fontWeight: '700',
+      color: theme.colors.textSecondary,
+    },
+    typeBtnTextActive: {
+      color: theme.colors.primary,
+    },
+    saveBtn: {
+      backgroundColor: theme.colors.primary,
+      borderRadius: 10,
+      height: 46,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginTop: 8,
+    },
+    btnGreen: {
+      backgroundColor: isDark ? '#10B981' : '#059669',
+    },
+    btnRed: {
+      backgroundColor: isDark ? '#FF4D4F' : '#DC2626',
+    },
+    btnBlue: {
+      backgroundColor: isDark ? '#3B82F6' : '#2563EB',
+    },
+    saveBtnText: {
+      color: '#FFFFFF',
+      fontSize: 14,
+      fontWeight: '700',
+    },
+  });
+};

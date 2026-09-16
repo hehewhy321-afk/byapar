@@ -1,7 +1,8 @@
-import { Component, createSignal, Show } from 'solid-js';
+import { Component, createSignal, Show, For } from 'solid-js';
 import { signIn, signUp } from '../../db/auth';
 import { showAuthModal, setShowAuthModal, updateBusinessProfile } from '../../db/localDb';
 import { IconX, IconAlertCircle, IconCheck } from '../icons';
+import { BUSINESS_TYPES, BusinessType } from '@byapar/core';
 
 export const AuthModal: Component = () => {
   const [mode, setMode] = createSignal<'login' | 'signup'>('login');
@@ -15,6 +16,7 @@ export const AuthModal: Component = () => {
 
   // Signup form
   const [signupStore, setSignupStore] = createSignal('');
+  const [signupBusinessType, setSignupBusinessType] = createSignal<BusinessType>('general');
   const [signupOwner, setSignupOwner] = createSignal('');
   const [signupEmail, setSignupEmail] = createSignal('');
   const [signupPhone, setSignupPhone] = createSignal('');
@@ -52,6 +54,7 @@ export const AuthModal: Component = () => {
       pass: signupPass(),
       name: signupOwner(),
       businessName: signupStore(),
+      businessType: signupBusinessType(),
       phone: signupPhone(),
       pan: signupPan(),
     });
@@ -62,6 +65,7 @@ export const AuthModal: Component = () => {
         name: signupStore(),
         nameEn: signupStore(),
         ownerName: signupOwner(),
+        businessType: signupBusinessType(),
         phone: signupPhone(),
         pan: signupPan(),
       });
@@ -189,6 +193,28 @@ export const AuthModal: Component = () => {
                   class="input-field"
                   autofocus
                 />
+              </div>
+
+              <div>
+                <label class="block text-xs font-semibold text-neutral-700 dark:text-neutral-300 mb-1">
+                  Business / Industry Category *
+                </label>
+                <select
+                  value={signupBusinessType()}
+                  onChange={(e) => setSignupBusinessType(e.currentTarget.value as BusinessType)}
+                  class="input-field cursor-pointer bg-white dark:bg-neutral-900"
+                >
+                  <For each={BUSINESS_TYPES}>
+                    {(bt) => (
+                      <option value={bt.id}>
+                        {bt.label} - {bt.sub}
+                      </option>
+                    )}
+                  </For>
+                </select>
+                <span class="text-[11px] text-neutral-400 dark:text-neutral-500 mt-1 block">
+                  Tailors preloaded categories, units & inventory items
+                </span>
               </div>
 
               <div class="grid grid-cols-2 gap-2.5">

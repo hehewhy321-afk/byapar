@@ -20,6 +20,7 @@ import { TutorialsModal } from './components/modals/TutorialsModal';
 import { WhatsNewModal } from './components/modals/WhatsNewModal';
 import { KeyboardShortcutsModal } from './components/modals/KeyboardShortcutsModal';
 import { ProfileModal } from './components/modals/ProfileModal';
+import { ChangePasswordModal } from './components/modals/ChangePasswordModal';
 import { SubscriptionModal } from './components/modals/SubscriptionModal';
 import { AuthModal } from './components/auth/AuthModal';
 import { activeTab, setActiveTab, currentBusiness, toggleSidebar, toggleDarkMode } from './db/localDb';
@@ -359,6 +360,7 @@ export const App: Component = () => {
       <WhatsNewModal />
       <KeyboardShortcutsModal />
       <ProfileModal />
+      <ChangePasswordModal />
       <SubscriptionModal />
       <AuthModal />
     </div>

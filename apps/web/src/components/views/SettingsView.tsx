@@ -1,11 +1,15 @@
-import { Component } from 'solid-js';
+import { Component, Show } from 'solid-js';
 import {
   settings,
   setSettings,
   currentBusiness,
   persistState,
   setActiveTab,
+  setShowChangePasswordModal,
+  setShowAuthModal,
 } from '../../db/localDb';
+import { currentUser } from '../../db/auth';
+import { IconShield, IconLock } from '../icons';
 
 export const SettingsView: Component = () => {
   const toggleCalendar = () => {
@@ -38,6 +42,64 @@ export const SettingsView: Component = () => {
       </div>
 
       <div class="space-y-4">
+        {/* Account & Security */}
+        <div class="stat-card">
+          <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center gap-2">
+              <IconShield class="w-4 h-4 text-[#FF4500]" />
+              <h3 class="text-sm font-semibold text-gray-900 dark:text-white">Account & Security</h3>
+            </div>
+            <Show when={currentUser()}>
+              <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 border border-emerald-200/50 dark:border-emerald-800/50">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                Cloud Synced
+              </span>
+            </Show>
+          </div>
+
+          <div class="space-y-3 text-sm">
+            <Show
+              when={currentUser()}
+              fallback={
+                <div class="p-3.5 bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl flex items-center justify-between">
+                  <div>
+                    <p class="text-xs font-semibold text-gray-800 dark:text-neutral-200">Local Guest Mode</p>
+                    <p class="text-[11px] text-gray-500 dark:text-neutral-400">Sign in to back up and sync your business across devices</p>
+                  </div>
+                  <button
+                    class="px-3.5 py-1.5 bg-[#FF4500] hover:bg-[#E03D00] text-white text-xs font-semibold rounded-lg shadow-sm transition"
+                    onClick={() => setShowAuthModal(true)}
+                  >
+                    Sign In
+                  </button>
+                </div>
+              }
+            >
+              <div class="flex justify-between py-1.5">
+                <span class="text-gray-500 dark:text-neutral-400">Signed In Account</span>
+                <span class="text-gray-900 dark:text-white font-medium">{currentUser()?.email}</span>
+              </div>
+              <div class="flex justify-between py-1.5 border-t border-gray-100 dark:border-neutral-800">
+                <span class="text-gray-500 dark:text-neutral-400">Account Role</span>
+                <span class="text-gray-900 dark:text-white font-medium capitalize">{currentUser()?.role || 'Owner'}</span>
+              </div>
+              <div class="flex items-center justify-between border-t border-gray-100 dark:border-neutral-800 pt-3">
+                <div>
+                  <p class="text-sm font-medium text-gray-800 dark:text-neutral-200">Password & Security</p>
+                  <p class="text-xs text-gray-400 dark:text-neutral-500">Requires your current password to update</p>
+                </div>
+                <button
+                  class="px-3 py-1.5 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 hover:bg-neutral-50 dark:hover:bg-neutral-800 text-gray-700 dark:text-neutral-200 text-xs font-semibold shadow-sm transition flex items-center gap-2"
+                  onClick={() => setShowChangePasswordModal(true)}
+                >
+                  <IconLock class="w-3.5 h-3.5 text-[#FF4500]" />
+                  <span>Change Password</span>
+                </button>
+              </div>
+            </Show>
+          </div>
+        </div>
+
         {/* Business Profile */}
         <div class="stat-card">
           <h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-3">Business Profile</h3>

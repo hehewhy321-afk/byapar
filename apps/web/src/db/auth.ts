@@ -1,6 +1,7 @@
 /// <reference types="vite/client" />
 import { createSignal } from 'solid-js';
 import { createClient, User } from '@supabase/supabase-js';
+import { BusinessType } from '@byapar/core';
 
 export interface AuthUser {
   id: string;
@@ -8,6 +9,7 @@ export interface AuthUser {
   name: string;
   businessId?: string;
   businessName: string;
+  businessType?: BusinessType;
   phone?: string;
   pan?: string;
   address?: string;
@@ -51,6 +53,7 @@ export async function syncUserBusiness(user: User): Promise<AuthUser> {
   let name = user.user_metadata?.full_name || user.email?.split('@')[0] || 'व्यापारी';
   let businessId = 'a0000000-0000-0000-0000-000000000001';
   let businessName = user.user_metadata?.business_name || 'Shrestha Mart & General Store';
+  let businessType: BusinessType = (user.user_metadata?.business_type as BusinessType) || 'general';
   let phone = user.phone || user.user_metadata?.phone || '';
   let pan = user.user_metadata?.pan || '';
   let address = user.user_metadata?.address || '';
@@ -72,6 +75,7 @@ export async function syncUserBusiness(user: User): Promise<AuthUser> {
       .from('business_members')
       .select('business_id, role, businesses(*)')
       .eq('user_id', user.id)
+      .order('created_at', { ascending: true })
       .limit(1)
       .single();
 
@@ -83,6 +87,9 @@ export async function syncUserBusiness(user: User): Promise<AuthUser> {
         phone = biz.phone || phone;
         pan = biz.pan_vat_number || pan;
         address = biz.address_line || address;
+        if (biz.business_type) {
+          businessType = biz.business_type as BusinessType;
+        }
       }
     }
   } catch (err) {
@@ -95,6 +102,7 @@ export async function syncUserBusiness(user: User): Promise<AuthUser> {
     name,
     businessId,
     businessName,
+    businessType,
     phone,
     pan,
     address,
@@ -104,6 +112,24 @@ export async function syncUserBusiness(user: User): Promise<AuthUser> {
 
   setCurrentUser(authUser);
   localStorage.setItem(STORAGE_KEY, JSON.stringify(authUser));
+
+  // Sync with localDb to update currentBusiness and hydrate real cloud data
+  import('./localDb').then(({ setCurrentBusiness, syncFromCloud, initRealtimeSync }) => {
+    setCurrentBusiness({
+      id: businessId,
+      name: businessName,
+      nameEn: businessName,
+      ownerName: name,
+      phone: phone,
+      pan: pan,
+      address: address,
+      businessType: businessType,
+      isVatRegistered: !!pan,
+    });
+    syncFromCloud();
+    initRealtimeSync();
+  });
+
   return authUser;
 }
 
@@ -114,6 +140,9 @@ supabase.auth.onAuthStateChange(async (event, session) => {
   } else if (event === 'SIGNED_OUT') {
     setCurrentUser(null);
     localStorage.removeItem(STORAGE_KEY);
+    import('./localDb').then(({ resetAllLocalData }) => {
+      if (resetAllLocalData) resetAllLocalData();
+    });
   }
 });
 
@@ -148,6 +177,7 @@ export async function signUp(params: {
   pass: string;
   name: string;
   businessName: string;
+  businessType?: BusinessType;
   phone?: string;
   pan?: string;
   address?: string;
@@ -160,6 +190,7 @@ export async function signUp(params: {
         data: {
           full_name: params.name,
           business_name: params.businessName,
+          business_type: params.businessType || 'general',
           phone: params.phone,
           pan: params.pan,
           address: params.address,
@@ -170,7 +201,10 @@ export async function signUp(params: {
     if (error) throw error;
 
     if (data.user) {
-      await syncUserBusiness(data.user);
+      // Give trigger moment to create business
+      setTimeout(async () => {
+        if (data.user) await syncUserBusiness(data.user);
+      }, 700);
       return { success: true };
     }
     return { success: true };
@@ -183,6 +217,9 @@ export async function signOut() {
   await supabase.auth.signOut();
   setCurrentUser(null);
   localStorage.removeItem(STORAGE_KEY);
+  import('./localDb').then(({ resetAllLocalData }) => {
+    if (resetAllLocalData) resetAllLocalData();
+  });
 }
 
 export function updateAuthProfile(updates: Partial<AuthUser>) {
@@ -193,3 +230,54 @@ export function updateAuthProfile(updates: Partial<AuthUser>) {
     return updated;
   });
 }
+
+export async function changePassword(
+  oldPassword: string,
+  newPassword: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const user = currentUser();
+    if (!user || !user.email) {
+      return { success: false, error: 'You must be logged in to change your password' };
+    }
+
+    if (!oldPassword || !oldPassword.trim()) {
+      return { success: false, error: 'Current password is required' };
+    }
+
+    if (!newPassword || newPassword.length < 6) {
+      return { success: false, error: 'New password must be at least 6 characters long' };
+    }
+
+    if (oldPassword === newPassword) {
+      return { success: false, error: 'New password must be different from current password' };
+    }
+
+    // Strictly verify old password with Supabase Auth
+    const { error: signInErr } = await supabase.auth.signInWithPassword({
+      email: user.email,
+      password: oldPassword,
+    });
+
+    if (signInErr) {
+      return { success: false, error: 'Incorrect current password. Please try again.' };
+    }
+
+    // Now securely update to the new password
+    const { error: updateErr } = await supabase.auth.updateUser({
+      password: newPassword,
+    });
+
+    if (updateErr) {
+      return { success: false, error: updateErr.message || 'Failed to update password' };
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    return {
+      success: false,
+      error: err.message || 'An unexpected error occurred while changing password',
+    };
+  }
+}
+

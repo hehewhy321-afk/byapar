@@ -1,4 +1,4 @@
-export type PaymentMode = 'cash' | 'card' | 'fonepay_qr' | 'credit';
+export type PaymentMode = 'cash' | 'card' | 'fonepay_qr' | 'credit' | 'bank' | 'fonepay';
 
 export type UnitType = 'Pcs' | 'Kg' | 'Ltr' | 'Pkt' | 'Bag' | 'Jar' | 'Bottle';
 
@@ -64,8 +64,28 @@ export interface BillImage {
   notes?: string;
 }
 
-export interface StoreProfile {
+export interface CategoryItem {
+  id: string;
   name: string;
+  color?: string;
+}
+
+export type BusinessType =
+  | 'general'
+  | 'clothing'
+  | 'bakery'
+  | 'electronics'
+  | 'foods'
+  | 'hotel'
+  | 'pharmacy'
+  | 'hardware'
+  | 'cosmetics'
+  | 'other';
+
+export interface StoreProfile {
+  id?: string;
+  name: string;
+  businessType?: BusinessType;
   ownerName: string;
   phone: string;
   panNumber: string;

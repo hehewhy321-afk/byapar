@@ -6,6 +6,7 @@ import { useApp } from '../../context/AppContext';
 import { Product } from '../../types';
 import { AnimatedPressable } from '../common/AnimatedPressable';
 import { FadeInView } from '../common/FadeInView';
+import { CATEGORY_PRESETS } from '@byapar/core';
 
 interface Props {
   visible: boolean;
@@ -14,12 +15,21 @@ interface Props {
   onSave: (data: Omit<Product, 'id'>) => void;
 }
 
-const CATEGORIES = ['Grains', 'Oil & Ghee', 'Spices', 'Dairy', 'Snacks', 'Household', 'General'];
+const DEFAULT_CATEGORIES = ['Grains', 'Oil & Ghee', 'Spices', 'Dairy', 'Snacks', 'Household', 'General'];
 const UNITS = ['Pcs', 'Kg', 'Ltr', 'Box', 'Bag', 'Pack'];
 
 export const ProductFormModal: React.FC<Props> = ({ visible, product, onClose, onSave }) => {
-  const { theme, themeMode } = useApp();
+  const { theme, themeMode, store, categories } = useApp();
   const styles = useMemo(() => createStyles(theme, themeMode), [theme, themeMode]);
+
+  const dynamicCategories = useMemo(() => {
+    if (categories && categories.length > 0) {
+      return categories.map((c) => c.name);
+    }
+    const bizType = store.businessType || 'general';
+    return CATEGORY_PRESETS[bizType] || DEFAULT_CATEGORIES;
+  }, [categories, store.businessType]);
+
   const [name, setName] = useState('');
   const [barcode, setBarcode] = useState('');
   const [category, setCategory] = useState('General');
@@ -102,11 +112,25 @@ export const ProductFormModal: React.FC<Props> = ({ visible, product, onClose, o
               onChangeText={setName}
             />
 
-            {/* CATEGORY CHIPS */}
-            <Text style={styles.label}>Category</Text>
+            {/* CATEGORY */}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text style={styles.label}>Category</Text>
+              {store.businessType && (
+                <Text style={{ fontSize: 10, color: theme.colors.textMuted, fontWeight: '600' }}>
+                  {store.businessType.toUpperCase()} SUGGESTIONS
+                </Text>
+              )}
+            </View>
+            <TextInput
+              style={[styles.input, { marginBottom: 8 }]}
+              placeholder="e.g. Rice & Grains"
+              placeholderTextColor={theme.colors.textMuted}
+              value={category}
+              onChangeText={setCategory}
+            />
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsRow}>
-              {CATEGORIES.map((cat) => {
-                const isActive = category === cat;
+              {dynamicCategories.map((cat) => {
+                const isActive = category.toLowerCase() === cat.toLowerCase();
                 return (
                   <AnimatedPressable
                     key={cat}
