@@ -189,41 +189,6 @@ export const DashboardScreen: React.FC = () => {
           />
         }
       >
-        {/* WELCOME / STORE SUMMARY BANNER */}
-        <View
-          style={[
-            styles.welcomeCard,
-            {
-              backgroundColor: isDark ? '#141414' : '#FFFFFF',
-              borderColor: isDark ? '#262626' : '#E2E8F0',
-            },
-          ]}
-        >
-          <View style={{ flex: 1 }}>
-            <View style={styles.syncRow}>
-              <View style={[styles.syncDot, { backgroundColor: '#10B981' }]} />
-              <Text style={styles.syncText}>
-                {user ? 'CLOUD SYNCED' : 'LOCAL OFFLINE'}
-              </Text>
-            </View>
-            <Text style={[styles.storeTitle, { color: theme.colors.textPrimary }]}>
-              {store.name || 'Byapar Store'}
-            </Text>
-            <Text style={[styles.storeSubtitle, { color: theme.colors.textSecondary }]}>
-              {store.ownerName ? `Owner: ${store.ownerName}` : 'Retail OS Engine Ready'}
-            </Text>
-          </View>
-
-          <TouchableOpacity
-            style={[styles.quickEntryBtn, { backgroundColor: theme.colors.primary }]}
-            onPress={() => setQuickLedgerModal(true)}
-            activeOpacity={0.85}
-          >
-            <Feather name="plus" size={16} color="#FFFFFF" />
-            <Text style={styles.quickEntryText}>Record Entry</Text>
-          </TouchableOpacity>
-        </View>
-
         {/* BENTO GRID: ROW 1 - CRITICAL FINANCIAL METRICS */}
         <View style={styles.gridRow}>
           {/* Card 1: To Receive (Receivables) */}
@@ -516,7 +481,15 @@ export const DashboardScreen: React.FC = () => {
         </View>
       </ScrollView>
 
-      {/* QUICK RECORD ENTRY MODAL */}
+      {/* FLOATING ACTION BUTTON (FAB) FOR QUICK RECORD ENTRY */}
+      <TouchableOpacity
+        style={[styles.floatingRecordBtn, { backgroundColor: theme.colors.primary }]}
+        onPress={() => setQuickLedgerModal(true)}
+        activeOpacity={0.88}
+      >
+        <Feather name="plus" size={18} color="#FFFFFF" />
+        <Text style={styles.floatingRecordText}>Udhar</Text>
+      </TouchableOpacity>
       <Modal
         visible={quickLedgerModal}
         transparent
@@ -948,22 +921,29 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 16,
-    paddingBottom: 32,
+    paddingBottom: 88,
   },
-  welcomeCard: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-    marginBottom: 20,
-  },
-  syncRow: {
+  floatingRecordBtn: {
+    position: 'absolute',
+    bottom: 20,
+    right: 18,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginBottom: 4,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 28,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  floatingRecordText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+    letterSpacing: 0.2,
   },
   syncDot: {
     width: 7,

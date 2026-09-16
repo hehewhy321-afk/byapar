@@ -12,6 +12,7 @@ import {
 import { Feather } from '@expo/vector-icons';
 import { useApp } from '../context/AppContext';
 import { PaymentMode } from '../types';
+import { AnimatedPressable } from '../components/common/AnimatedPressable';
 
 export const PurchaseHubScreen: React.FC = () => {
   const {
@@ -23,7 +24,11 @@ export const PurchaseHubScreen: React.FC = () => {
     createPurchaseBill,
     createPurchaseReturn,
     createPaymentOut,
+    theme,
+    themeMode,
   } = useApp();
+
+  const isDark = themeMode === 'dark';
 
   const [activeSubTab, setActiveSubTab] = useState<'bills' | 'payment_out' | 'returns'>('bills');
   const [searchQuery, setSearchQuery] = useState('');
@@ -89,33 +94,27 @@ export const PurchaseHubScreen: React.FC = () => {
     const qty = parseFloat(billQty) || 1;
     const cost = parseFloat(billCost) || 0;
     const paid = parseFloat(billPaid) || 0;
-
     if (!billSupplierName.trim() || !billItemName.trim() || cost <= 0) {
-      Alert.alert('Validation Error', 'Please enter supplier name, item name, and cost.');
+      Alert.alert('Validation Error', 'Please enter supplier name, item name, and item cost.');
       return;
     }
 
     const total = qty * cost;
-    const due = Math.max(0, total - paid);
     const seq = (purchaseBills.length + 1).toString().padStart(4, '0');
-
     await createPurchaseBill({
       billNumber: `BILL-${new Date().getFullYear()}-${seq}`,
       supplierName: billSupplierName.trim(),
       supplierPhone: billSupplierPhone.trim() || undefined,
       date: new Date().toISOString().split('T')[0],
-      subtotal: total,
       totalAmount: total,
       paidAmount: paid,
-      dueAmount: due,
       paymentMode: billMode,
-      status: due === 0 ? 'paid' : paid > 0 ? 'partial' : 'unpaid',
       items: [
         {
           id: Math.random().toString(),
           itemName: billItemName.trim(),
           quantity: qty,
-          costPrice: cost,
+          purchaseCost: cost,
           totalAmount: total,
         },
       ],
@@ -129,23 +128,26 @@ export const PurchaseHubScreen: React.FC = () => {
     setBillPaid('');
   };
 
-  const handleCreatePaymentOut = async () => {
+  const handleRecordPaymentOut = async () => {
     const amt = parseFloat(outAmount);
-    if (!outPartyId || !amt || amt <= 0) {
-      Alert.alert('Validation Error', 'Please select a supplier and enter an amount.');
+    if (!outPartyId) {
+      Alert.alert('Validation Error', 'Please select a supplier.');
+      return;
+    }
+    if (isNaN(amt) || amt <= 0) {
+      Alert.alert('Validation Error', 'Please enter a valid amount.');
       return;
     }
 
     const party = parties.find((p) => p.id === outPartyId);
     await createPaymentOut({
-      type: 'out',
       partyId: outPartyId,
-      partyName: party?.name || 'Supplier',
+      partyName: party ? party.name : 'Unknown Supplier',
       amount: amt,
       paymentMode: outMode,
       accountId: outAccountId || undefined,
-      notes: outNotes,
       date: new Date().toISOString().split('T')[0],
+      notes: outNotes || undefined,
     });
 
     setShowPaymentOutModal(false);
@@ -158,7 +160,6 @@ export const PurchaseHubScreen: React.FC = () => {
     const qty = parseFloat(returnQty) || 1;
     const cost = parseFloat(returnCost) || 0;
     const refund = parseFloat(returnRefund) || 0;
-
     if (!returnSupplierName.trim() || !returnItemName.trim() || cost <= 0) {
       Alert.alert('Validation Error', 'Please enter supplier name, item name, and cost.');
       return;
@@ -166,20 +167,20 @@ export const PurchaseHubScreen: React.FC = () => {
 
     const total = qty * cost;
     const seq = (purchaseReturns.length + 1).toString().padStart(4, '0');
-
     await createPurchaseReturn({
       returnNumber: `PR-${new Date().getFullYear()}-${seq}`,
       supplierName: returnSupplierName.trim(),
       date: new Date().toISOString().split('T')[0],
       totalAmount: total,
       refundAmount: refund,
+      creditAmount: Math.max(0, total - refund),
       reason: returnReason || undefined,
       items: [
         {
           id: Math.random().toString(),
           itemName: returnItemName.trim(),
           quantity: qty,
-          costPrice: cost,
+          purchaseCost: cost,
           totalAmount: total,
         },
       ],
@@ -194,268 +195,411 @@ export const PurchaseHubScreen: React.FC = () => {
   };
 
   return (
-    <View style={styles.container}>
-      {/* Search & Header Row */}
-      <View style={styles.searchRow}>
-        <View style={styles.searchBox}>
-          <Feather name="search" size={16} color="#666" />
+    <View style={[styles.container, { backgroundColor: theme.colors.bg }]}>
+      {/* Header Bar */}
+      <View
+        style={[
+          styles.headerBar,
+          {
+            backgroundColor: theme.colors.card,
+            borderBottomColor: theme.colors.borderGlass,
+          },
+        ]}
+      >
+        <View
+          style={[
+            styles.searchBox,
+            {
+              backgroundColor: theme.colors.surface,
+              borderColor: theme.colors.borderGlass,
+            },
+          ]}
+        >
+          <Feather name="search" size={15} color={theme.colors.textMuted} />
           <TextInput
-            style={styles.searchInput}
-            placeholder="Search bills, suppliers..."
-            placeholderTextColor="#555"
+            style={[styles.searchInput, { color: theme.colors.textPrimary }]}
+            placeholder="Search bill # or supplier..."
+            placeholderTextColor={theme.colors.textMuted}
             value={searchQuery}
             onChangeText={setSearchQuery}
           />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <Feather name="x-circle" size={15} color={theme.colors.textMuted} />
+            </TouchableOpacity>
+          )}
         </View>
 
         {activeSubTab === 'bills' && (
           <TouchableOpacity
-            style={styles.headerBtn}
+            style={[styles.headerBtn, { backgroundColor: theme.colors.primary }]}
             onPress={() => setShowBillModal(true)}
+            activeOpacity={0.88}
           >
-            <Feather name="plus" size={16} color="#FFFFFF" />
-            <Text style={styles.headerBtnText}>Add Bill</Text>
+            <Feather name="plus" size={15} color="#FFFFFF" />
+            <Text style={styles.headerBtnText}>Purchase Bill</Text>
           </TouchableOpacity>
         )}
 
         {activeSubTab === 'payment_out' && (
           <TouchableOpacity
-            style={styles.headerBtn}
+            style={[styles.headerBtn, { backgroundColor: '#EF4444' }]}
             onPress={() => setShowPaymentOutModal(true)}
+            activeOpacity={0.88}
           >
-            <Feather name="plus" size={16} color="#FFFFFF" />
-            <Text style={styles.headerBtnText}>Pay Out</Text>
+            <Feather name="plus" size={15} color="#FFFFFF" />
+            <Text style={styles.headerBtnText}>Payment Out</Text>
           </TouchableOpacity>
         )}
 
         {activeSubTab === 'returns' && (
           <TouchableOpacity
-            style={[styles.headerBtn, styles.btnRose]}
+            style={[styles.headerBtn, { backgroundColor: '#F59E0B' }]}
             onPress={() => setShowReturnModal(true)}
+            activeOpacity={0.88}
           >
-            <Feather name="plus" size={16} color="#FFFFFF" />
-            <Text style={styles.headerBtnText}>Return</Text>
+            <Feather name="plus" size={15} color="#FFFFFF" />
+            <Text style={styles.headerBtnText}>Debit Note</Text>
           </TouchableOpacity>
         )}
       </View>
 
-      {/* Subtabs */}
+      {/* Sub-Tabs Selector */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.tabsRow}
       >
         <TouchableOpacity
-          style={[styles.tab, activeSubTab === 'bills' && styles.tabActive]}
+          style={[
+            styles.tab,
+            {
+              backgroundColor:
+                activeSubTab === 'bills' ? 'rgba(99, 102, 241, 0.14)' : theme.colors.card,
+              borderColor:
+                activeSubTab === 'bills' ? theme.colors.primary : theme.colors.borderGlass,
+            },
+          ]}
           onPress={() => setActiveSubTab('bills')}
         >
-          <Text style={[styles.tabText, activeSubTab === 'bills' && styles.tabTextActive]}>
-            Purchase Bills ({purchaseBills.length})
+          <Text
+            style={[
+              styles.tabText,
+              {
+                color:
+                  activeSubTab === 'bills' ? theme.colors.primary : theme.colors.textSecondary,
+              },
+              activeSubTab === 'bills' && styles.tabTextActive,
+            ]}
+          >
+            Bills In ({purchaseBills.length})
           </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.tab, activeSubTab === 'payment_out' && styles.tabActive]}
+          style={[
+            styles.tab,
+            {
+              backgroundColor:
+                activeSubTab === 'payment_out' ? 'rgba(239, 68, 68, 0.14)' : theme.colors.card,
+              borderColor:
+                activeSubTab === 'payment_out' ? '#EF4444' : theme.colors.borderGlass,
+            },
+          ]}
           onPress={() => setActiveSubTab('payment_out')}
         >
-          <Text style={[styles.tabText, activeSubTab === 'payment_out' && styles.tabTextActive]}>
-            Payment Out ({paymentOutRecords.length})
+          <Text
+            style={[
+              styles.tabText,
+              { color: activeSubTab === 'payment_out' ? '#EF4444' : theme.colors.textSecondary },
+              activeSubTab === 'payment_out' && styles.tabTextActive,
+            ]}
+          >
+            Payments Out ({paymentOutRecords.length})
           </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.tab, activeSubTab === 'returns' && styles.tabActive]}
+          style={[
+            styles.tab,
+            {
+              backgroundColor:
+                activeSubTab === 'returns' ? 'rgba(245, 158, 11, 0.14)' : theme.colors.card,
+              borderColor:
+                activeSubTab === 'returns' ? '#F59E0B' : theme.colors.borderGlass,
+            },
+          ]}
           onPress={() => setActiveSubTab('returns')}
         >
-          <Text style={[styles.tabText, activeSubTab === 'returns' && styles.tabTextActive]}>
-            Purchase Return ({purchaseReturns.length})
+          <Text
+            style={[
+              styles.tabText,
+              { color: activeSubTab === 'returns' ? '#F59E0B' : theme.colors.textSecondary },
+              activeSubTab === 'returns' && styles.tabTextActive,
+            ]}
+          >
+            Returns ({purchaseReturns.length})
           </Text>
         </TouchableOpacity>
       </ScrollView>
 
-      {/* Tab 1: Purchase Bills */}
-      {activeSubTab === 'bills' && (
-        <ScrollView contentContainerStyle={styles.listContainer} showsVerticalScrollIndicator={false}>
-          {filteredBills.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Feather name="truck" size={40} color="#444" />
-              <Text style={styles.emptyText}>No purchase bills recorded</Text>
-            </View>
-          ) : (
-            filteredBills.map((b) => (
-              <View key={b.id} style={styles.card}>
-                <View style={styles.cardHeader}>
+      {/* Main Content List */}
+      <ScrollView
+        contentContainerStyle={styles.listContainer}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* 1. BILLS */}
+        {activeSubTab === 'bills' && (
+          <>
+            {filteredBills.map((b) => (
+              <View
+                key={b.id}
+                style={[
+                  styles.card,
+                  {
+                    backgroundColor: theme.colors.card,
+                    borderColor: theme.colors.borderGlass,
+                  },
+                ]}
+              >
+                <View style={styles.cardTop}>
                   <View>
-                    <Text style={styles.cardTitle}>{b.billNumber}</Text>
-                    <Text style={styles.cardSubtitle}>
+                    <Text style={[styles.cardTitle, { color: theme.colors.textPrimary }]}>
+                      {b.billNumber}
+                    </Text>
+                    <Text style={[styles.cardSub, { color: theme.colors.textMuted }]}>
                       {b.supplierName} • {b.date}
                     </Text>
                   </View>
-                  <Text style={[styles.cardAmount, { color: '#3B82F6' }]}>
-                    Rs. {b.totalAmount.toLocaleString()}
-                  </Text>
-                </View>
-
-                <View style={styles.cardFooter}>
-                  <View
-                    style={[
-                      styles.modeBadge,
-                      b.status === 'paid' ? styles.badgeGreen : styles.badgeAmber,
-                    ]}
-                  >
-                    <Text
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text style={[styles.cardAmount, { color: '#EF4444' }]}>
+                      Rs. {Number(b.totalAmount).toLocaleString()}
+                    </Text>
+                    <View
                       style={[
-                        styles.modeBadgeText,
-                        b.status === 'paid' ? { color: '#10B981' } : { color: '#F59E0B' },
+                        styles.badge,
+                        {
+                          backgroundColor:
+                            b.paidAmount >= b.totalAmount
+                              ? 'rgba(16, 185, 129, 0.15)'
+                              : 'rgba(239, 68, 68, 0.15)',
+                        },
                       ]}
                     >
-                      {b.status.toUpperCase()}
-                    </Text>
+                      <Text
+                        style={[
+                          styles.badgeText,
+                          {
+                            color: b.paidAmount >= b.totalAmount ? '#10B981' : '#EF4444',
+                          },
+                        ]}
+                      >
+                        {b.paidAmount >= b.totalAmount ? 'PAID' : 'PENDING'}
+                      </Text>
+                    </View>
                   </View>
-                  <Text style={styles.dueText}>
-                    {b.dueAmount > 0 ? `Due: Rs. ${b.dueAmount.toLocaleString()}` : 'Paid in Full'}
-                  </Text>
                 </View>
               </View>
-            ))
-          )}
-        </ScrollView>
-      )}
+            ))}
+            {filteredBills.length === 0 && (
+              <View style={styles.emptyState}>
+                <Feather name="truck" size={36} color={theme.colors.textMuted} />
+                <Text style={[styles.emptyText, { color: theme.colors.textMuted }]}>
+                  No purchase bills recorded.
+                </Text>
+              </View>
+            )}
+          </>
+        )}
 
-      {/* Tab 2: Payment Out */}
-      {activeSubTab === 'payment_out' && (
-        <ScrollView contentContainerStyle={styles.listContainer} showsVerticalScrollIndicator={false}>
-          {filteredPaymentsOut.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Feather name="credit-card" size={40} color="#444" />
-              <Text style={styles.emptyText}>No payment out records</Text>
-            </View>
-          ) : (
-            filteredPaymentsOut.map((p) => (
-              <View key={p.id} style={styles.card}>
-                <View style={styles.cardHeader}>
+        {/* 2. PAYMENTS OUT */}
+        {activeSubTab === 'payment_out' && (
+          <>
+            {filteredPaymentsOut.map((pay) => (
+              <View
+                key={pay.id}
+                style={[
+                  styles.card,
+                  {
+                    backgroundColor: theme.colors.card,
+                    borderColor: theme.colors.borderGlass,
+                  },
+                ]}
+              >
+                <View style={styles.cardTop}>
                   <View>
-                    <Text style={styles.cardTitle}>{p.partyName}</Text>
-                    <Text style={styles.cardSubtitle}>
-                      {p.date} • {p.paymentMode.toUpperCase()}
+                    <Text style={[styles.cardTitle, { color: theme.colors.textPrimary }]}>
+                      {pay.partyName}
+                    </Text>
+                    <Text style={[styles.cardSub, { color: theme.colors.textMuted }]}>
+                      {pay.date} • Mode: {pay.paymentMode.toUpperCase()}
                     </Text>
                   </View>
-                  <Text style={[styles.cardAmount, { color: '#FF4D4F' }]}>
-                    - Rs. {p.amount.toLocaleString()}
+                  <Text style={[styles.cardAmount, { color: '#EF4444' }]}>
+                    - Rs. {Number(pay.amount).toLocaleString()}
                   </Text>
                 </View>
-                {p.notes ? <Text style={styles.notesText}>{p.notes}</Text> : null}
+                {pay.notes && (
+                  <Text style={[styles.cardNote, { color: theme.colors.textSecondary }]}>
+                    Note: {pay.notes}
+                  </Text>
+                )}
               </View>
-            ))
-          )}
-        </ScrollView>
-      )}
+            ))}
+            {filteredPaymentsOut.length === 0 && (
+              <View style={styles.emptyState}>
+                <Feather name="upload" size={36} color={theme.colors.textMuted} />
+                <Text style={[styles.emptyText, { color: theme.colors.textMuted }]}>
+                  No payment-out records found.
+                </Text>
+              </View>
+            )}
+          </>
+        )}
 
-      {/* Tab 3: Purchase Returns */}
-      {activeSubTab === 'returns' && (
-        <ScrollView contentContainerStyle={styles.listContainer} showsVerticalScrollIndicator={false}>
-          {filteredReturns.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Feather name="corner-up-left" size={40} color="#444" />
-              <Text style={styles.emptyText}>No purchase returns recorded</Text>
-            </View>
-          ) : (
-            filteredReturns.map((pr) => (
-              <View key={pr.id} style={styles.card}>
-                <View style={styles.cardHeader}>
+        {/* 3. PURCHASE RETURNS */}
+        {activeSubTab === 'returns' && (
+          <>
+            {filteredReturns.map((pr) => (
+              <View
+                key={pr.id}
+                style={[
+                  styles.card,
+                  {
+                    backgroundColor: theme.colors.card,
+                    borderColor: theme.colors.borderGlass,
+                  },
+                ]}
+              >
+                <View style={styles.cardTop}>
                   <View>
-                    <Text style={styles.cardTitle}>{pr.returnNumber}</Text>
-                    <Text style={styles.cardSubtitle}>
+                    <Text style={[styles.cardTitle, { color: theme.colors.textPrimary }]}>
+                      {pr.returnNumber}
+                    </Text>
+                    <Text style={[styles.cardSub, { color: theme.colors.textMuted }]}>
                       {pr.supplierName} • {pr.date}
                     </Text>
                   </View>
                   <Text style={[styles.cardAmount, { color: '#10B981' }]}>
-                    Refund: Rs. {pr.refundAmount.toLocaleString()}
+                    + Rs. {Number(pr.totalAmount).toLocaleString()}
                   </Text>
                 </View>
-                {pr.reason ? <Text style={styles.notesText}>Reason: {pr.reason}</Text> : null}
+                {pr.reason && (
+                  <Text style={[styles.cardNote, { color: theme.colors.textSecondary }]}>
+                    Reason: {pr.reason}
+                  </Text>
+                )}
               </View>
-            ))
-          )}
-        </ScrollView>
-      )}
+            ))}
+            {filteredReturns.length === 0 && (
+              <View style={styles.emptyState}>
+                <Feather name="corner-up-left" size={36} color={theme.colors.textMuted} />
+                <Text style={[styles.emptyText, { color: theme.colors.textMuted }]}>
+                  No purchase returns recorded.
+                </Text>
+              </View>
+            )}
+          </>
+        )}
+      </ScrollView>
 
-      {/* MODAL: New Purchase Bill */}
-      <Modal visible={showBillModal} transparent animationType="slide">
+      {/* CREATE BILL MODAL */}
+      <Modal
+        visible={showBillModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowBillModal(false)}
+      >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View
+            style={[
+              styles.modalCard,
+              {
+                backgroundColor: isDark ? '#0B0F19' : '#FFFFFF',
+                borderColor: isDark ? '#1E293B' : '#CBD5E1',
+              },
+            ]}
+          >
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Add Purchase Bill</Text>
+              <Text style={[styles.modalTitle, { color: theme.colors.textPrimary }]}>
+                Record Purchase Bill
+              </Text>
               <TouchableOpacity onPress={() => setShowBillModal(false)}>
-                <Feather name="x" size={20} color="#888" />
+                <Feather name="x" size={20} color={theme.colors.textSecondary} />
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.modalForm}>
-              <Text style={styles.label}>Select Supplier *</Text>
-              <View style={styles.pickerContainer}>
-                {parties
-                  .filter((p) => p.type === 'supplier')
-                  .map((p) => (
-                    <TouchableOpacity
-                      key={p.id}
-                      style={[
-                        styles.pickerOption,
-                        billSupplierName === p.name && styles.pickerOptionActive,
-                      ]}
-                      onPress={() => {
-                        setBillSupplierName(p.name);
-                        setBillSupplierPhone(p.phone || '');
-                      }}
-                    >
-                      <Text
-                        style={[
-                          styles.pickerOptionText,
-                          billSupplierName === p.name && styles.pickerOptionTextActive,
-                        ]}
-                      >
-                        {p.name}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-              </View>
-
-              <Text style={styles.label}>Supplier Name (if new)</Text>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={[styles.modalLabel, { color: theme.colors.textSecondary }]}>
+                Supplier / Vendor *
+              </Text>
               <TextInput
-                style={styles.input}
-                placeholder="Vendor or Distributor Name"
-                placeholderTextColor="#555"
+                style={[
+                  styles.modalInput,
+                  {
+                    backgroundColor: theme.colors.surface,
+                    color: theme.colors.textPrimary,
+                    borderColor: theme.colors.borderGlass,
+                  },
+                ]}
+                placeholder="e.g. Kathmandu Distributors"
+                placeholderTextColor={theme.colors.textMuted}
                 value={billSupplierName}
                 onChangeText={setBillSupplierName}
               />
 
-              <Text style={styles.label}>Item / Product Name *</Text>
+              <Text style={[styles.modalLabel, { color: theme.colors.textSecondary, marginTop: 10 }]}>
+                Item Purchased *
+              </Text>
               <TextInput
-                style={styles.input}
-                placeholder="Product purchased"
-                placeholderTextColor="#555"
+                style={[
+                  styles.modalInput,
+                  {
+                    backgroundColor: theme.colors.surface,
+                    color: theme.colors.textPrimary,
+                    borderColor: theme.colors.borderGlass,
+                  },
+                ]}
+                placeholder="e.g. Cooking Oil Box"
+                placeholderTextColor={theme.colors.textMuted}
                 value={billItemName}
                 onChangeText={setBillItemName}
               />
 
-              <View style={styles.twoCols}>
+              <View style={styles.inputSplitRow}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.label}>Quantity</Text>
+                  <Text style={[styles.modalLabel, { color: theme.colors.textSecondary, marginTop: 10 }]}>
+                    Quantity
+                  </Text>
                   <TextInput
-                    style={styles.input}
-                    placeholder="1"
-                    placeholderTextColor="#555"
+                    style={[
+                      styles.modalInput,
+                      {
+                        backgroundColor: theme.colors.surface,
+                        color: theme.colors.textPrimary,
+                        borderColor: theme.colors.borderGlass,
+                      },
+                    ]}
                     keyboardType="numeric"
                     value={billQty}
                     onChangeText={setBillQty}
                   />
                 </View>
-                <View style={{ flex: 1.5 }}>
-                  <Text style={styles.label}>Cost Price (Rs.) *</Text>
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <Text style={[styles.modalLabel, { color: theme.colors.textSecondary, marginTop: 10 }]}>
+                    Cost / Unit (Rs.) *
+                  </Text>
                   <TextInput
-                    style={styles.input}
+                    style={[
+                      styles.modalInput,
+                      {
+                        backgroundColor: theme.colors.surface,
+                        color: theme.colors.textPrimary,
+                        borderColor: theme.colors.borderGlass,
+                      },
+                    ]}
                     placeholder="0.00"
-                    placeholderTextColor="#555"
+                    placeholderTextColor={theme.colors.textMuted}
                     keyboardType="numeric"
                     value={billCost}
                     onChangeText={setBillCost}
@@ -463,162 +607,270 @@ export const PurchaseHubScreen: React.FC = () => {
                 </View>
               </View>
 
-              <Text style={styles.label}>Amount Paid (Rs.)</Text>
+              <Text style={[styles.modalLabel, { color: theme.colors.textSecondary, marginTop: 10 }]}>
+                Paid Amount (Rs.)
+              </Text>
               <TextInput
-                style={styles.input}
-                placeholder="0.00"
-                placeholderTextColor="#555"
+                style={[
+                  styles.modalInput,
+                  {
+                    backgroundColor: theme.colors.surface,
+                    color: theme.colors.textPrimary,
+                    borderColor: theme.colors.borderGlass,
+                  },
+                ]}
+                placeholder="0.00 (leave empty if full credit)"
+                placeholderTextColor={theme.colors.textMuted}
                 keyboardType="numeric"
                 value={billPaid}
                 onChangeText={setBillPaid}
               />
 
-              <TouchableOpacity style={styles.submitBtn} onPress={handleCreateBill}>
-                <Text style={styles.submitBtnText}>Save Purchase & Restock</Text>
-              </TouchableOpacity>
+              <AnimatedPressable
+                style={[styles.modalSubmitBtn, { backgroundColor: theme.colors.primary, marginTop: 18 }]}
+                onPress={handleCreateBill}
+                activeScale={0.96}
+              >
+                <Text style={styles.modalSubmitText}>Save Purchase Bill</Text>
+              </AnimatedPressable>
             </ScrollView>
           </View>
         </View>
       </Modal>
 
-      {/* MODAL: Payment Out */}
-      <Modal visible={showPaymentOutModal} transparent animationType="slide">
+      {/* PAYMENT OUT MODAL */}
+      <Modal
+        visible={showPaymentOutModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowPaymentOutModal(false)}
+      >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View
+            style={[
+              styles.modalCard,
+              {
+                backgroundColor: isDark ? '#0B0F19' : '#FFFFFF',
+                borderColor: isDark ? '#1E293B' : '#CBD5E1',
+              },
+            ]}
+          >
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Record Payment Out</Text>
+              <Text style={[styles.modalTitle, { color: theme.colors.textPrimary }]}>
+                Record Payment Given
+              </Text>
               <TouchableOpacity onPress={() => setShowPaymentOutModal(false)}>
-                <Feather name="x" size={20} color="#888" />
+                <Feather name="x" size={20} color={theme.colors.textSecondary} />
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.modalForm}>
-              <Text style={styles.label}>Select Supplier *</Text>
-              <View style={styles.pickerContainer}>
-                {parties
-                  .filter((p) => p.type === 'supplier')
-                  .map((p) => (
-                    <TouchableOpacity
-                      key={p.id}
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={[styles.modalLabel, { color: theme.colors.textSecondary }]}>
+                Supplier / Party *
+              </Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
+                {parties.map((p) => (
+                  <TouchableOpacity
+                    key={p.id}
+                    style={[
+                      styles.partyChip,
+                      {
+                        backgroundColor:
+                          outPartyId === p.id ? '#EF4444' : theme.colors.surface,
+                        borderColor:
+                          outPartyId === p.id ? '#EF4444' : theme.colors.borderGlass,
+                      },
+                    ]}
+                    onPress={() => setOutPartyId(p.id)}
+                  >
+                    <Text
                       style={[
-                        styles.pickerOption,
-                        outPartyId === p.id && styles.pickerOptionActive,
+                        styles.partyChipText,
+                        { color: outPartyId === p.id ? '#FFFFFF' : theme.colors.textPrimary },
                       ]}
-                      onPress={() => setOutPartyId(p.id)}
                     >
-                      <Text
-                        style={[
-                          styles.pickerOptionText,
-                          outPartyId === p.id && styles.pickerOptionTextActive,
-                        ]}
-                      >
-                        {p.name}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-              </View>
+                      {p.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
 
-              <Text style={styles.label}>Amount Paid (Rs.) *</Text>
+              <Text style={[styles.modalLabel, { color: theme.colors.textSecondary, marginTop: 12 }]}>
+                Amount Paid (Rs.) *
+              </Text>
               <TextInput
-                style={[styles.input, styles.amountInput]}
+                style={[
+                  styles.modalInput,
+                  {
+                    backgroundColor: theme.colors.surface,
+                    color: theme.colors.textPrimary,
+                    borderColor: theme.colors.borderGlass,
+                  },
+                ]}
                 placeholder="0.00"
-                placeholderTextColor="#555"
+                placeholderTextColor={theme.colors.textMuted}
                 keyboardType="numeric"
                 value={outAmount}
                 onChangeText={setOutAmount}
               />
 
-              <Text style={styles.label}>Paid From Account</Text>
-              <View style={styles.pickerContainer}>
-                {accounts.map((a) => (
+              <Text style={[styles.modalLabel, { color: theme.colors.textSecondary, marginTop: 12 }]}>
+                Payment Mode
+              </Text>
+              <View style={styles.modeRow}>
+                {(['cash', 'fonepay', 'bank', 'credit'] as const).map((m) => (
                   <TouchableOpacity
-                    key={a.id}
+                    key={m}
                     style={[
-                      styles.pickerOption,
-                      outAccountId === a.id && styles.pickerOptionActive,
+                      styles.modeBtn,
+                      {
+                        backgroundColor:
+                          outMode === m ? '#EF4444' : theme.colors.surface,
+                        borderColor:
+                          outMode === m ? '#EF4444' : theme.colors.borderGlass,
+                      },
                     ]}
-                    onPress={() => setOutAccountId(a.id)}
+                    onPress={() => setOutMode(m)}
                   >
                     <Text
                       style={[
-                        styles.pickerOptionText,
-                        outAccountId === a.id && styles.pickerOptionTextActive,
+                        styles.modeBtnText,
+                        { color: outMode === m ? '#FFFFFF' : theme.colors.textSecondary },
                       ]}
                     >
-                      {a.name}
+                      {m.toUpperCase()}
                     </Text>
                   </TouchableOpacity>
                 ))}
               </View>
 
-              <Text style={styles.label}>Notes</Text>
+              <Text style={[styles.modalLabel, { color: theme.colors.textSecondary, marginTop: 12 }]}>
+                Notes
+              </Text>
               <TextInput
-                style={styles.input}
-                placeholder="e.g. Cheque # or Bank Transfer"
-                placeholderTextColor="#555"
+                style={[
+                  styles.modalInput,
+                  {
+                    backgroundColor: theme.colors.surface,
+                    color: theme.colors.textPrimary,
+                    borderColor: theme.colors.borderGlass,
+                  },
+                ]}
+                placeholder="Payment reference, cheque number..."
+                placeholderTextColor={theme.colors.textMuted}
                 value={outNotes}
                 onChangeText={setOutNotes}
               />
 
-              <TouchableOpacity
-                style={[styles.submitBtn, { backgroundColor: '#3B82F6' }]}
-                onPress={handleCreatePaymentOut}
+              <AnimatedPressable
+                style={[styles.modalSubmitBtn, { backgroundColor: '#EF4444', marginTop: 18 }]}
+                onPress={handleRecordPaymentOut}
+                activeScale={0.96}
               >
-                <Text style={styles.submitBtnText}>Save Payment Out</Text>
-              </TouchableOpacity>
+                <Text style={styles.modalSubmitText}>Save Payment Out</Text>
+              </AnimatedPressable>
             </ScrollView>
           </View>
         </View>
       </Modal>
 
-      {/* MODAL: Purchase Return */}
-      <Modal visible={showReturnModal} transparent animationType="slide">
+      {/* PURCHASE RETURN MODAL */}
+      <Modal
+        visible={showReturnModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowReturnModal(false)}
+      >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View
+            style={[
+              styles.modalCard,
+              {
+                backgroundColor: isDark ? '#0B0F19' : '#FFFFFF',
+                borderColor: isDark ? '#1E293B' : '#CBD5E1',
+              },
+            ]}
+          >
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>New Purchase Return (Debit Note)</Text>
+              <Text style={[styles.modalTitle, { color: theme.colors.textPrimary }]}>
+                Record Purchase Return (Debit Note)
+              </Text>
               <TouchableOpacity onPress={() => setShowReturnModal(false)}>
-                <Feather name="x" size={20} color="#888" />
+                <Feather name="x" size={20} color={theme.colors.textSecondary} />
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.modalForm}>
-              <Text style={styles.label}>Supplier Name *</Text>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={[styles.modalLabel, { color: theme.colors.textSecondary }]}>
+                Supplier Name *
+              </Text>
               <TextInput
-                style={styles.input}
-                placeholder="Supplier Name"
-                placeholderTextColor="#555"
+                style={[
+                  styles.modalInput,
+                  {
+                    backgroundColor: theme.colors.surface,
+                    color: theme.colors.textPrimary,
+                    borderColor: theme.colors.borderGlass,
+                  },
+                ]}
+                placeholder="e.g. Wholesale Nepal"
+                placeholderTextColor={theme.colors.textMuted}
                 value={returnSupplierName}
                 onChangeText={setReturnSupplierName}
               />
 
-              <Text style={styles.label}>Returned Item *</Text>
+              <Text style={[styles.modalLabel, { color: theme.colors.textSecondary, marginTop: 10 }]}>
+                Returned Item Name *
+              </Text>
               <TextInput
-                style={styles.input}
-                placeholder="Item name"
-                placeholderTextColor="#555"
+                style={[
+                  styles.modalInput,
+                  {
+                    backgroundColor: theme.colors.surface,
+                    color: theme.colors.textPrimary,
+                    borderColor: theme.colors.borderGlass,
+                  },
+                ]}
+                placeholder="e.g. Expired stock"
+                placeholderTextColor={theme.colors.textMuted}
                 value={returnItemName}
                 onChangeText={setReturnItemName}
               />
 
-              <View style={styles.twoCols}>
+              <View style={styles.inputSplitRow}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.label}>Qty</Text>
+                  <Text style={[styles.modalLabel, { color: theme.colors.textSecondary, marginTop: 10 }]}>
+                    Qty
+                  </Text>
                   <TextInput
-                    style={styles.input}
-                    placeholder="1"
-                    placeholderTextColor="#555"
+                    style={[
+                      styles.modalInput,
+                      {
+                        backgroundColor: theme.colors.surface,
+                        color: theme.colors.textPrimary,
+                        borderColor: theme.colors.borderGlass,
+                      },
+                    ]}
                     keyboardType="numeric"
                     value={returnQty}
                     onChangeText={setReturnQty}
                   />
                 </View>
-                <View style={{ flex: 1.5 }}>
-                  <Text style={styles.label}>Cost per Unit (Rs.) *</Text>
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <Text style={[styles.modalLabel, { color: theme.colors.textSecondary, marginTop: 10 }]}>
+                    Cost / Unit (Rs.) *
+                  </Text>
                   <TextInput
-                    style={styles.input}
+                    style={[
+                      styles.modalInput,
+                      {
+                        backgroundColor: theme.colors.surface,
+                        color: theme.colors.textPrimary,
+                        borderColor: theme.colors.borderGlass,
+                      },
+                    ]}
                     placeholder="0.00"
-                    placeholderTextColor="#555"
+                    placeholderTextColor={theme.colors.textMuted}
                     keyboardType="numeric"
                     value={returnCost}
                     onChangeText={setReturnCost}
@@ -626,31 +878,31 @@ export const PurchaseHubScreen: React.FC = () => {
                 </View>
               </View>
 
-              <Text style={styles.label}>Refund Received (Rs.)</Text>
+              <Text style={[styles.modalLabel, { color: theme.colors.textSecondary, marginTop: 10 }]}>
+                Reason
+              </Text>
               <TextInput
-                style={styles.input}
-                placeholder="0.00"
-                placeholderTextColor="#555"
-                keyboardType="numeric"
-                value={returnRefund}
-                onChangeText={setReturnRefund}
-              />
-
-              <Text style={styles.label}>Reason for Return</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g. Expired, damaged goods"
-                placeholderTextColor="#555"
+                style={[
+                  styles.modalInput,
+                  {
+                    backgroundColor: theme.colors.surface,
+                    color: theme.colors.textPrimary,
+                    borderColor: theme.colors.borderGlass,
+                  },
+                ]}
+                placeholder="Reason for return to supplier..."
+                placeholderTextColor={theme.colors.textMuted}
                 value={returnReason}
                 onChangeText={setReturnReason}
               />
 
-              <TouchableOpacity
-                style={[styles.submitBtn, { backgroundColor: '#FF4D4F' }]}
+              <AnimatedPressable
+                style={[styles.modalSubmitBtn, { backgroundColor: '#F59E0B', marginTop: 18 }]}
                 onPress={handleCreateReturn}
+                activeScale={0.96}
               >
-                <Text style={styles.submitBtnText}>Issue Debit Note</Text>
-              </TouchableOpacity>
+                <Text style={styles.modalSubmitText}>Save Purchase Return</Text>
+              </AnimatedPressable>
             </ScrollView>
           </View>
         </View>
@@ -662,240 +914,194 @@ export const PurchaseHubScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000000',
   },
-  searchRow: {
+  headerBar: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: 12,
+    paddingVertical: 10,
     gap: 10,
+    borderBottomWidth: 1,
   },
   searchBox: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#111111',
     borderWidth: 1,
-    borderColor: '#222222',
-    borderRadius: 10,
+    borderRadius: 8,
     paddingHorizontal: 12,
     height: 40,
   },
   searchInput: {
     flex: 1,
-    color: '#FFFFFF',
     fontSize: 13,
+    padding: 0,
   },
   headerBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#3B82F6',
+    gap: 6,
     paddingHorizontal: 12,
     height: 40,
-    borderRadius: 10,
-  },
-  btnRose: {
-    backgroundColor: '#FF4D4F',
+    borderRadius: 8,
   },
   headerBtnText: {
     color: '#FFFFFF',
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '800',
   },
   tabsRow: {
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 10,
     gap: 8,
   },
   tab: {
     paddingHorizontal: 14,
     paddingVertical: 7,
     borderRadius: 20,
-    backgroundColor: '#111111',
     borderWidth: 1,
-    borderColor: '#222222',
-  },
-  tabActive: {
-    backgroundColor: 'rgba(59, 130, 246, 0.15)',
-    borderColor: '#3B82F6',
   },
   tabText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#888888',
   },
   tabTextActive: {
-    color: '#3B82F6',
+    fontWeight: '800',
   },
   listContainer: {
     padding: 16,
+    paddingBottom: 40,
     gap: 10,
-  },
-  emptyState: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 60,
-    gap: 10,
-  },
-  emptyText: {
-    fontSize: 13,
-    color: '#555555',
   },
   card: {
-    backgroundColor: '#0d0d0d',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#1f1f1f',
     padding: 14,
   },
-  cardHeader: {
+  cardTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
   },
   cardTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '800',
   },
-  cardSubtitle: {
+  cardSub: {
     fontSize: 12,
-    color: '#777777',
     marginTop: 2,
   },
   cardAmount: {
     fontSize: 15,
     fontWeight: '800',
-    color: '#FFFFFF',
   },
-  cardFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 10,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#1a1a1a',
+  cardNote: {
+    fontSize: 12,
+    marginTop: 8,
+    fontStyle: 'italic',
   },
-  modeBadge: {
-    backgroundColor: '#1a1a1a',
+  badge: {
     paddingHorizontal: 8,
     paddingVertical: 2,
-    borderRadius: 4,
+    borderRadius: 6,
+    marginTop: 4,
   },
-  badgeGreen: {
-    backgroundColor: 'rgba(16, 185, 129, 0.15)',
-  },
-  badgeAmber: {
-    backgroundColor: 'rgba(245, 158, 11, 0.15)',
-  },
-  modeBadgeText: {
+  badgeText: {
     fontSize: 10,
-    fontWeight: '700',
-    color: '#888888',
+    fontWeight: '800',
   },
-  dueText: {
-    fontSize: 11,
-    color: '#F59E0B',
-    fontWeight: '600',
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+    gap: 8,
   },
-  notesText: {
-    fontSize: 11,
-    color: '#888888',
-    marginTop: 6,
+  emptyText: {
+    fontSize: 13,
+    fontWeight: '500',
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.85)',
-    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
   },
-  modalContent: {
-    backgroundColor: '#0e0e0e',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+  modalCard: {
+    width: '100%',
+    maxWidth: 440,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#262626',
-    padding: 20,
+    padding: 18,
     maxHeight: '85%',
   },
   modalHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    alignItems: 'center',
+    marginBottom: 14,
   },
   modalTitle: {
     fontSize: 16,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    fontWeight: '800',
   },
-  modalForm: {
-    gap: 12,
-  },
-  label: {
+  modalLabel: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#AAAAAA',
+    fontWeight: '700',
+    marginBottom: 6,
   },
-  input: {
-    backgroundColor: '#161616',
-    borderWidth: 1,
-    borderColor: '#2a2a2a',
-    borderRadius: 10,
-    paddingHorizontal: 12,
+  modalInput: {
     height: 42,
-    color: '#FFFFFF',
+    borderRadius: 8,
+    borderWidth: 1,
+    paddingHorizontal: 12,
     fontSize: 13,
   },
-  amountInput: {
-    fontSize: 18,
+  chipRow: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingBottom: 4,
+  },
+  partyChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginRight: 8,
+  },
+  partyChipText: {
+    fontSize: 12,
     fontWeight: '700',
-    color: '#3B82F6',
-    textAlign: 'center',
   },
-  twoCols: {
+  modeRow: {
     flexDirection: 'row',
-    gap: 10,
-  },
-  pickerContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: 8,
   },
-  pickerOption: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: '#161616',
-    borderWidth: 1,
-    borderColor: '#262626',
-  },
-  pickerOptionActive: {
-    borderColor: '#3B82F6',
-    backgroundColor: 'rgba(59, 130, 246, 0.15)',
-  },
-  pickerOptionText: {
-    fontSize: 11,
-    color: '#888888',
-  },
-  pickerOptionTextActive: {
-    color: '#3B82F6',
-    fontWeight: '700',
-  },
-  submitBtn: {
-    backgroundColor: '#3B82F6',
-    borderRadius: 10,
-    height: 46,
+  modeBtn: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 8,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
   },
-  submitBtnText: {
+  modeBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  inputSplitRow: {
+    flexDirection: 'row',
+  },
+  modalSubmitBtn: {
+    height: 44,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalSubmitText: {
     color: '#FFFFFF',
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '800',
   },
 });

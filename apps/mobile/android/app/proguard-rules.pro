@@ -1,5 +1,5 @@
 # ============================================================================
-# Byapar (व्यापार) - Android ProGuard & R8 Optimization and Protection Rules
+# Byapar - Android ProGuard & R8 Optimization and Protection Rules
 # ============================================================================
 
 # 1. React Native Core & TurboModules
