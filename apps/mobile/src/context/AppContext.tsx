@@ -48,6 +48,7 @@ interface AppContextType {
   isOnboarded: boolean;
   activeTab: ActiveTab;
   setActiveTab: (tab: ActiveTab) => void;
+  navigateBack: () => boolean;
   themeMode: ThemeMode;
   theme: Theme;
   setThemeMode: (mode: ThemeMode) => Promise<void>;
@@ -237,7 +238,37 @@ function mapDbToAccountTx(row: any): AccountTransaction {
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isReady, setIsReady] = useState(false);
   const [isOnboarded, setIsOnboarded] = useState(true);
-  const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
+  const [activeTab, setActiveTabState] = useState<ActiveTab>('dashboard');
+  const [tabHistory, setTabHistory] = useState<ActiveTab[]>(['dashboard']);
+
+  const setActiveTab = (tab: ActiveTab) => {
+    setActiveTabState(tab);
+    setTabHistory((prev) => {
+      if (prev.length > 0 && prev[prev.length - 1] === tab) return prev;
+      return [...prev, tab];
+    });
+    storage.set('active_tab', tab).catch(() => {});
+  };
+
+  const navigateBack = (): boolean => {
+    if (tabHistory.length > 1) {
+      const nextHistory = [...tabHistory];
+      nextHistory.pop(); // Pop current tab
+      const prevTab = nextHistory[nextHistory.length - 1];
+      setTabHistory(nextHistory);
+      setActiveTabState(prevTab);
+      storage.set('active_tab', prevTab).catch(() => {});
+      return true;
+    }
+    if (activeTab !== 'dashboard') {
+      setActiveTabState('dashboard');
+      setTabHistory(['dashboard']);
+      storage.set('active_tab', 'dashboard').catch(() => {});
+      return true;
+    }
+    return false;
+  };
+
   const [themeMode, setThemeModeState] = useState<ThemeMode>('dark');
 
   // Cloud Auth
@@ -475,6 +506,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const storedPayIn = await storage.get<PaymentRecord[]>('pay_in', []);
       const storedPayOut = await storage.get<PaymentRecord[]>('pay_out', []);
       const storedStaff = await storage.get<StaffMember[]>('staff_list', []);
+
+      const storedActiveTab = await storage.get<ActiveTab>('active_tab', 'dashboard');
+      if (storedActiveTab && storedActiveTab !== 'dashboard') {
+        setActiveTabState(storedActiveTab);
+        setTabHistory(['dashboard', storedActiveTab]);
+      }
 
       setIsOnboarded(storedOnboarded);
       setThemeModeState(storedTheme === 'light' ? 'light' : 'dark');
@@ -1364,6 +1401,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isOnboarded,
         activeTab,
         setActiveTab,
+        navigateBack,
         themeMode,
         theme: activeTheme,
         setThemeMode,

@@ -5,7 +5,7 @@ import { useApp } from '../../context/AppContext';
 import { AnimatedPressable } from './AnimatedPressable';
 
 export const AppHeader: React.FC = () => {
-  const { store, setActiveTab, activeTab, theme } = useApp();
+  const { store, setActiveTab, activeTab, navigateBack, theme } = useApp();
 
   return (
     <View
@@ -18,6 +18,21 @@ export const AppHeader: React.FC = () => {
       ]}
     >
       <View style={styles.brandRow}>
+        {activeTab !== 'dashboard' && (
+          <AnimatedPressable
+            style={[
+              styles.backBtn,
+              {
+                backgroundColor: theme.colors.card,
+                borderColor: theme.colors.borderGlass,
+              },
+            ]}
+            onPress={() => navigateBack()}
+            activeScale={0.9}
+          >
+            <Feather name="arrow-left" size={17} color={theme.colors.textPrimary} />
+          </AnimatedPressable>
+        )}
         <View style={styles.logoBadge}>
           <Image
             source={require('../../../assets/logo.png')}
@@ -76,6 +91,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
     marginRight: 16,
+  },
+  backBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   logoBadge: {
     width: 36,

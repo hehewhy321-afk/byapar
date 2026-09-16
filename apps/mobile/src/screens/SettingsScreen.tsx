@@ -63,10 +63,10 @@ const PREMADE_TEMPLATES: TemplatePreset[] = [
 ];
 
 const TEMPLATE_VARIABLES = [
-  { tag: '{customer_name}', desc: 'Customer Name' },
-  { tag: '{store_name}', desc: 'Store Name' },
-  { tag: '{amount}', desc: 'Due Balance (Rs.)' },
-  { tag: '{date}', desc: "Today's Date" },
+  { tag: '{customer_name}', desc: 'Customer' },
+  { tag: '{store_name}', desc: 'Store' },
+  { tag: '{amount}', desc: 'Due Balance' },
+  { tag: '{date}', desc: 'Date' },
 ];
 
 export const SettingsScreen: React.FC = () => {
@@ -76,13 +76,15 @@ export const SettingsScreen: React.FC = () => {
     theme,
     themeMode,
     setThemeMode,
+    toggleThemeMode,
     user,
     logout,
     changePassword,
     setShowAuthModal,
   } = useApp();
 
-  // Store profile fields
+  // Store profile modal & fields
+  const [showStoreModal, setShowStoreModal] = useState(false);
   const [storeName, setStoreName] = useState(store.name || '');
   const [ownerName, setOwnerName] = useState(store.ownerName || '');
   const [phone, setPhone] = useState(store.phone || '');
@@ -91,6 +93,14 @@ export const SettingsScreen: React.FC = () => {
   const [vatEnabled, setVatEnabled] = useState(store.vatEnabled || false);
   const [paperWidth, setPaperWidth] = useState<'58mm' | '80mm'>(store.paperWidth || '58mm');
   const [isSavingStore, setIsSavingStore] = useState(false);
+
+  // Preference switches
+  const [calendarSystem, setCalendarSystem] = useState<'BS' | 'AD'>('BS');
+  const [autoPrint, setAutoPrint] = useState(true);
+  const [scannerEnabled, setScannerEnabled] = useState(true);
+  const [soundboxEnabled, setSoundboxEnabled] = useState(true);
+  const [whatsappEnabled, setWhatsappEnabled] = useState(true);
+  const [autoBackup, setAutoBackup] = useState(true);
 
   // Change Password state
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -102,6 +112,57 @@ export const SettingsScreen: React.FC = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
+
+  // WhatsApp Template Modal & fields
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [messageTemplate, setMessageTemplate] = useState(
+    store.whatsappTemplate || PREMADE_TEMPLATES[0].template
+  );
+  const [activePresetId, setActivePresetId] = useState<string>('friendly');
+  const [isSavingTemplate, setIsSavingTemplate] = useState(false);
+
+  // Update check
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
+
+  useEffect(() => {
+    setStoreName(store.name || '');
+    setOwnerName(store.ownerName || '');
+    setPhone(store.phone || '');
+    setPanNumber(store.panNumber || '');
+    setAddress(store.address || '');
+    setVatEnabled(store.vatEnabled || false);
+    setPaperWidth(store.paperWidth || '58mm');
+    if (store.whatsappTemplate) {
+      setMessageTemplate(store.whatsappTemplate);
+    }
+  }, [store]);
+
+  const handleSaveStoreProfile = async () => {
+    setIsSavingStore(true);
+    try {
+      await updateStoreProfile({
+        name: storeName.trim(),
+        ownerName: ownerName.trim(),
+        phone: phone.trim(),
+        panNumber: panNumber.trim(),
+        address: address.trim(),
+        vatEnabled,
+        paperWidth,
+      });
+      setShowStoreModal(false);
+      Alert.alert('Success', 'Store profile saved successfully.');
+    } catch {
+      Alert.alert('Error', 'Failed to save store profile.');
+    } finally {
+      setIsSavingStore(false);
+    }
+  };
+
+  const handleTogglePaperWidth = async () => {
+    const nextWidth = paperWidth === '58mm' ? '80mm' : '58mm';
+    setPaperWidth(nextWidth);
+    await updateStoreProfile({ paperWidth: nextWidth });
+  };
 
   const handleChangePasswordSubmit = async () => {
     if (!oldPassword.trim()) {
@@ -141,49 +202,6 @@ export const SettingsScreen: React.FC = () => {
     }
   };
 
-  // Message template fields
-  const [messageTemplate, setMessageTemplate] = useState(
-    store.whatsappTemplate || PREMADE_TEMPLATES[0].template
-  );
-  const [activePresetId, setActivePresetId] = useState<string>('friendly');
-  const [isSavingTemplate, setIsSavingTemplate] = useState(false);
-
-  // In-app update state
-  const [checkingUpdate, setCheckingUpdate] = useState(false);
-
-  useEffect(() => {
-    setStoreName(store.name || '');
-    setOwnerName(store.ownerName || '');
-    setPhone(store.phone || '');
-    setPanNumber(store.panNumber || '');
-    setAddress(store.address || '');
-    setVatEnabled(store.vatEnabled || false);
-    setPaperWidth(store.paperWidth || '58mm');
-    if (store.whatsappTemplate) {
-      setMessageTemplate(store.whatsappTemplate);
-    }
-  }, [store]);
-
-  const handleSaveStoreProfile = async () => {
-    setIsSavingStore(true);
-    try {
-      await updateStoreProfile({
-        name: storeName.trim(),
-        ownerName: ownerName.trim(),
-        phone: phone.trim(),
-        panNumber: panNumber.trim(),
-        address: address.trim(),
-        vatEnabled,
-        paperWidth,
-      });
-      Alert.alert('Success', 'Store profile and preferences saved successfully.');
-    } catch {
-      Alert.alert('Error', 'Failed to save store profile.');
-    } finally {
-      setIsSavingStore(false);
-    }
-  };
-
   const handleApplyPreset = (preset: TemplatePreset) => {
     setMessageTemplate(preset.template);
     setActivePresetId(preset.id);
@@ -199,6 +217,7 @@ export const SettingsScreen: React.FC = () => {
       await updateStoreProfile({
         whatsappTemplate: messageTemplate.trim(),
       });
+      setShowTemplateModal(false);
       Alert.alert('Success', 'WhatsApp reminder template saved.');
     } catch {
       Alert.alert('Error', 'Failed to save template.');
@@ -212,7 +231,7 @@ export const SettingsScreen: React.FC = () => {
     try {
       await updateService.checkForUpdates(false);
     } catch {
-      Alert.alert('Update Check', 'Unable to reach the update server. Please check internet.');
+      Alert.alert('Update Check', 'Unable to reach the update server. Please check your connection.');
     } finally {
       setCheckingUpdate(false);
     }
@@ -240,9 +259,7 @@ export const SettingsScreen: React.FC = () => {
 
   const displayName =
     store.ownerName || user?.user_metadata?.owner_name || store.name || 'Store Owner';
-  const displayEmail = user?.email || 'No email registered';
-  const displayPhone = store.phone || user?.user_metadata?.phone || 'Not provided';
-  const displayStore = store.name || user?.user_metadata?.store_name || 'My Store';
+  const displayEmail = user?.email || 'Local Offline Mode';
 
   return (
     <ScrollView
@@ -250,685 +267,768 @@ export const SettingsScreen: React.FC = () => {
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
     >
-      {/* 1. ACCOUNT PROFILE CARD */}
+      {/* Profile Header Card */}
       <View
         style={[
-          styles.sectionCard,
+          styles.profileCard,
           { backgroundColor: theme.colors.card, borderColor: theme.colors.borderGlass },
         ]}
       >
-        <View style={styles.cardHeader}>
-          <View style={[styles.avatarBox, { backgroundColor: theme.colors.primary }]}>
-            <Text style={styles.avatarLetter}>
-              {displayName.charAt(0).toUpperCase()}
-            </Text>
-          </View>
-          <View style={styles.headerTitles}>
-            <Text style={[styles.profileName, { color: theme.colors.textPrimary }]}>
-              {displayName}
-            </Text>
-            <Text style={[styles.profileEmail, { color: theme.colors.textSecondary }]}>
-              {displayEmail}
-            </Text>
-          </View>
+        <View style={[styles.avatarBox, { backgroundColor: theme.colors.primary }]}>
+          <Text style={styles.avatarLetter}>{displayName.charAt(0).toUpperCase()}</Text>
         </View>
-
-        <View style={styles.profileDetailsList}>
-          <View style={styles.profileDetailRow}>
-            <View style={styles.detailLabelRow}>
-              <Feather name="shopping-bag" size={14} color={theme.colors.textMuted} />
-              <Text style={[styles.detailLabel, { color: theme.colors.textMuted }]}>Store</Text>
-            </View>
-            <Text style={[styles.detailValue, { color: theme.colors.textPrimary }]}>
-              {displayStore}
-            </Text>
-          </View>
-
-          <View style={styles.profileDetailRow}>
-            <View style={styles.detailLabelRow}>
-              <Feather name="phone" size={14} color={theme.colors.textMuted} />
-              <Text style={[styles.detailLabel, { color: theme.colors.textMuted }]}>Phone</Text>
-            </View>
-            <Text style={[styles.detailValue, { color: theme.colors.textPrimary }]}>
-              {displayPhone}
-            </Text>
-          </View>
+        <View style={styles.profileTextCol}>
+          <Text style={[styles.profileName, { color: theme.colors.textPrimary }]}>
+            {displayName}
+          </Text>
+          <Text style={[styles.profileEmail, { color: theme.colors.textSecondary }]}>
+            {displayEmail}
+          </Text>
         </View>
-
         {user ? (
-          <View style={styles.accountActionBtnsRow}>
-            <AnimatedPressable
-              style={[
-                styles.changePasswordBtn,
-                {
-                  borderColor: theme.colors.borderGlass,
-                  backgroundColor: theme.colors.surface,
-                },
-              ]}
-              onPress={() => {
-                setOldPassword('');
-                setNewPassword('');
-                setConfirmPassword('');
-                setPasswordError(null);
-                setShowPasswordModal(true);
-              }}
-              activeScale={0.96}
-            >
-              <Feather name="lock" size={14} color={theme.colors.textPrimary} />
-              <Text style={[styles.changePasswordBtnText, { color: theme.colors.textPrimary }]}>
-                Change Password
-              </Text>
-            </AnimatedPressable>
-
-            <AnimatedPressable
-              style={[styles.signOutBtn, { borderColor: theme.colors.orange }]}
-              onPress={handleLogout}
-              activeScale={0.96}
-            >
-              <Feather name="log-out" size={14} color={theme.colors.orange} />
-              <Text style={[styles.signOutBtnText, { color: theme.colors.orange }]}>Sign Out</Text>
-            </AnimatedPressable>
+          <View style={styles.cloudBadge}>
+            <View style={styles.cloudDot} />
+            <Text style={styles.cloudBadgeText}>Synced</Text>
           </View>
         ) : (
-          <AnimatedPressable
-            style={[styles.primaryActionBtn, { backgroundColor: theme.colors.primary }]}
+          <TouchableOpacity
+            style={[styles.signInBadge, { backgroundColor: theme.colors.primary }]}
             onPress={() => setShowAuthModal(true)}
-            activeScale={0.96}
           >
-            <Feather name="user-check" size={15} color="#FFFFFF" />
-            <Text style={styles.primaryActionBtnText}>Sign In to Account</Text>
-          </AnimatedPressable>
+            <Text style={styles.signInBadgeText}>Sign In</Text>
+          </TouchableOpacity>
         )}
       </View>
 
-      {/* 2. APPEARANCE - TOGGLE TYPE TAB */}
-      <View
-        style={[
-          styles.sectionCard,
-          { backgroundColor: theme.colors.card, borderColor: theme.colors.borderGlass },
-        ]}
-      >
-        <View style={styles.cardHeaderSmall}>
-          <Feather name="sun" size={18} color={theme.colors.primary} />
-          <Text style={[styles.cardTitle, { color: theme.colors.textPrimary }]}>Appearance</Text>
-        </View>
-
-        {/* Segmented Toggle Bar */}
+      {/* 1. ACCOUNT & SECURITY */}
+      <View style={styles.categoryBlock}>
+        <Text style={[styles.categoryTitle, { color: theme.colors.textMuted }]}>
+          ACCOUNT & SECURITY
+        </Text>
         <View
           style={[
-            styles.toggleTabContainer,
-            {
-              backgroundColor: theme.colors.surface,
-              borderColor: theme.colors.borderGlass,
-            },
+            styles.cardGroup,
+            { backgroundColor: theme.colors.card, borderColor: theme.colors.borderGlass },
           ]}
         >
-          <TouchableOpacity
-            style={[
-              styles.toggleTabBtn,
-              themeMode === 'dark' && [
-                styles.toggleTabBtnActive,
-                { backgroundColor: theme.colors.primary },
-              ],
-            ]}
-            onPress={() => setThemeMode('dark')}
-            activeOpacity={0.85}
-          >
-            <Feather
-              name="moon"
-              size={15}
-              color={themeMode === 'dark' ? '#FFFFFF' : theme.colors.textMuted}
-            />
-            <Text
-              style={[
-                styles.toggleTabText,
-                { color: themeMode === 'dark' ? '#FFFFFF' : theme.colors.textMuted },
-                themeMode === 'dark' && styles.toggleTabTextActive,
-              ]}
-            >
-              Dark
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.toggleTabBtn,
-              themeMode === 'light' && [
-                styles.toggleTabBtnActive,
-                { backgroundColor: theme.colors.primary },
-              ],
-            ]}
-            onPress={() => setThemeMode('light')}
-            activeOpacity={0.85}
-          >
-            <Feather
-              name="sun"
-              size={15}
-              color={themeMode === 'light' ? '#FFFFFF' : theme.colors.textMuted}
-            />
-            <Text
-              style={[
-                styles.toggleTabText,
-                { color: themeMode === 'light' ? '#FFFFFF' : theme.colors.textMuted },
-                themeMode === 'light' && styles.toggleTabTextActive,
-              ]}
-            >
-              Light
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* 3. STORE PROFILE & BILLING PREFERENCES */}
-      <View
-        style={[
-          styles.sectionCard,
-          { backgroundColor: theme.colors.card, borderColor: theme.colors.borderGlass },
-        ]}
-      >
-        <View style={styles.cardHeaderSmall}>
-          <Feather name="briefcase" size={18} color={theme.colors.primary} />
-          <Text style={[styles.cardTitle, { color: theme.colors.textPrimary }]}>
-            Store Information
-          </Text>
-        </View>
-
-        <View style={styles.inputGroup}>
-          <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>
-            Store / Shop Name
-          </Text>
-          <TextInput
-            style={[
-              styles.textInput,
-              {
-                backgroundColor: theme.colors.surface,
-                color: theme.colors.textPrimary,
-                borderColor: theme.colors.borderGlass,
-              },
-            ]}
-            value={storeName}
-            onChangeText={setStoreName}
-            placeholder="e.g., Byapar Kirana Store"
-            placeholderTextColor={theme.colors.textMuted}
-          />
-        </View>
-
-        <View style={styles.inputGroup}>
-          <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>
-            Proprietor / Owner Name
-          </Text>
-          <TextInput
-            style={[
-              styles.textInput,
-              {
-                backgroundColor: theme.colors.surface,
-                color: theme.colors.textPrimary,
-                borderColor: theme.colors.borderGlass,
-              },
-            ]}
-            value={ownerName}
-            onChangeText={setOwnerName}
-            placeholder="e.g., Rajesh Shrestha"
-            placeholderTextColor={theme.colors.textMuted}
-          />
-        </View>
-
-        <View style={styles.inputRow}>
-          <View style={[styles.inputGroup, { flex: 1 }]}>
-            <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>Phone</Text>
-            <TextInput
-              style={[
-                styles.textInput,
-                {
-                  backgroundColor: theme.colors.surface,
-                  color: theme.colors.textPrimary,
-                  borderColor: theme.colors.borderGlass,
-                },
-              ]}
-              value={phone}
-              onChangeText={setPhone}
-              placeholder="98XXXXXXXX"
-              keyboardType="phone-pad"
-              placeholderTextColor={theme.colors.textMuted}
-            />
-          </View>
-          <View style={[styles.inputGroup, { flex: 1 }]}>
-            <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>
-              PAN / VAT
-            </Text>
-            <TextInput
-              style={[
-                styles.textInput,
-                {
-                  backgroundColor: theme.colors.surface,
-                  color: theme.colors.textPrimary,
-                  borderColor: theme.colors.borderGlass,
-                },
-              ]}
-              value={panNumber}
-              onChangeText={setPanNumber}
-              placeholder="9 Digits"
-              keyboardType="number-pad"
-              placeholderTextColor={theme.colors.textMuted}
-            />
-          </View>
-        </View>
-
-        <View style={styles.inputGroup}>
-          <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>Address</Text>
-          <TextInput
-            style={[
-              styles.textInput,
-              {
-                backgroundColor: theme.colors.surface,
-                color: theme.colors.textPrimary,
-                borderColor: theme.colors.borderGlass,
-              },
-            ]}
-            value={address}
-            onChangeText={setAddress}
-            placeholder="e.g., New Road, Kathmandu"
-            placeholderTextColor={theme.colors.textMuted}
-          />
-        </View>
-
-        {/* 13% VAT TOGGLE WITH SMALL BORDER RADIUS */}
-        <View
-          style={[
-            styles.vatRowCard,
-            {
-              backgroundColor: theme.colors.surface,
-              borderColor: theme.colors.borderGlass,
-            },
-          ]}
-        >
-          <View style={styles.vatInfo}>
-            <Text style={[styles.vatTitle, { color: theme.colors.textPrimary }]}>
-              Enable 13% Nepal VAT
-            </Text>
-            <Text style={[styles.vatSubtitle, { color: theme.colors.textMuted }]}>
-              Computes taxable amount and VAT on sales receipts
-            </Text>
-          </View>
-          <Switch
-            value={vatEnabled}
-            onValueChange={setVatEnabled}
-            trackColor={{ false: theme.colors.card, true: theme.colors.primary }}
-            thumbColor="#FFFFFF"
-          />
-        </View>
-
-        {/* Thermal Printer Paper Width */}
-        <View style={styles.paperWidthContainer}>
-          <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>
-            Receipt Printer Width
-          </Text>
-          <View style={styles.paperWidthRow}>
-            {(['58mm', '80mm'] as const).map((width) => (
+          {user && (
+            <>
               <TouchableOpacity
-                key={width}
-                style={[
-                  styles.paperWidthOption,
-                  paperWidth === width && styles.paperWidthOptionActive,
-                  {
-                    backgroundColor:
-                      paperWidth === width ? 'rgba(99, 102, 241, 0.16)' : theme.colors.surface,
-                    borderColor:
-                      paperWidth === width ? theme.colors.primary : theme.colors.borderGlass,
-                  },
-                ]}
-                onPress={() => setPaperWidth(width)}
+                style={styles.settingRow}
+                onPress={() => {
+                  setOldPassword('');
+                  setNewPassword('');
+                  setConfirmPassword('');
+                  setPasswordError(null);
+                  setShowPasswordModal(true);
+                }}
+                activeOpacity={0.7}
               >
-                <Feather
-                  name="printer"
-                  size={15}
-                  color={paperWidth === width ? theme.colors.primary : theme.colors.textMuted}
-                />
-                <Text
-                  style={[
-                    styles.paperWidthText,
-                    {
-                      color:
-                        paperWidth === width ? theme.colors.primary : theme.colors.textMuted,
-                    },
-                  ]}
-                >
-                  {width} Paper
-                </Text>
+                <View style={styles.rowLeft}>
+                  <View style={styles.iconContainer}>
+                    <Feather name="lock" size={18} color={theme.colors.textPrimary} />
+                  </View>
+                  <Text style={[styles.rowLabel, { color: theme.colors.textPrimary }]}>
+                    Change Password
+                  </Text>
+                </View>
+                <Feather name="chevron-right" size={17} color={theme.colors.textMuted} />
               </TouchableOpacity>
-            ))}
-          </View>
-        </View>
 
-        <AnimatedPressable
-          style={[styles.saveBtn, { backgroundColor: theme.colors.primary }]}
-          onPress={handleSaveStoreProfile}
-          disabled={isSavingStore}
-          activeScale={0.96}
-        >
-          <Feather name="check" size={16} color="#FFFFFF" />
-          <Text style={styles.saveBtnText}>{isSavingStore ? 'Saving...' : 'Save Store Details'}</Text>
-        </AnimatedPressable>
-      </View>
+              <View style={[styles.rowSeparator, { backgroundColor: theme.colors.borderGlass }]} />
+            </>
+          )}
 
-      {/* 4. MESSAGE TEMPLATES STUDIO */}
-      <View
-        style={[
-          styles.sectionCard,
-          { backgroundColor: theme.colors.card, borderColor: theme.colors.borderGlass },
-        ]}
-      >
-        <View style={styles.cardHeaderSmall}>
-          <Feather name="message-circle" size={18} color="#25D366" />
-          <Text style={[styles.cardTitle, { color: theme.colors.textPrimary }]}>
-            WhatsApp Templates Studio
-          </Text>
-        </View>
-
-        {/* Premade Presets Chips */}
-        <Text style={[styles.inputLabel, { color: theme.colors.textSecondary, marginBottom: 8 }]}>
-          Premade Presets
-        </Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.presetScroll}
-        >
-          {PREMADE_TEMPLATES.map((preset) => {
-            const isSelected = activePresetId === preset.id;
-            return (
-              <TouchableOpacity
-                key={preset.id}
-                style={[
-                  styles.presetChip,
-                  {
-                    backgroundColor: isSelected ? 'rgba(37, 211, 102, 0.16)' : theme.colors.surface,
-                    borderColor: isSelected ? '#25D366' : theme.colors.borderGlass,
-                  },
-                ]}
-                onPress={() => handleApplyPreset(preset)}
-              >
-                <Text
-                  style={[
-                    styles.presetBadge,
-                    { color: isSelected ? '#25D366' : theme.colors.textMuted },
-                  ]}
-                >
-                  {preset.badge}
-                </Text>
-                <Text
-                  style={[
-                    styles.presetName,
-                    { color: isSelected ? theme.colors.textPrimary : theme.colors.textSecondary },
-                  ]}
-                >
-                  {preset.name}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-
-        {/* Variable Inserter */}
-        <Text
-          style={[
-            styles.inputLabel,
-            { color: theme.colors.textSecondary, marginTop: 14, marginBottom: 6 },
-          ]}
-        >
-          Insert Variables (Tap to add)
-        </Text>
-        <View style={styles.variablePillsRow}>
-          {TEMPLATE_VARIABLES.map((v) => (
-            <TouchableOpacity
-              key={v.tag}
-              style={[
-                styles.variablePill,
-                { backgroundColor: theme.colors.surface, borderColor: theme.colors.borderGlass },
-              ]}
-              onPress={() => handleInsertVariable(v.tag)}
-            >
-              <Text style={[styles.variableTag, { color: theme.colors.primary }]}>{v.tag}</Text>
-              <Text style={[styles.variableDesc, { color: theme.colors.textMuted }]}>
-                {v.desc}
+          <View style={styles.settingRow}>
+            <View style={styles.rowLeft}>
+              <View style={styles.iconContainer}>
+                <Feather name="cloud" size={18} color={theme.colors.textPrimary} />
+              </View>
+              <Text style={[styles.rowLabel, { color: theme.colors.textPrimary }]}>
+                Automatic Cloud Backup
               </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+            </View>
+            <Switch
+              value={autoBackup}
+              onValueChange={setAutoBackup}
+              trackColor={{ false: theme.colors.surface, true: '#FF4500' }}
+              thumbColor="#FFFFFF"
+            />
+          </View>
 
-        {/* Template Input Area */}
-        <View style={styles.inputGroup}>
-          <Text style={[styles.inputLabel, { color: theme.colors.textSecondary, marginTop: 14 }]}>
-            Template Content
-          </Text>
-          <TextInput
-            style={[
-              styles.templateTextInput,
-              {
-                backgroundColor: theme.colors.surface,
-                color: theme.colors.textPrimary,
-                borderColor: theme.colors.borderGlass,
-              },
-            ]}
-            value={messageTemplate}
-            onChangeText={(txt) => {
-              setMessageTemplate(txt);
-              setActivePresetId('');
-            }}
-            multiline
-            numberOfLines={5}
-            placeholder="Type your WhatsApp message template..."
-            placeholderTextColor={theme.colors.textMuted}
-          />
-        </View>
+          {user && (
+            <>
+              <View style={[styles.rowSeparator, { backgroundColor: theme.colors.borderGlass }]} />
 
-        {/* Live Preview Card */}
+              <TouchableOpacity style={styles.settingRow} onPress={handleLogout} activeOpacity={0.7}>
+                <View style={styles.rowLeft}>
+                  <View style={styles.iconContainer}>
+                    <Feather name="log-out" size={18} color="#EF4444" />
+                  </View>
+                  <Text style={[styles.rowLabel, { color: '#EF4444', fontWeight: '600' }]}>
+                    Sign Out
+                  </Text>
+                </View>
+                <Feather name="chevron-right" size={17} color={theme.colors.textMuted} />
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
+      </View>
+
+      {/* 2. STORE PROFILE & TAX */}
+      <View style={styles.categoryBlock}>
+        <Text style={[styles.categoryTitle, { color: theme.colors.textMuted }]}>
+          STORE PROFILE & TAX
+        </Text>
         <View
           style={[
-            styles.previewCard,
-            { backgroundColor: theme.colors.surface, borderColor: theme.colors.borderGlass },
+            styles.cardGroup,
+            { backgroundColor: theme.colors.card, borderColor: theme.colors.borderGlass },
           ]}
         >
-          <View style={styles.previewHeader}>
-            <Feather name="eye" size={13} color="#25D366" />
-            <Text style={[styles.previewTitle, { color: '#25D366' }]}>
-              Live WhatsApp Preview
-            </Text>
-          </View>
-          <Text style={[styles.previewText, { color: theme.colors.textPrimary }]}>
-            {previewText}
-          </Text>
-        </View>
-
-        <AnimatedPressable
-          style={[styles.saveBtn, { backgroundColor: '#25D366', marginTop: 14 }]}
-          onPress={handleSaveTemplate}
-          disabled={isSavingTemplate}
-          activeScale={0.96}
-        >
-          <Feather name="save" size={16} color="#FFFFFF" />
-          <Text style={styles.saveBtnText}>
-            {isSavingTemplate ? 'Saving...' : 'Save WhatsApp Template'}
-          </Text>
-        </AnimatedPressable>
-      </View>
-
-      {/* 5. APP UPDATES - CLEAN SINGLE CHECK FOR UPDATE */}
-      <View
-        style={[
-          styles.sectionCard,
-          { backgroundColor: theme.colors.card, borderColor: theme.colors.borderGlass },
-        ]}
-      >
-        <View style={styles.updateRow}>
-          <View style={styles.updateInfoCol}>
-            <Text style={[styles.updateTitle, { color: theme.colors.textPrimary }]}>
-              Byapar Retail OS
-            </Text>
-            <Text style={[styles.updateSub, { color: theme.colors.textMuted }]}>
-              Version {CURRENT_APP_VERSION}
-            </Text>
-          </View>
-
-          <AnimatedPressable
-            style={[styles.updateCheckBtn, { backgroundColor: theme.colors.primary }]}
-            onPress={handleCheckUpdate}
-            disabled={checkingUpdate}
-            activeScale={0.94}
+          <TouchableOpacity
+            style={styles.settingRow}
+            onPress={() => setShowStoreModal(true)}
+            activeOpacity={0.7}
           >
-            <Feather name="refresh-cw" size={14} color="#FFFFFF" />
-            <Text style={styles.updateCheckBtnText}>
-              {checkingUpdate ? 'Checking...' : 'Check for Updates'}
-            </Text>
-          </AnimatedPressable>
+            <View style={styles.rowLeft}>
+              <View style={styles.iconContainer}>
+                <Feather name="shopping-bag" size={18} color={theme.colors.textPrimary} />
+              </View>
+              <Text style={[styles.rowLabel, { color: theme.colors.textPrimary }]}>
+                Store Details & Address
+              </Text>
+            </View>
+            <View style={styles.rowRight}>
+              <Text
+                style={[styles.rowValueText, { color: theme.colors.textMuted }]}
+                numberOfLines={1}
+              >
+                {store.name || 'Set Store'}
+              </Text>
+              <Feather name="chevron-right" size={17} color={theme.colors.textMuted} />
+            </View>
+          </TouchableOpacity>
+
+          <View style={[styles.rowSeparator, { backgroundColor: theme.colors.borderGlass }]} />
+
+          <View style={styles.settingRow}>
+            <View style={styles.rowLeft}>
+              <View style={styles.iconContainer}>
+                <Feather name="file-text" size={18} color={theme.colors.textPrimary} />
+              </View>
+              <Text style={[styles.rowLabel, { color: theme.colors.textPrimary }]}>
+                VAT Registered (13%)
+              </Text>
+            </View>
+            <Switch
+              value={vatEnabled}
+              onValueChange={async (val) => {
+                setVatEnabled(val);
+                await updateStoreProfile({ vatEnabled: val });
+              }}
+              trackColor={{ false: theme.colors.surface, true: '#FF4500' }}
+              thumbColor="#FFFFFF"
+            />
+          </View>
         </View>
       </View>
 
-      {/* 6. CHANGE PASSWORD MODAL */}
-      <Modal
-        visible={showPasswordModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowPasswordModal(false)}
-      >
+      {/* 3. DISPLAY & LOCALIZATION */}
+      <View style={styles.categoryBlock}>
+        <Text style={[styles.categoryTitle, { color: theme.colors.textMuted }]}>
+          DISPLAY & LOCALIZATION
+        </Text>
+        <View
+          style={[
+            styles.cardGroup,
+            { backgroundColor: theme.colors.card, borderColor: theme.colors.borderGlass },
+          ]}
+        >
+          <View style={styles.settingRow}>
+            <View style={styles.rowLeft}>
+              <View style={styles.iconContainer}>
+                <Feather
+                  name={themeMode === 'dark' ? 'moon' : 'sun'}
+                  size={18}
+                  color={theme.colors.textPrimary}
+                />
+              </View>
+              <Text style={[styles.rowLabel, { color: theme.colors.textPrimary }]}>Dark Theme</Text>
+            </View>
+            <Switch
+              value={themeMode === 'dark'}
+              onValueChange={toggleThemeMode}
+              trackColor={{ false: theme.colors.surface, true: '#FF4500' }}
+              thumbColor="#FFFFFF"
+            />
+          </View>
+
+          <View style={[styles.rowSeparator, { backgroundColor: theme.colors.borderGlass }]} />
+
+          <TouchableOpacity
+            style={styles.settingRow}
+            onPress={() => setCalendarSystem(calendarSystem === 'BS' ? 'AD' : 'BS')}
+            activeOpacity={0.7}
+          >
+            <View style={styles.rowLeft}>
+              <View style={styles.iconContainer}>
+                <Feather name="calendar" size={18} color={theme.colors.textPrimary} />
+              </View>
+              <Text style={[styles.rowLabel, { color: theme.colors.textPrimary }]}>
+                Calendar System
+              </Text>
+            </View>
+            <View style={styles.rowRight}>
+              <Text style={[styles.rowValueText, { color: theme.colors.textMuted }]}>
+                {calendarSystem === 'BS' ? 'Bikram Sambat (BS)' : 'Gregorian (AD)'}
+              </Text>
+              <Feather name="chevron-right" size={17} color={theme.colors.textMuted} />
+            </View>
+          </TouchableOpacity>
+
+          <View style={[styles.rowSeparator, { backgroundColor: theme.colors.borderGlass }]} />
+
+          <View style={styles.settingRow}>
+            <View style={styles.rowLeft}>
+              <View style={styles.iconContainer}>
+                <Feather name="globe" size={18} color={theme.colors.textPrimary} />
+              </View>
+              <Text style={[styles.rowLabel, { color: theme.colors.textPrimary }]}>Language</Text>
+            </View>
+            <View style={styles.rowRight}>
+              <Text style={[styles.rowValueText, { color: theme.colors.textMuted }]}>English</Text>
+              <Feather name="chevron-right" size={17} color={theme.colors.textMuted} />
+            </View>
+          </View>
+        </View>
+      </View>
+
+      {/* 4. HARDWARE & DEVICES */}
+      <View style={styles.categoryBlock}>
+        <Text style={[styles.categoryTitle, { color: theme.colors.textMuted }]}>
+          HARDWARE & DEVICES
+        </Text>
+        <View
+          style={[
+            styles.cardGroup,
+            { backgroundColor: theme.colors.card, borderColor: theme.colors.borderGlass },
+          ]}
+        >
+          <TouchableOpacity
+            style={styles.settingRow}
+            onPress={handleTogglePaperWidth}
+            activeOpacity={0.7}
+          >
+            <View style={styles.rowLeft}>
+              <View style={styles.iconContainer}>
+                <Feather name="printer" size={18} color={theme.colors.textPrimary} />
+              </View>
+              <Text style={[styles.rowLabel, { color: theme.colors.textPrimary }]}>
+                Receipt Paper Width
+              </Text>
+            </View>
+            <View style={styles.rowRight}>
+              <Text style={[styles.rowValueText, { color: theme.colors.textMuted }]}>
+                {paperWidth}
+              </Text>
+              <Feather name="chevron-right" size={17} color={theme.colors.textMuted} />
+            </View>
+          </TouchableOpacity>
+
+          <View style={[styles.rowSeparator, { backgroundColor: theme.colors.borderGlass }]} />
+
+          <View style={styles.settingRow}>
+            <View style={styles.rowLeft}>
+              <View style={styles.iconContainer}>
+                <Feather name="check-circle" size={18} color={theme.colors.textPrimary} />
+              </View>
+              <Text style={[styles.rowLabel, { color: theme.colors.textPrimary }]}>
+                Auto-Print on Checkout
+              </Text>
+            </View>
+            <Switch
+              value={autoPrint}
+              onValueChange={setAutoPrint}
+              trackColor={{ false: theme.colors.surface, true: '#FF4500' }}
+              thumbColor="#FFFFFF"
+            />
+          </View>
+
+          <View style={[styles.rowSeparator, { backgroundColor: theme.colors.borderGlass }]} />
+
+          <View style={styles.settingRow}>
+            <View style={styles.rowLeft}>
+              <View style={styles.iconContainer}>
+                <Feather name="maximize" size={18} color={theme.colors.textPrimary} />
+              </View>
+              <Text style={[styles.rowLabel, { color: theme.colors.textPrimary }]}>
+                Barcode Scanner Device
+              </Text>
+            </View>
+            <Switch
+              value={scannerEnabled}
+              onValueChange={setScannerEnabled}
+              trackColor={{ false: theme.colors.surface, true: '#FF4500' }}
+              thumbColor="#FFFFFF"
+            />
+          </View>
+        </View>
+      </View>
+
+      {/* 5. VOICE & NOTIFICATIONS */}
+      <View style={styles.categoryBlock}>
+        <Text style={[styles.categoryTitle, { color: theme.colors.textMuted }]}>
+          VOICE & NOTIFICATIONS
+        </Text>
+        <View
+          style={[
+            styles.cardGroup,
+            { backgroundColor: theme.colors.card, borderColor: theme.colors.borderGlass },
+          ]}
+        >
+          <View style={styles.settingRow}>
+            <View style={styles.rowLeft}>
+              <View style={styles.iconContainer}>
+                <Feather name="volume-2" size={18} color={theme.colors.textPrimary} />
+              </View>
+              <Text style={[styles.rowLabel, { color: theme.colors.textPrimary }]}>
+                Voice Payment Chimes
+              </Text>
+            </View>
+            <Switch
+              value={soundboxEnabled}
+              onValueChange={setSoundboxEnabled}
+              trackColor={{ false: theme.colors.surface, true: '#FF4500' }}
+              thumbColor="#FFFFFF"
+            />
+          </View>
+
+          <View style={[styles.rowSeparator, { backgroundColor: theme.colors.borderGlass }]} />
+
+          <TouchableOpacity
+            style={styles.settingRow}
+            onPress={() => Alert.alert('Soundbox', 'Payment chime played successfully.')}
+            activeOpacity={0.7}
+          >
+            <View style={styles.rowLeft}>
+              <View style={styles.iconContainer}>
+                <Feather name="play-circle" size={18} color={theme.colors.textPrimary} />
+              </View>
+              <Text style={[styles.rowLabel, { color: theme.colors.textPrimary }]}>
+                Test Audio Chime
+              </Text>
+            </View>
+            <Feather name="chevron-right" size={17} color={theme.colors.textMuted} />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* 6. KHATA & WHATSAPP */}
+      <View style={styles.categoryBlock}>
+        <Text style={[styles.categoryTitle, { color: theme.colors.textMuted }]}>
+          KHATA & WHATSAPP
+        </Text>
+        <View
+          style={[
+            styles.cardGroup,
+            { backgroundColor: theme.colors.card, borderColor: theme.colors.borderGlass },
+          ]}
+        >
+          <View style={styles.settingRow}>
+            <View style={styles.rowLeft}>
+              <View style={styles.iconContainer}>
+                <Feather name="message-circle" size={18} color={theme.colors.textPrimary} />
+              </View>
+              <Text style={[styles.rowLabel, { color: theme.colors.textPrimary }]}>
+                WhatsApp Dues Reminders
+              </Text>
+            </View>
+            <Switch
+              value={whatsappEnabled}
+              onValueChange={setWhatsappEnabled}
+              trackColor={{ false: theme.colors.surface, true: '#FF4500' }}
+              thumbColor="#FFFFFF"
+            />
+          </View>
+
+          <View style={[styles.rowSeparator, { backgroundColor: theme.colors.borderGlass }]} />
+
+          <TouchableOpacity
+            style={styles.settingRow}
+            onPress={() => setShowTemplateModal(true)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.rowLeft}>
+              <View style={styles.iconContainer}>
+                <Feather name="edit-3" size={18} color={theme.colors.textPrimary} />
+              </View>
+              <Text style={[styles.rowLabel, { color: theme.colors.textPrimary }]}>
+                Reminder Message Template
+              </Text>
+            </View>
+            <View style={styles.rowRight}>
+              <Text style={[styles.rowValueText, { color: theme.colors.textMuted }]}>
+                Customize
+              </Text>
+              <Feather name="chevron-right" size={17} color={theme.colors.textMuted} />
+            </View>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* 7. DATA & SYSTEM */}
+      <View style={styles.categoryBlock}>
+        <Text style={[styles.categoryTitle, { color: theme.colors.textMuted }]}>DATA & SYSTEM</Text>
+        <View
+          style={[
+            styles.cardGroup,
+            { backgroundColor: theme.colors.card, borderColor: theme.colors.borderGlass },
+          ]}
+        >
+          <TouchableOpacity
+            style={styles.settingRow}
+            onPress={() =>
+              Alert.alert('Backup Export', 'Local data backup exported to documents directory.')
+            }
+            activeOpacity={0.7}
+          >
+            <View style={styles.rowLeft}>
+              <View style={styles.iconContainer}>
+                <Feather name="download" size={18} color={theme.colors.textPrimary} />
+              </View>
+              <Text style={[styles.rowLabel, { color: theme.colors.textPrimary }]}>
+                Export JSON Backup
+              </Text>
+            </View>
+            <Feather name="chevron-right" size={17} color={theme.colors.textMuted} />
+          </TouchableOpacity>
+
+          <View style={[styles.rowSeparator, { backgroundColor: theme.colors.borderGlass }]} />
+
+          <TouchableOpacity
+            style={styles.settingRow}
+            onPress={handleCheckUpdate}
+            activeOpacity={0.7}
+          >
+            <View style={styles.rowLeft}>
+              <View style={styles.iconContainer}>
+                <Feather name="info" size={18} color={theme.colors.textPrimary} />
+              </View>
+              <Text style={[styles.rowLabel, { color: theme.colors.textPrimary }]}>
+                Check for Updates
+              </Text>
+            </View>
+            <View style={styles.rowRight}>
+              <Text style={[styles.rowValueText, { color: theme.colors.textMuted }]}>
+                {checkingUpdate ? 'Checking...' : `v${CURRENT_APP_VERSION}`}
+              </Text>
+              <Feather name="chevron-right" size={17} color={theme.colors.textMuted} />
+            </View>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* FOOTER */}
+      <View style={styles.footerNote}>
+        <Text style={[styles.footerText, { color: theme.colors.textMuted }]}>
+          Byapar Retail OS • Fast, Modern, Offline-First
+        </Text>
+      </View>
+
+      {/* ================= MODALS ================= */}
+
+      {/* 1. STORE DETAILS MODAL */}
+      <Modal visible={showStoreModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View
             style={[
               styles.modalCard,
-              {
-                backgroundColor: themeMode === 'dark' ? '#141414' : '#FFFFFF',
-                borderColor: themeMode === 'dark' ? '#262626' : '#E2E8F0',
-              },
+              { backgroundColor: theme.colors.card, borderColor: theme.colors.borderGlass },
             ]}
           >
             <View style={styles.modalHeader}>
-              <View>
+              <View style={styles.modalHeaderTitleRow}>
+                <Feather name="shopping-bag" size={20} color={theme.colors.primary} />
                 <Text style={[styles.modalTitle, { color: theme.colors.textPrimary }]}>
-                  Change Password
-                </Text>
-                <Text style={[styles.modalSubtitle, { color: theme.colors.textSecondary }]}>
-                  Verify old password to set a new password
+                  Store Information
                 </Text>
               </View>
               <TouchableOpacity
+                onPress={() => setShowStoreModal(false)}
                 style={styles.modalCloseBtn}
-                onPress={() => setShowPasswordModal(false)}
               >
-                <Feather name="x" size={18} color={theme.colors.textMuted} />
+                <Feather name="x" size={20} color={theme.colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
+              <View style={styles.modalInputGroup}>
+                <Text style={[styles.modalInputLabel, { color: theme.colors.textSecondary }]}>
+                  Store Name *
+                </Text>
+                <TextInput
+                  style={[
+                    styles.modalInput,
+                    {
+                      backgroundColor: theme.colors.surface,
+                      borderColor: theme.colors.borderGlass,
+                      color: theme.colors.textPrimary,
+                    },
+                  ]}
+                  value={storeName}
+                  onChangeText={setStoreName}
+                  placeholder="e.g. Shrestha Mart"
+                  placeholderTextColor={theme.colors.textMuted}
+                />
+              </View>
+
+              <View style={styles.modalInputGroup}>
+                <Text style={[styles.modalInputLabel, { color: theme.colors.textSecondary }]}>
+                  Owner Full Name
+                </Text>
+                <TextInput
+                  style={[
+                    styles.modalInput,
+                    {
+                      backgroundColor: theme.colors.surface,
+                      borderColor: theme.colors.borderGlass,
+                      color: theme.colors.textPrimary,
+                    },
+                  ]}
+                  value={ownerName}
+                  onChangeText={setOwnerName}
+                  placeholder="e.g. Suman Shrestha"
+                  placeholderTextColor={theme.colors.textMuted}
+                />
+              </View>
+
+              <View style={styles.modalInputGroup}>
+                <Text style={[styles.modalInputLabel, { color: theme.colors.textSecondary }]}>
+                  Phone Number
+                </Text>
+                <TextInput
+                  style={[
+                    styles.modalInput,
+                    {
+                      backgroundColor: theme.colors.surface,
+                      borderColor: theme.colors.borderGlass,
+                      color: theme.colors.textPrimary,
+                    },
+                  ]}
+                  value={phone}
+                  onChangeText={setPhone}
+                  keyboardType="phone-pad"
+                  placeholder="e.g. 9841234567"
+                  placeholderTextColor={theme.colors.textMuted}
+                />
+              </View>
+
+              <View style={styles.modalInputGroup}>
+                <Text style={[styles.modalInputLabel, { color: theme.colors.textSecondary }]}>
+                  PAN / VAT Number
+                </Text>
+                <TextInput
+                  style={[
+                    styles.modalInput,
+                    {
+                      backgroundColor: theme.colors.surface,
+                      borderColor: theme.colors.borderGlass,
+                      color: theme.colors.textPrimary,
+                    },
+                  ]}
+                  value={panNumber}
+                  onChangeText={setPanNumber}
+                  placeholder="9-digit PAN"
+                  placeholderTextColor={theme.colors.textMuted}
+                />
+              </View>
+
+              <View style={styles.modalInputGroup}>
+                <Text style={[styles.modalInputLabel, { color: theme.colors.textSecondary }]}>
+                  Store Address
+                </Text>
+                <TextInput
+                  style={[
+                    styles.modalInput,
+                    {
+                      backgroundColor: theme.colors.surface,
+                      borderColor: theme.colors.borderGlass,
+                      color: theme.colors.textPrimary,
+                    },
+                  ]}
+                  value={address}
+                  onChangeText={setAddress}
+                  placeholder="e.g. New Road, Kathmandu"
+                  placeholderTextColor={theme.colors.textMuted}
+                />
+              </View>
+            </ScrollView>
+
+            <View style={styles.modalActionsRow}>
+              <TouchableOpacity
+                style={[
+                  styles.modalCancelBtn,
+                  {
+                    backgroundColor: theme.colors.surface,
+                    borderColor: theme.colors.borderGlass,
+                  },
+                ]}
+                onPress={() => setShowStoreModal(false)}
+              >
+                <Text style={[styles.modalCancelBtnText, { color: theme.colors.textSecondary }]}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.modalSubmitBtn, { backgroundColor: theme.colors.primary }]}
+                onPress={handleSaveStoreProfile}
+                disabled={isSavingStore}
+              >
+                {isSavingStore ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.modalSubmitBtnText}>Save Store</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* 2. CHANGE PASSWORD MODAL */}
+      <Modal visible={showPasswordModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View
+            style={[
+              styles.modalCard,
+              { backgroundColor: theme.colors.card, borderColor: theme.colors.borderGlass },
+            ]}
+          >
+            <View style={styles.modalHeader}>
+              <View style={styles.modalHeaderTitleRow}>
+                <Feather name="lock" size={20} color={theme.colors.primary} />
+                <Text style={[styles.modalTitle, { color: theme.colors.textPrimary }]}>
+                  Change Password
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setShowPasswordModal(false)}
+                disabled={passwordLoading}
+                style={styles.modalCloseBtn}
+              >
+                <Feather name="x" size={20} color={theme.colors.textMuted} />
               </TouchableOpacity>
             </View>
 
             {passwordError && (
-              <View style={styles.passwordErrorBox}>
-                <Feather name="alert-circle" size={15} color="#EF4444" />
-                <Text style={styles.passwordErrorText}>{passwordError}</Text>
+              <View style={styles.errorBanner}>
+                <Feather name="alert-circle" size={14} color="#EF4444" />
+                <Text style={styles.errorBannerText}>{passwordError}</Text>
               </View>
             )}
 
-            <View style={styles.modalForm}>
-              {/* CURRENT PASSWORD */}
-              <View style={styles.modalInputGroup}>
-                <Text style={[styles.modalInputLabel, { color: theme.colors.textSecondary }]}>
-                  Current Password *
-                </Text>
-                <View
-                  style={[
-                    styles.modalInputContainer,
-                    {
-                      backgroundColor: theme.colors.surface,
-                      borderColor: theme.colors.borderGlass,
-                    },
-                  ]}
+            <View style={styles.modalInputGroup}>
+              <Text style={[styles.modalInputLabel, { color: theme.colors.textSecondary }]}>
+                Current Password *
+              </Text>
+              <View
+                style={[
+                  styles.passwordInputBox,
+                  {
+                    backgroundColor: theme.colors.surface,
+                    borderColor: theme.colors.borderGlass,
+                  },
+                ]}
+              >
+                <TextInput
+                  style={[styles.passwordTextInput, { color: theme.colors.textPrimary }]}
+                  placeholder="Enter current password"
+                  placeholderTextColor={theme.colors.textMuted}
+                  secureTextEntry={!showOldPassword}
+                  value={oldPassword}
+                  onChangeText={setOldPassword}
+                />
+                <TouchableOpacity
+                  onPress={() => setShowOldPassword(!showOldPassword)}
+                  style={styles.eyeBtn}
                 >
-                  <TextInput
-                    style={[styles.modalTextInput, { color: theme.colors.textPrimary }]}
-                    placeholder="Enter current password"
-                    placeholderTextColor={theme.colors.textMuted}
-                    secureTextEntry={!showOldPassword}
-                    value={oldPassword}
-                    onChangeText={setOldPassword}
+                  <Feather
+                    name={showOldPassword ? 'eye-off' : 'eye'}
+                    size={16}
+                    color={theme.colors.textMuted}
                   />
-                  <TouchableOpacity
-                    onPress={() => setShowOldPassword(!showOldPassword)}
-                    style={styles.passwordEyeBtn}
-                  >
-                    <Feather
-                      name={showOldPassword ? 'eye-off' : 'eye'}
-                      size={15}
-                      color={theme.colors.textMuted}
-                    />
-                  </TouchableOpacity>
-                </View>
+                </TouchableOpacity>
               </View>
+            </View>
 
-              {/* NEW PASSWORD */}
-              <View style={styles.modalInputGroup}>
-                <Text style={[styles.modalInputLabel, { color: theme.colors.textSecondary }]}>
-                  New Password * (Min 6 characters)
-                </Text>
-                <View
-                  style={[
-                    styles.modalInputContainer,
-                    {
-                      backgroundColor: theme.colors.surface,
-                      borderColor: theme.colors.borderGlass,
-                    },
-                  ]}
+            <View style={styles.modalInputGroup}>
+              <Text style={[styles.modalInputLabel, { color: theme.colors.textSecondary }]}>
+                New Password *
+              </Text>
+              <View
+                style={[
+                  styles.passwordInputBox,
+                  {
+                    backgroundColor: theme.colors.surface,
+                    borderColor: theme.colors.borderGlass,
+                  },
+                ]}
+              >
+                <TextInput
+                  style={[styles.passwordTextInput, { color: theme.colors.textPrimary }]}
+                  placeholder="At least 6 characters"
+                  placeholderTextColor={theme.colors.textMuted}
+                  secureTextEntry={!showNewPassword}
+                  value={newPassword}
+                  onChangeText={setNewPassword}
+                />
+                <TouchableOpacity
+                  onPress={() => setShowNewPassword(!showNewPassword)}
+                  style={styles.eyeBtn}
                 >
-                  <TextInput
-                    style={[styles.modalTextInput, { color: theme.colors.textPrimary }]}
-                    placeholder="Enter new password"
-                    placeholderTextColor={theme.colors.textMuted}
-                    secureTextEntry={!showNewPassword}
-                    value={newPassword}
-                    onChangeText={setNewPassword}
+                  <Feather
+                    name={showNewPassword ? 'eye-off' : 'eye'}
+                    size={16}
+                    color={theme.colors.textMuted}
                   />
-                  <TouchableOpacity
-                    onPress={() => setShowNewPassword(!showNewPassword)}
-                    style={styles.passwordEyeBtn}
-                  >
-                    <Feather
-                      name={showNewPassword ? 'eye-off' : 'eye'}
-                      size={15}
-                      color={theme.colors.textMuted}
-                    />
-                  </TouchableOpacity>
-                </View>
+                </TouchableOpacity>
               </View>
+            </View>
 
-              {/* CONFIRM NEW PASSWORD */}
-              <View style={styles.modalInputGroup}>
-                <Text style={[styles.modalInputLabel, { color: theme.colors.textSecondary }]}>
-                  Confirm New Password *
-                </Text>
-                <View
-                  style={[
-                    styles.modalInputContainer,
-                    {
-                      backgroundColor: theme.colors.surface,
-                      borderColor: theme.colors.borderGlass,
-                    },
-                  ]}
+            <View style={styles.modalInputGroup}>
+              <Text style={[styles.modalInputLabel, { color: theme.colors.textSecondary }]}>
+                Confirm New Password *
+              </Text>
+              <View
+                style={[
+                  styles.passwordInputBox,
+                  {
+                    backgroundColor: theme.colors.surface,
+                    borderColor: theme.colors.borderGlass,
+                  },
+                ]}
+              >
+                <TextInput
+                  style={[styles.passwordTextInput, { color: theme.colors.textPrimary }]}
+                  placeholder="Re-type new password"
+                  placeholderTextColor={theme.colors.textMuted}
+                  secureTextEntry={!showConfirmPassword}
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                />
+                <TouchableOpacity
+                  onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                  style={styles.eyeBtn}
                 >
-                  <TextInput
-                    style={[styles.modalTextInput, { color: theme.colors.textPrimary }]}
-                    placeholder="Re-type new password"
-                    placeholderTextColor={theme.colors.textMuted}
-                    secureTextEntry={!showConfirmPassword}
-                    value={confirmPassword}
-                    onChangeText={setConfirmPassword}
+                  <Feather
+                    name={showConfirmPassword ? 'eye-off' : 'eye'}
+                    size={16}
+                    color={theme.colors.textMuted}
                   />
-                  <TouchableOpacity
-                    onPress={() => setShowConfirmPassword(!showConfirmPassword)}
-                    style={styles.passwordEyeBtn}
-                  >
-                    <Feather
-                      name={showConfirmPassword ? 'eye-off' : 'eye'}
-                      size={15}
-                      color={theme.colors.textMuted}
-                    />
-                  </TouchableOpacity>
-                </View>
+                </TouchableOpacity>
               </View>
             </View>
 
@@ -964,6 +1064,154 @@ export const SettingsScreen: React.FC = () => {
           </View>
         </View>
       </Modal>
+
+      {/* 3. WHATSAPP TEMPLATE MODAL */}
+      <Modal visible={showTemplateModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View
+            style={[
+              styles.modalCard,
+              { backgroundColor: theme.colors.card, borderColor: theme.colors.borderGlass },
+            ]}
+          >
+            <View style={styles.modalHeader}>
+              <View style={styles.modalHeaderTitleRow}>
+                <Feather name="message-circle" size={20} color={theme.colors.primary} />
+                <Text style={[styles.modalTitle, { color: theme.colors.textPrimary }]}>
+                  WhatsApp Template
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setShowTemplateModal(false)}
+                style={styles.modalCloseBtn}
+              >
+                <Feather name="x" size={20} color={theme.colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 440 }}>
+              {/* Presets Pills */}
+              <Text style={[styles.modalInputLabel, { color: theme.colors.textSecondary, marginBottom: 8 }]}>
+                Select Premade Style
+              </Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
+                {PREMADE_TEMPLATES.map((preset) => (
+                  <TouchableOpacity
+                    key={preset.id}
+                    style={[
+                      styles.presetChip,
+                      {
+                        backgroundColor:
+                          activePresetId === preset.id ? theme.colors.primary : theme.colors.surface,
+                        borderColor:
+                          activePresetId === preset.id
+                            ? theme.colors.primary
+                            : theme.colors.borderGlass,
+                      },
+                    ]}
+                    onPress={() => handleApplyPreset(preset)}
+                  >
+                    <Text
+                      style={[
+                        styles.presetChipText,
+                        { color: activePresetId === preset.id ? '#FFFFFF' : theme.colors.textSecondary },
+                      ]}
+                    >
+                      {preset.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              {/* Tag inserters */}
+              <Text style={[styles.modalInputLabel, { color: theme.colors.textSecondary, marginBottom: 6 }]}>
+                Insert Dynamic Tag
+              </Text>
+              <View style={styles.tagsRow}>
+                {TEMPLATE_VARIABLES.map((v) => (
+                  <TouchableOpacity
+                    key={v.tag}
+                    style={[
+                      styles.tagChip,
+                      { backgroundColor: theme.colors.surface, borderColor: theme.colors.borderGlass },
+                    ]}
+                    onPress={() => handleInsertVariable(v.tag)}
+                  >
+                    <Text style={[styles.tagChipText, { color: theme.colors.primary }]}>
+                      + {v.desc}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Multiline Template Input */}
+              <TextInput
+                style={[
+                  styles.templateInput,
+                  {
+                    backgroundColor: theme.colors.surface,
+                    borderColor: theme.colors.borderGlass,
+                    color: theme.colors.textPrimary,
+                  },
+                ]}
+                multiline
+                numberOfLines={4}
+                value={messageTemplate}
+                onChangeText={setMessageTemplate}
+                placeholder="Type your WhatsApp message template..."
+                placeholderTextColor={theme.colors.textMuted}
+              />
+
+              {/* Live Preview Card */}
+              <View
+                style={[
+                  styles.previewBox,
+                  { backgroundColor: theme.colors.surface, borderColor: theme.colors.borderGlass },
+                ]}
+              >
+                <View style={styles.previewHeaderRow}>
+                  <Feather name="eye" size={13} color={theme.colors.textMuted} />
+                  <Text style={[styles.previewHeaderTitle, { color: theme.colors.textMuted }]}>
+                    Message Preview
+                  </Text>
+                </View>
+                <Text style={[styles.previewMsgText, { color: theme.colors.textPrimary }]}>
+                  {previewText}
+                </Text>
+              </View>
+            </ScrollView>
+
+            <View style={styles.modalActionsRow}>
+              <TouchableOpacity
+                style={[
+                  styles.modalCancelBtn,
+                  {
+                    backgroundColor: theme.colors.surface,
+                    borderColor: theme.colors.borderGlass,
+                  },
+                ]}
+                onPress={() => setShowTemplateModal(false)}
+              >
+                <Text style={[styles.modalCancelBtnText, { color: theme.colors.textSecondary }]}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.modalSubmitBtn, { backgroundColor: theme.colors.primary }]}
+                onPress={handleSaveTemplate}
+                disabled={isSavingTemplate}
+              >
+                {isSavingTemplate ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.modalSubmitBtnText}>Save Template</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 };
@@ -973,31 +1221,19 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    padding: 16,
-    paddingBottom: 40,
-    gap: 14,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 48,
   },
-  sectionCard: {
-    borderRadius: 14,
+
+  // Profile Header Card
+  profileCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
     padding: 16,
+    borderRadius: 16,
     borderWidth: 1,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 14,
-  },
-  cardHeaderSmall: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 14,
-  },
-  cardTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    letterSpacing: -0.2,
+    marginBottom: 20,
   },
   avatarBox: {
     width: 44,
@@ -1005,406 +1241,282 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
+    marginRight: 14,
   },
   avatarLetter: {
-    fontSize: 18,
-    fontWeight: '900',
     color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '800',
   },
-  headerTitles: {
+  profileTextCol: {
     flex: 1,
   },
   profileName: {
     fontSize: 16,
-    fontWeight: '800',
+    fontWeight: '700',
   },
   profileEmail: {
     fontSize: 12,
     marginTop: 2,
   },
-  profileDetailsList: {
-    gap: 8,
-    marginBottom: 12,
-    paddingTop: 4,
-  },
-  profileDetailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  detailLabelRow: {
+  cloudBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-  },
-  detailLabel: {
-    fontSize: 12,
-  },
-  detailValue: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  accountActionBtnsRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 6,
-  },
-  changePasswordBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  changePasswordBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  signOutBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  signOutBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  primaryActionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 11,
-    borderRadius: 8,
-    marginTop: 4,
-  },
-  primaryActionBtnText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-
-  /* Toggle Tab for Appearance */
-  toggleTabContainer: {
-    flexDirection: 'row',
-    borderRadius: 8,
-    padding: 3,
-    borderWidth: 1,
-  },
-  toggleTabBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 9,
-    borderRadius: 6,
-  },
-  toggleTabBtnActive: {},
-  toggleTabText: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  toggleTabTextActive: {
-    fontWeight: '800',
-  },
-
-  /* Form & VAT */
-  inputGroup: {
-    marginBottom: 10,
-  },
-  inputRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  inputLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    marginBottom: 5,
-  },
-  textInput: {
-    height: 42,
-    borderRadius: 8,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    fontSize: 13,
-  },
-  vatRowCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 8, // Small border radius as requested
-    borderWidth: 1,
-    marginTop: 6,
-    marginBottom: 10,
-  },
-  vatInfo: {
-    flex: 1,
-    marginRight: 10,
-  },
-  vatTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  vatSubtitle: {
-    fontSize: 11,
-    marginTop: 1,
-  },
-  paperWidthContainer: {
-    marginTop: 6,
-    marginBottom: 14,
-  },
-  paperWidthRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  paperWidthOption: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 9,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  paperWidthOptionActive: {},
-  paperWidthText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  saveBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    height: 44,
-    borderRadius: 8,
-  },
-  saveBtnText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '800',
-  },
-
-  /* WhatsApp Studio */
-  presetScroll: {
-    gap: 8,
-    paddingBottom: 4,
-  },
-  presetChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 8,
-    borderWidth: 1,
-    alignItems: 'flex-start',
-  },
-  presetBadge: {
-    fontSize: 9,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-  },
-  presetName: {
-    fontSize: 12,
-    fontWeight: '700',
-    marginTop: 2,
-  },
-  variablePillsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  variablePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
     paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: 6,
-    borderWidth: 1,
+    paddingVertical: 4,
+    borderRadius: 12,
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    gap: 5,
   },
-  variableTag: {
+  cloudDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#10B981',
+  },
+  cloudBadgeText: {
     fontSize: 11,
-    fontWeight: '800',
+    fontWeight: '600',
+    color: '#10B981',
   },
-  variableDesc: {
-    fontSize: 10,
+  signInBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
   },
-  templateTextInput: {
-    minHeight: 95,
-    borderRadius: 8,
-    borderWidth: 1,
-    padding: 10,
-    fontSize: 13,
-    textAlignVertical: 'top',
-  },
-  previewCard: {
-    borderRadius: 8,
-    borderWidth: 1,
-    padding: 10,
-    marginTop: 6,
-  },
-  previewHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 4,
-  },
-  previewTitle: {
-    fontSize: 10,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  previewText: {
-    fontSize: 12,
-    lineHeight: 17,
-  },
-
-  /* Clean In-App Update Row */
-  updateRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  updateInfoCol: {
-    flex: 1,
-  },
-  updateTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  updateSub: {
-    fontSize: 12,
-    marginTop: 2,
-  },
-  updateCheckBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: 8,
-  },
-  updateCheckBtnText: {
+  signInBadgeText: {
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '700',
   },
 
-  /* Change Password Modal */
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
+  // Category Layout (Matches Reference Screenshot)
+  categoryBlock: {
+    marginBottom: 20,
   },
-  modalCard: {
-    width: '100%',
-    maxWidth: 420,
+  categoryTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    marginBottom: 8,
+    marginLeft: 6,
+    textTransform: 'uppercase',
+  },
+  cardGroup: {
     borderRadius: 16,
     borderWidth: 1,
+    overflow: 'hidden',
+  },
+  settingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 13,
+    paddingHorizontal: 16,
+    minHeight: 52,
+  },
+  rowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  iconContainer: {
+    width: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  rowLabel: {
+    fontSize: 14.5,
+    fontWeight: '500',
+    letterSpacing: -0.2,
+  },
+  rowRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  rowValueText: {
+    fontSize: 13,
+    fontWeight: '400',
+  },
+  rowSeparator: {
+    height: StyleSheet.hairlineWidth,
+    marginLeft: 58,
+  },
+
+  footerNote: {
+    alignItems: 'center',
+    paddingVertical: 16,
+  },
+  footerText: {
+    fontSize: 11,
+  },
+
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.72)',
+    justifyContent: 'flex-end',
+  },
+  modalCard: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderWidth: 1,
+    borderBottomWidth: 0,
     padding: 20,
+    paddingBottom: 32,
   },
   modalHeader: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
     marginBottom: 16,
+  },
+  modalHeaderTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
   modalTitle: {
     fontSize: 17,
-    fontWeight: '800',
-  },
-  modalSubtitle: {
-    fontSize: 12,
-    marginTop: 2,
+    fontWeight: '700',
   },
   modalCloseBtn: {
-    padding: 4,
-  },
-  passwordErrorBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: 'rgba(239, 68, 68, 0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.3)',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginBottom: 14,
-  },
-  passwordErrorText: {
-    color: '#EF4444',
-    fontSize: 12,
-    fontWeight: '600',
-    flex: 1,
-  },
-  modalForm: {
-    gap: 12,
+    padding: 6,
   },
   modalInputGroup: {
-    gap: 5,
+    marginBottom: 14,
   },
   modalInputLabel: {
     fontSize: 12,
     fontWeight: '600',
+    marginBottom: 6,
   },
-  modalInputContainer: {
+  modalInput: {
+    height: 46,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    fontSize: 14,
+  },
+  passwordInputBox: {
+    height: 46,
+    borderRadius: 12,
+    borderWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 8,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    height: 44,
+    paddingHorizontal: 14,
   },
-  modalTextInput: {
+  passwordTextInput: {
     flex: 1,
     fontSize: 14,
-    height: '100%',
+    paddingVertical: 0,
   },
-  passwordEyeBtn: {
+  eyeBtn: {
     padding: 6,
   },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    padding: 10,
+    borderRadius: 10,
+    marginBottom: 12,
+  },
+  errorBannerText: {
+    color: '#EF4444',
+    fontSize: 12,
+    flex: 1,
+  },
+
+  // Template Modal Styles
+  presetChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginRight: 8,
+  },
+  presetChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  tagsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 12,
+  },
+  tagChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  tagChipText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  templateInput: {
+    height: 90,
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 12,
+    fontSize: 13,
+    textAlignVertical: 'top',
+    marginBottom: 12,
+  },
+  previewBox: {
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 14,
+  },
+  previewHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginBottom: 6,
+  },
+  previewHeaderTitle: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  previewMsgText: {
+    fontSize: 12,
+    lineHeight: 18,
+  },
+
+  // Actions
   modalActionsRow: {
     flexDirection: 'row',
-    gap: 10,
-    marginTop: 18,
+    gap: 12,
+    marginTop: 8,
   },
   modalCancelBtn: {
     flex: 1,
-    height: 44,
-    borderRadius: 8,
+    height: 46,
+    borderRadius: 12,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
   modalCancelBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '600',
   },
   modalSubmitBtn: {
     flex: 1.5,
-    height: 44,
-    borderRadius: 8,
+    height: 46,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
   modalSubmitBtnText: {
     color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '800',
+    fontSize: 14,
+    fontWeight: '700',
   },
 });

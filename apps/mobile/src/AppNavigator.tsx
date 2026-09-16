@@ -1,5 +1,14 @@
-import React, { useState, useRef } from 'react';
-import { View, StyleSheet, ActivityIndicator, Text, PanResponder } from 'react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import {
+  View,
+  StyleSheet,
+  ActivityIndicator,
+  Text,
+  PanResponder,
+  BackHandler,
+  ToastAndroid,
+  Platform,
+} from 'react-native';
 import { useApp } from './context/AppContext';
 import { theme } from './theme';
 import { AppHeader } from './components/common/AppHeader';
@@ -35,8 +44,50 @@ const MAIN_TABS: ActiveTab[] = [
 ];
 
 export const AppNavigator: React.FC = () => {
-  const { isReady, isOnboarded, activeTab, setActiveTab, theme, showAuthModal, setShowAuthModal, user } = useApp();
+  const {
+    isReady,
+    isOnboarded,
+    activeTab,
+    setActiveTab,
+    navigateBack,
+    theme,
+    showAuthModal,
+    setShowAuthModal,
+    user,
+  } = useApp();
   const [onboardingStep, setOnboardingStep] = useState<'intro' | 'setup'>('intro');
+  const lastBackPressRef = useRef<number>(0);
+
+  // Hardware back button navigation: navigate back through screen history or double tap to exit from home
+  useEffect(() => {
+    const onBackPress = () => {
+      if (showAuthModal) {
+        setShowAuthModal(false);
+        return true;
+      }
+
+      const handled = navigateBack();
+      if (handled) {
+        return true;
+      }
+
+      // At home ('dashboard'), require 2 presses within 2000ms to exit
+      const now = Date.now();
+      if (now - lastBackPressRef.current < 2000) {
+        BackHandler.exitApp();
+        return true;
+      }
+
+      lastBackPressRef.current = now;
+      if (Platform.OS === 'android') {
+        ToastAndroid.show('Press back again to exit', ToastAndroid.SHORT);
+      }
+      return true;
+    };
+
+    const backSubscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => backSubscription.remove();
+  }, [showAuthModal, activeTab, navigateBack]);
 
   // Swipe gesture navigation between tabs
   const panResponder = useRef(
