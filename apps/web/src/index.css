@@ -1,0 +1,145 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --brand-primary: #059669;
+    --brand-light: #ecfdf5;
+    --khata-got: #10b981;
+    --khata-gave: #ef4444;
+  }
+
+  body {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    overflow-x: hidden;
+    @apply bg-gray-50 text-gray-900 dark:bg-black dark:text-white;
+  }
+
+  h1, h2, h3, .font-heading {
+    font-family: 'Outfit', 'Inter', sans-serif;
+  }
+}
+
+/* Clean Scrollbars */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.4);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(156, 163, 175, 0.7);
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #262626;
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #404040;
+}
+
+/* Sidebar nav items */
+.nav-item {
+  @apply flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-gray-600 dark:text-neutral-300 transition-all duration-150 cursor-pointer select-none;
+}
+.nav-item:hover {
+  @apply bg-gray-50 dark:bg-neutral-900 text-gray-900 dark:text-white;
+}
+.nav-item.active {
+  @apply bg-brand-600 text-white shadow-sm dark:bg-brand-600 dark:text-white;
+}
+.nav-item.active:hover {
+  @apply bg-brand-700 dark:bg-brand-700;
+}
+
+/* Section label */
+.nav-section {
+  @apply text-[11px] font-semibold uppercase tracking-wider text-gray-400 dark:text-neutral-500 px-3 pt-5 pb-1;
+}
+
+/* Card with subtle hover */
+.stat-card {
+  @apply bg-white dark:bg-black rounded-xl border border-gray-100 dark:border-neutral-800 p-4 transition-all duration-200 text-gray-900 dark:text-white;
+}
+.stat-card:hover {
+  @apply shadow-card-hover border-gray-200 dark:border-neutral-700;
+}
+
+/* Monospace receipt styling */
+.font-receipt {
+  font-family: 'Courier New', Courier, monospace;
+}
+
+/* Button base */
+.btn-primary {
+  @apply inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-brand-600 text-white text-sm font-semibold transition-all duration-150 hover:bg-brand-700 active:scale-[0.98] shadow-sm;
+}
+
+.btn-outline {
+  @apply inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 dark:border-neutral-800 text-gray-700 dark:text-neutral-200 text-sm font-medium transition-all duration-150 hover:bg-gray-50 dark:hover:bg-neutral-900 active:scale-[0.98];
+}
+
+.btn-danger {
+  @apply inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-red-500 text-white text-sm font-semibold transition-all duration-150 hover:bg-red-600 active:scale-[0.98] shadow-sm;
+}
+
+/* Input styles */
+.input-field {
+  @apply w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-neutral-800 bg-white dark:bg-black text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-neutral-500 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 dark:focus:border-brand-400;
+}
+
+/* Modal overlay */
+.modal-overlay {
+  @apply fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm;
+}
+
+.modal-content {
+  @apply bg-white dark:bg-black rounded-2xl shadow-2xl border border-gray-100 dark:border-neutral-800 w-full max-w-lg mx-4 max-h-[90vh] overflow-auto text-gray-900 dark:text-white;
+}
+
+/* Tab underline style (like Karobar) */
+.tab-item {
+  @apply relative px-4 py-2.5 text-sm font-medium text-gray-500 dark:text-neutral-400 cursor-pointer transition-colors duration-150 hover:text-gray-900 dark:hover:text-white;
+}
+.tab-item.active {
+  @apply text-brand-600 dark:text-brand-400;
+}
+.tab-item.active::after {
+  content: '';
+  @apply absolute bottom-0 left-0 right-0 h-0.5 bg-brand-600 dark:bg-brand-500 rounded-full;
+}
+
+/* Subtle pulse animation */
+@keyframes pulse-ring {
+  0% { transform: scale(0.95); opacity: 0.8; }
+  50% { transform: scale(1.04); opacity: 1; }
+  100% { transform: scale(0.95); opacity: 0.8; }
+}
+
+.animate-pulse-subtle {
+  animation: pulse-ring 2.5s infinite ease-in-out;
+}
+
+/* Fade-in animation */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in {
+  animation: fadeIn 0.25s ease-out;
+}
+
+/* Slide-in from left for sidebar */
+@keyframes slideInLeft {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+.animate-slide-in {
+  animation: slideInLeft 0.2s ease-out;
+}

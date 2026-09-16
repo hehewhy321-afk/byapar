@@ -1,0 +1,29 @@
+{
+  "expo": {
+    "name": "Byapar (व्यापार)",
+    "slug": "byapar",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#020617"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.byapar.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#020617"
+      },
+      "package": "com.byapar"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    }
+  }
+}

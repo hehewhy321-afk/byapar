@@ -1,0 +1,39 @@
+# Byapar (व्यापार) - Supabase Local Configuration
+
+project_id = "byapar"
+
+[api]
+enabled = true
+port = 54341
+schemas = ["public", "storage", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54342
+shadow_port = 54340
+major_version = 15
+
+[studio]
+enabled = true
+port = 54343
+
+[inbucket]
+enabled = true
+port = 54344
+smtp_port = 54345
+pop3_port = 54346
+
+[storage]
+enabled = true
+file_size_limit = "50MiB"
+
+[auth]
+enabled = true
+site_url = "http://127.0.0.1:5173"
+additional_redirect_urls = ["http://127.0.0.1:5173", "http://localhost:5173"]
+jwt_expiry = 3600
+enable_signup = true
+
+[analytics]
+enabled = false

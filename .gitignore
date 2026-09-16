@@ -1,0 +1,120 @@
+# ==============================================================================
+# Kirana / Byapar Monorepo - Comprehensive .gitignore
+# ==============================================================================
+
+# --- Node & Package Managers ---
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-store/
+.npm/
+lerna-debug.log*
+
+# --- Environment Variables & Sensitive Credentials ---
+.env
+.env*.local
+.env.development
+.env.test
+.env.production
+.env.staging
+*.pem
+*.key
+*.cert
+*.p12
+*.jks
+*.p8
+*.mobileprovision
+
+# --- Turborepo & Build Tool Caches ---
+.turbo/
+.cache/
+.parcel-cache/
+dist/
+build/
+out/
+.next/
+
+# --- React Native / Expo ---
+.expo/
+.expo-shared/
+web-build/
+*.tsbuildinfo
+
+# --- Android Native ---
+apps/mobile/android/.gradle/
+apps/mobile/android/app/build/
+apps/mobile/android/build/
+apps/mobile/android/captures/
+apps/mobile/android/local.properties
+apps/mobile/android/.cxx/
+apps/mobile/android/default/
+**/android/.gradle/
+**/android/app/build/
+**/android/build/
+**/android/local.properties
+**/android/.cxx/
+*.apk
+*.aab
+*.ap_
+*.dex
+
+# --- iOS Native ---
+apps/mobile/ios/Pods/
+apps/mobile/ios/build/
+apps/mobile/ios/*.xcworkspace/xcuserdata/
+apps/mobile/ios/*.xcodeproj/xcuserdata/
+apps/mobile/ios/DerivedData/
+**/ios/Pods/
+**/ios/build/
+**/ios/*.xcworkspace/xcuserdata/
+**/ios/*.xcodeproj/xcuserdata/
+*.ipa
+*.xcuserstate
+
+# --- Testing & Code Coverage ---
+coverage/
+.nyc_output/
+*.lcov
+test-results/
+
+# --- Supabase & Local Database ---
+supabase/.branches/
+supabase/.temp/
+.temp/
+
+# --- IDEs & Text Editors ---
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.sublime-project
+*.sublime-workspace
+
+# --- OS Generated Files ---
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# --- Backup & Temp Files ---
+*.swp
+*.swo
+*~
+*.bak
+*.tmp
+*.orig
+
+
+#misc
+docs/

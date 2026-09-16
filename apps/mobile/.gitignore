@@ -1,0 +1,50 @@
+# --- Package Manager & Node ---
+node_modules/
+.npm/
+*.log
+node_modules
+
+
+# --- Environment & Credentials ---
+.env
+.env*.local
+*.pem
+*.jks
+*.keystore
+!android/app/debug.keystore
+
+# --- Expo & Metro ---
+.expo/
+.expo-shared/
+web-build/
+dist/
+*.tsbuildinfo
+
+# --- Android ---
+android/.gradle/
+android/app/build/
+android/build/
+android/captures/
+android/local.properties
+android/.cxx/
+android/default/
+*.apk
+*.aab
+
+# --- iOS ---
+ios/Pods/
+ios/build/
+ios/DerivedData/
+ios/*.xcworkspace/xcuserdata/
+ios/*.xcodeproj/xcuserdata/
+*.ipa
+*.xcuserstate
+
+# --- IDEs & OS ---
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+*.iml

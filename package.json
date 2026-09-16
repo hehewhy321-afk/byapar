@@ -1,0 +1,19 @@
+{
+  "name": "byapar-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Byapar (व्यापार) - Offline-First Smart Business Management Platform for Nepal MSMEs",
+  "scripts": {
+    "dev": "pnpm --filter @byapar/web dev",
+    "dev:mobile": "pnpm --filter @byapar/mobile start",
+    "build": "pnpm --filter @byapar/web build"
+  },
+  "pnpm": {
+    "overrides": {
+      "@solidjs/vite-plugin": "3.0.0-next.27"
+    }
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  }
+}
