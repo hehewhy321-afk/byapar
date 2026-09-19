@@ -21,7 +21,7 @@ import {
 
 export const KhataView: Component = () => {
   const [partyFilter, setPartyFilter] = createSignal<'all' | 'customer' | 'supplier'>('all');
-  const [selectedPartyId, setSelectedPartyId] = createSignal<string>(parties[0]?.id || '');
+  const [selectedPartyId, setSelectedPartyId] = createSignal<string>('');
   const [searchQuery, setSearchQuery] = createSignal('');
 
   const [showEntryModal, setShowEntryModal] = createSignal(false);
@@ -39,11 +39,11 @@ export const KhataView: Component = () => {
   const [newPartyCreditLimit, setNewPartyCreditLimit] = createSignal<number>(50000);
   const [newPartyPan, setNewPartyPan] = createSignal('');
 
-  const handleCreateParty = (e: Event) => {
+  const handleCreateParty = async (e: Event) => {
     e.preventDefault();
     if (!newPartyName().trim()) return;
 
-    const created = addParty({
+    const created = await addParty({
       name: newPartyName().trim(),
       phone: newPartyPhone().trim() || undefined,
       address: newPartyAddress().trim() || undefined,
@@ -93,11 +93,19 @@ export const KhataView: Component = () => {
   });
 
   const selectedParty = createMemo(() => {
-    return parties.find((p) => p.id === selectedPartyId());
+    if (!parties || parties.length === 0) return null;
+    const currentId = selectedPartyId();
+    if (currentId) {
+      const found = parties.find((p) => p.id === currentId);
+      if (found) return found;
+    }
+    return parties[0];
   });
 
   const partyTransactions = createMemo(() => {
-    return khataEntries.filter((k) => k.partyId === selectedPartyId());
+    const p = selectedParty();
+    if (!p) return [];
+    return khataEntries.filter((k) => k.partyId === p.id);
   });
 
   const handleOpenEntry = (type: 'liyo' | 'diyo') => {
@@ -109,10 +117,11 @@ export const KhataView: Component = () => {
 
   const handleSaveEntry = (e: Event) => {
     e.preventDefault();
-    if (entryAmount() <= 0 || !selectedPartyId()) return;
+    const p = selectedParty();
+    if (entryAmount() <= 0 || !p) return;
 
     addKhataEntry({
-      partyId: selectedPartyId(),
+      partyId: p.id,
       entryType: entryType(),
       amount: entryAmount(),
       notes: entryNotes() || (entryType() === 'liyo' ? 'Cash Payment Received' : 'Goods on Credit'),
@@ -213,15 +222,14 @@ export const KhataView: Component = () => {
           <div class="divide-y divide-gray-50 dark:divide-neutral-800/60 overflow-y-auto max-h-[500px] pr-1">
             <For each={filteredParties()}>
               {(party) => {
-                const isSelected = party.id === selectedPartyId();
-                const isReceivable = party.currentBalance > 0;
-                const isPayable = party.currentBalance < 0;
+                const isReceivable = () => party.currentBalance > 0;
+                const isPayable = () => party.currentBalance < 0;
 
                 return (
                   <div
                     onClick={() => setSelectedPartyId(party.id)}
                     class={`p-3 rounded-xl cursor-pointer transition-all flex items-center justify-between gap-2 ${
-                      isSelected
+                      party.id === selectedParty()?.id
                         ? 'bg-brand-50 dark:bg-brand-950/80 border border-brand-200 dark:border-brand-700/60 shadow-sm'
                         : 'hover:bg-gray-50 dark:hover:bg-neutral-900/60'
                     }`}
@@ -234,12 +242,12 @@ export const KhataView: Component = () => {
                     </div>
                     <div class="text-right">
                       <span class={`text-xs font-black block ${
-                        isReceivable ? 'text-emerald-600 dark:text-emerald-400' : isPayable ? 'text-red-500 dark:text-red-400' : 'text-gray-400 dark:text-neutral-500'
+                        isReceivable() ? 'text-emerald-600 dark:text-emerald-400' : isPayable() ? 'text-red-500 dark:text-red-400' : 'text-gray-400 dark:text-neutral-500'
                       }`}>
                         {formatNepaliCurrency(Math.abs(party.currentBalance))}
                       </span>
                       <span class="text-[9px] text-gray-400 dark:text-neutral-500 font-semibold uppercase">
-                        {isReceivable ? 'Receivable' : isPayable ? 'Payable' : 'Settled'}
+                        {isReceivable() ? 'Receivable' : isPayable() ? 'Payable' : 'Settled'}
                       </span>
                     </div>
                   </div>
@@ -259,43 +267,44 @@ export const KhataView: Component = () => {
               </div>
             }
           >
-            <div>
-              {/* Party Profile */}
-              <div class="flex flex-wrap items-center justify-between pb-4 border-b border-gray-100 dark:border-neutral-800 gap-3">
-                <div>
-                  <div class="flex items-center gap-2">
-                    <h3 class="font-black text-lg text-gray-900 dark:text-white">{selectedParty()!.name}</h3>
-                    <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-100 dark:bg-neutral-800 text-gray-600 dark:text-neutral-300 uppercase">
-                      {selectedParty()!.partyType}
-                    </span>
-                  </div>
-                  <p class="text-xs text-gray-400 dark:text-neutral-400 mt-0.5">
-                    Phone: <span class="font-mono text-gray-600 dark:text-neutral-300">{selectedParty()!.phone || 'N/A'}</span> • Address: {selectedParty()!.address}
-                  </p>
-                </div>
-
-                <div class="flex items-center gap-3">
-                  <div class="text-right">
-                    <span class="text-[10px] text-gray-400 dark:text-neutral-500 block font-semibold uppercase">Current Balance</span>
-                    <span class={`text-xl font-black ${
-                      selectedParty()!.currentBalance > 0 ? 'text-emerald-600 dark:text-emerald-400' :
-                      selectedParty()!.currentBalance < 0 ? 'text-red-500 dark:text-red-400' : 'text-gray-400 dark:text-neutral-500'
-                    }`}>
-                      {formatNepaliCurrency(Math.abs(selectedParty()!.currentBalance))}
-                    </span>
+            {(current) => (
+              <div>
+                {/* Party Profile */}
+                <div class="flex flex-wrap items-center justify-between pb-4 border-b border-gray-100 dark:border-neutral-800 gap-3">
+                  <div>
+                    <div class="flex items-center gap-2">
+                      <h3 class="font-black text-lg text-gray-900 dark:text-white">{current().name}</h3>
+                      <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-100 dark:bg-neutral-800 text-gray-600 dark:text-neutral-300 uppercase">
+                        {current().partyType}
+                      </span>
+                    </div>
+                    <p class="text-xs text-gray-400 dark:text-neutral-400 mt-0.5">
+                      Phone: <span class="font-mono text-gray-600 dark:text-neutral-300">{current().phone || 'N/A'}</span> • Address: {current().address || 'N/A'}
+                    </p>
                   </div>
 
-                  {selectedParty()!.currentBalance > 0 && (
-                    <button
-                      onClick={handleSendWhatsAppReminder}
-                      class="btn-primary text-xs flex items-center gap-1.5"
-                    >
-                      <IconWhatsApp class="w-3.5 h-3.5" />
-                      <span>WhatsApp Reminder</span>
-                    </button>
-                  )}
+                  <div class="flex items-center gap-3">
+                    <div class="text-right">
+                      <span class="text-[10px] text-gray-400 dark:text-neutral-500 block font-semibold uppercase">Current Balance</span>
+                      <span class={`text-xl font-black ${
+                        current().currentBalance > 0 ? 'text-emerald-600 dark:text-emerald-400' :
+                        current().currentBalance < 0 ? 'text-red-500 dark:text-red-400' : 'text-gray-400 dark:text-neutral-500'
+                      }`}>
+                        {formatNepaliCurrency(Math.abs(current().currentBalance))}
+                      </span>
+                    </div>
+
+                    {current().currentBalance > 0 && (
+                      <button
+                        onClick={handleSendWhatsAppReminder}
+                        class="btn-primary text-xs flex items-center gap-1.5"
+                      >
+                        <IconWhatsApp class="w-3.5 h-3.5" />
+                        <span>WhatsApp Reminder</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
 
               {/* Liyo / Diyo Buttons */}
               <div class="grid grid-cols-2 gap-3 my-4">
@@ -354,6 +363,7 @@ export const KhataView: Component = () => {
                 </div>
               </div>
             </div>
+            )}
           </Show>
         </div>
       </div>

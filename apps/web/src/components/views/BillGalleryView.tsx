@@ -25,7 +25,7 @@ export const BillGalleryView: Component = () => {
     const cat = selectedCategory();
     return bills.filter((b) => {
       const matchesCat = cat === 'All' || b.category === cat;
-      const matchesSearch = !q || b.vendorName.toLowerCase().includes(q) || b.invoiceNumber.toLowerCase().includes(q);
+      const matchesSearch = !q || (b.vendorName || b.title || '').toLowerCase().includes(q) || (b.invoiceNumber || '').toLowerCase().includes(q);
       return matchesCat && matchesSearch;
     });
   });

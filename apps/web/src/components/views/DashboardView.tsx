@@ -1,7 +1,10 @@
 import { Component, createMemo, createSignal, For, Show } from 'solid-js';
 import {
   invoices,
-  khataEntries,
+  parties,
+  purchaseBills,
+  paymentRecords,
+  accounts,
   expenses,
   incomes,
   reminders,
@@ -22,27 +25,51 @@ import {
 export const DashboardView: Component = () => {
   const [chartMode, setChartMode] = createSignal<'daily' | 'weekly'>('daily');
 
-  // Calculate stats from real data
-  const totalIncome = createMemo(() => {
-    const fromInvoices = invoices.reduce((sum, inv) => sum + inv.paidAmount, 0);
-    const fromIncomes = incomes.reduce((sum, inc) => sum + inc.amount, 0);
-    return fromInvoices + fromIncomes;
+  // 1. Total Sales (GTV)
+  const totalSales = createMemo(() => {
+    return invoices.reduce((sum, inv) => sum + (Number(inv.totalAmount) || 0), 0);
   });
 
-  const totalExpense = createMemo(() => {
-    return expenses.reduce((sum, exp) => sum + exp.amount, 0);
+  // 2. Total Purchases & Expenses
+  const totalPurchasesAndExpenses = createMemo(() => {
+    const purchases = purchaseBills.reduce((sum, b) => sum + (Number(b.totalAmount) || 0), 0);
+    const exp = expenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+    return purchases + exp;
   });
 
+  // 3. To Receive (उठ्न बाँकी - Customer Receivables)
   const toReceive = createMemo(() => {
-    return khataEntries
-      .filter((e) => e.entryType === 'diyo')
-      .reduce((sum, e) => sum + e.amount, 0);
+    return parties
+      .filter((p) => (Number(p.currentBalance) || 0) > 0)
+      .reduce((sum, p) => sum + Number(p.currentBalance), 0);
   });
 
+  // 4. To Pay (तिर्न बाँकी - Supplier Payables / Advance Liabilities)
   const toGive = createMemo(() => {
-    return khataEntries
-      .filter((e) => e.entryType === 'liyo')
-      .reduce((sum, e) => sum + e.amount, 0);
+    return parties
+      .filter((p) => (Number(p.currentBalance) || 0) < 0)
+      .reduce((sum, p) => sum + Math.abs(Number(p.currentBalance)), 0);
+  });
+
+  // 5. Total Balance (Cash & Bank Accounts or Net Cashflow)
+  const totalBalance = createMemo(() => {
+    if (accounts && accounts.length > 0) {
+      return accounts.reduce((sum, acc) => sum + (Number(acc.balance) || 0), 0);
+    }
+    // Net realized cash
+    const cashFromSales = invoices.reduce((sum, inv) => sum + (Number(inv.paidAmount) || 0), 0);
+    const cashFromPaymentsIn = paymentRecords
+      .filter((p) => p.type === 'in')
+      .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+    const cashFromIncomes = incomes.reduce((sum, inc) => sum + (Number(inc.amount) || 0), 0);
+
+    const cashOutPurchases = purchaseBills.reduce((sum, b) => sum + (Number(b.paidAmount) || 0), 0);
+    const cashOutPaymentsOut = paymentRecords
+      .filter((p) => p.type === 'out')
+      .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+    const cashOutExpenses = expenses.reduce((sum, exp) => sum + (Number(exp.amount) || 0), 0);
+
+    return (cashFromSales + cashFromPaymentsIn + cashFromIncomes) - (cashOutPurchases + cashOutPaymentsOut + cashOutExpenses);
   });
 
   const upcomingReminders = createMemo(() => {
@@ -58,18 +85,35 @@ export const DashboardView: Component = () => {
       const dateStr = d.toISOString().split('T')[0];
       const dayLabel = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
-      const dayIn = invoices
-        .filter((inv) => inv.invoiceDateAd === dateStr)
-        .reduce((sum, inv) => sum + inv.paidAmount, 0);
+      const dayIn =
+        invoices
+          .filter((inv) => inv.invoiceDateAd === dateStr)
+          .reduce((sum, inv) => sum + (Number(inv.paidAmount) || 0), 0) +
+        paymentRecords
+          .filter((p) => p.type === 'in' && (p.date === dateStr || p.createdAt?.startsWith(dateStr)))
+          .reduce((sum, p) => sum + (Number(p.amount) || 0), 0) +
+        incomes
+          .filter((inc) => inc.date === dateStr)
+          .reduce((sum, inc) => sum + (Number(inc.amount) || 0), 0);
 
-      const dayOut = expenses
-        .filter((exp) => exp.date === dateStr)
-        .reduce((sum, exp) => sum + exp.amount, 0);
+      const dayOut =
+        expenses
+          .filter((exp) => exp.date === dateStr)
+          .reduce((sum, exp) => sum + (Number(exp.amount) || 0), 0) +
+        purchaseBills
+          .filter((b) => b.date === dateStr || b.createdAt?.startsWith(dateStr))
+          .reduce((sum, b) => sum + (Number(b.paidAmount) || 0), 0) +
+        paymentRecords
+          .filter((p) => p.type === 'out' && (p.date === dateStr || p.createdAt?.startsWith(dateStr)))
+          .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
 
       days.push({ label: dayLabel, moneyIn: dayIn, moneyOut: dayOut });
     }
     return days;
   });
+
+  const totalMoneyIn = createMemo(() => chartData().reduce((sum, d) => sum + d.moneyIn, 0));
+  const totalMoneyOut = createMemo(() => chartData().reduce((sum, d) => sum + d.moneyOut, 0));
 
   const chartMax = createMemo(() => {
     const maxVal = Math.max(
@@ -113,46 +157,67 @@ export const DashboardView: Component = () => {
 
       {/* 4 Stat Cards */}
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Income */}
-        <div class="rounded-xl p-4 bg-[#e6fbf3] dark:bg-black border border-emerald-100/80 dark:border-emerald-950/80 transition-all hover:shadow-card">
-          <div class="w-7 h-7 rounded-md bg-emerald-100/90 dark:bg-emerald-950/80 flex items-center justify-center mb-2.5 text-emerald-600 dark:text-emerald-400">
+        {/* Total Sales */}
+        <div
+          class="rounded-xl p-4 bg-[#e6fbf3] dark:bg-black border border-emerald-100/80 dark:border-emerald-950/80 transition-all hover:shadow-card cursor-pointer"
+          onClick={() => setActiveTab('sales')}
+        >
+          <div class="w-7 h-7 rounded-md bg-emerald-100/90 dark:bg-emerald-950/80 flex items-center justify-center mb-2.5 text-emerald-600 dark:text-emerald-400 font-bold">
             <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="2" y="6" width="20" height="12" rx="2" />
-              <circle cx="12" cy="12" r="2" />
+              <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
+              <line x1="3" y1="6" x2="21" y2="6" />
+              <path d="M16 10a4 4 0 0 1-8 0" />
             </svg>
           </div>
-          <p class="text-xs text-gray-500 dark:text-neutral-400 mb-1">Income (This Month)</p>
-          <p class="text-xl font-bold text-gray-900 dark:text-white">{formatNepaliCurrency(totalIncome())}</p>
+          <p class="text-xs text-gray-500 dark:text-neutral-400 mb-1 font-medium uppercase tracking-wide">Total Sales (कुल बिक्री)</p>
+          <p class="text-xl font-bold text-gray-900 dark:text-white">{formatNepaliCurrency(totalSales())}</p>
+          <p class="text-[11px] text-gray-400 dark:text-neutral-500 mt-1">{invoices.length} invoices generated</p>
         </div>
 
-        {/* Expense */}
-        <div class="rounded-xl p-4 bg-[#fef2f2] dark:bg-black border border-rose-100/80 dark:border-rose-950/80 transition-all hover:shadow-card">
-          <div class="w-7 h-7 rounded-md bg-rose-100/90 dark:bg-rose-950/80 flex items-center justify-center mb-2.5 text-rose-500 dark:text-rose-400">
+        {/* Purchases & Expenses */}
+        <div
+          class="rounded-xl p-4 bg-[#fef2f2] dark:bg-black border border-rose-100/80 dark:border-rose-950/80 transition-all hover:shadow-card cursor-pointer"
+          onClick={() => setActiveTab('purchase')}
+        >
+          <div class="w-7 h-7 rounded-md bg-rose-100/90 dark:bg-rose-950/80 flex items-center justify-center mb-2.5 text-rose-500 dark:text-rose-400 font-bold">
             <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <rect x="2" y="5" width="20" height="14" rx="2" />
               <line x1="2" y1="10" x2="22" y2="10" />
             </svg>
           </div>
-          <p class="text-xs text-gray-500 dark:text-neutral-400 mb-1">Expense (This Month)</p>
-          <p class="text-xl font-bold text-gray-900 dark:text-white">{formatNepaliCurrency(totalExpense())}</p>
+          <p class="text-xs text-gray-500 dark:text-neutral-400 mb-1 font-medium uppercase tracking-wide">Purchases & Expenses (खर्च)</p>
+          <p class="text-xl font-bold text-gray-900 dark:text-white">{formatNepaliCurrency(totalPurchasesAndExpenses())}</p>
+          <p class="text-[11px] text-gray-400 dark:text-neutral-500 mt-1">{purchaseBills.length} bills • {expenses.length} expenses</p>
         </div>
 
         {/* To Receive */}
-        <div class="rounded-xl p-4 bg-[#e6fbf3] dark:bg-black border border-emerald-100/80 dark:border-emerald-950/80 transition-all hover:shadow-card">
+        <div
+          class="rounded-xl p-4 bg-[#e6fbf3] dark:bg-black border border-emerald-100/80 dark:border-emerald-950/80 transition-all hover:shadow-card cursor-pointer"
+          onClick={() => setActiveTab('khata')}
+        >
           <div class="w-7 h-7 rounded-md bg-emerald-100/90 dark:bg-emerald-950/80 flex items-center justify-center mb-2.5 text-emerald-600 dark:text-emerald-400 font-bold text-sm">
             <IconArrowDown class="w-4 h-4" />
           </div>
-          <p class="text-xs text-gray-500 dark:text-neutral-400 mb-1">To Receive</p>
-          <p class="text-xl font-bold text-gray-900 dark:text-white">{formatNepaliCurrency(toReceive())}</p>
+          <p class="text-xs text-gray-500 dark:text-neutral-400 mb-1 font-medium uppercase tracking-wide">To Receive (उठ्न बाँकी)</p>
+          <p class="text-xl font-bold text-emerald-600 dark:text-emerald-400">{formatNepaliCurrency(toReceive())}</p>
+          <p class="text-[11px] text-gray-400 dark:text-neutral-500 mt-1">
+            From {parties.filter((p) => (Number(p.currentBalance) || 0) > 0).length} customer(s)
+          </p>
         </div>
 
-        {/* To Give */}
-        <div class="rounded-xl p-4 bg-[#fef2f2] dark:bg-black border border-rose-100/80 dark:border-rose-950/80 transition-all hover:shadow-card">
+        {/* To Pay */}
+        <div
+          class="rounded-xl p-4 bg-[#fef2f2] dark:bg-black border border-rose-100/80 dark:border-rose-950/80 transition-all hover:shadow-card cursor-pointer"
+          onClick={() => setActiveTab('khata')}
+        >
           <div class="w-7 h-7 rounded-md bg-rose-100/90 dark:bg-rose-950/80 flex items-center justify-center mb-2.5 text-rose-500 dark:text-rose-400 font-bold text-sm">
             <IconArrowUp class="w-4 h-4" />
           </div>
-          <p class="text-xs text-gray-500 dark:text-neutral-400 mb-1">To Give</p>
-          <p class="text-xl font-bold text-gray-900 dark:text-white">{formatNepaliCurrency(toGive())}</p>
+          <p class="text-xs text-gray-500 dark:text-neutral-400 mb-1 font-medium uppercase tracking-wide">To Pay (तिर्न बाँकी)</p>
+          <p class="text-xl font-bold text-rose-500 dark:text-rose-400">{formatNepaliCurrency(toGive())}</p>
+          <p class="text-[11px] text-gray-400 dark:text-neutral-500 mt-1">
+            To {parties.filter((p) => (Number(p.currentBalance) || 0) < 0).length} supplier(s)
+          </p>
         </div>
       </div>
 
@@ -242,14 +307,14 @@ export const DashboardView: Component = () => {
               <span class="w-2.5 h-2.5 rounded-full bg-emerald-500" />
               <span class="text-xs text-gray-500 dark:text-neutral-400">Total Money In</span>
               <span class="text-xs font-bold text-emerald-600 dark:text-emerald-400">
-                {formatNepaliCurrency(totalIncome())}
+                {formatNepaliCurrency(totalMoneyIn())}
               </span>
             </div>
             <div class="flex items-center gap-2">
               <span class="w-2.5 h-2.5 rounded-full bg-red-500" />
               <span class="text-xs text-gray-500 dark:text-neutral-400">Total Money Out</span>
               <span class="text-xs font-bold text-red-500 dark:text-red-400">
-                {formatNepaliCurrency(totalExpense())}
+                {formatNepaliCurrency(totalMoneyOut())}
               </span>
             </div>
           </div>
@@ -268,7 +333,7 @@ export const DashboardView: Component = () => {
               </svg>
             </div>
             <p class="text-2xl font-bold text-gray-900 dark:text-white">
-              {formatNepaliCurrency(totalIncome() - totalExpense())}
+              {formatNepaliCurrency(totalBalance())}
             </p>
           </div>
 
@@ -311,20 +376,6 @@ export const DashboardView: Component = () => {
                 </For>
               </div>
             </Show>
-          </div>
-
-          {/* Referral Card */}
-          <div class="stat-card bg-gradient-to-br from-amber-50 to-white dark:from-neutral-950 dark:to-black border-amber-100 dark:border-neutral-800">
-            <div class="w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center mb-2.5">
-              <IconGift class="w-5 h-5" />
-            </div>
-            <p class="text-sm font-bold text-gray-900 dark:text-white mb-1">
-              Invite Friends. Get Rewarded.
-            </p>
-            <p class="text-xs text-gray-500 dark:text-neutral-400 leading-relaxed">
-              Share your invite link and earn <b class="text-gray-800 dark:text-white">150 Coins</b> when your friends join,
-              and <b class="text-gray-800 dark:text-white">1 Month Premium Free For Both</b> when your friend upgrades.
-            </p>
           </div>
         </div>
       </div>

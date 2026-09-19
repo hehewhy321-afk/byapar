@@ -1,9 +1,10 @@
 import { Component, createSignal, createMemo, For, Show } from 'solid-js';
 import {
   reminders,
-  setReminders,
   parties,
-  persistState,
+  addReminder,
+  updateReminder,
+  deleteReminder,
   setActiveTab,
   type Reminder,
 } from '../../db/localDb';
@@ -28,12 +29,11 @@ export const RemindersView: Component = () => {
     activeReminderTab() === 'upcoming' ? upcoming() : completed()
   );
 
-  const handleAddReminder = () => {
+  const handleAddReminder = async () => {
     if (!formTitle().trim()) return;
     const party = formPartyId() ? parties.find((p) => p.id === formPartyId()) : undefined;
 
-    const newReminder: Reminder = {
-      id: crypto.randomUUID(),
+    await addReminder({
       title: formTitle(),
       partyId: formPartyId() || undefined,
       partyName: party?.name,
@@ -41,35 +41,18 @@ export const RemindersView: Component = () => {
       dueDate: formDueDate(),
       note: formNote() || undefined,
       status: 'upcoming',
-      createdAt: new Date().toISOString(),
-    };
-
-    setReminders((draft) => {
-      draft.unshift(newReminder);
     });
-    persistState();
+
     resetForm();
     setShowModal(false);
   };
 
-  const markComplete = (id: string) => {
-    const idx = reminders.findIndex((r) => r.id === id);
-    if (idx >= 0) {
-      setReminders((draft) => {
-        draft[idx].status = 'completed';
-      });
-      persistState();
-    }
+  const markComplete = async (id: string) => {
+    await updateReminder(id, { status: 'completed' });
   };
 
-  const deleteReminder = (id: string) => {
-    const idx = reminders.findIndex((r) => r.id === id);
-    if (idx >= 0) {
-      setReminders((draft) => {
-        draft.splice(idx, 1);
-      });
-      persistState();
-    }
+  const handleDeleteReminder = async (id: string) => {
+    await deleteReminder(id);
   };
 
   const resetForm = () => {
@@ -210,7 +193,7 @@ export const RemindersView: Component = () => {
                   </Show>
                   <button
                     class="p-1.5 rounded-lg bg-red-50 dark:bg-red-950/40 text-red-500 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors"
-                    onClick={() => deleteReminder(reminder.id)}
+                    onClick={() => handleDeleteReminder(reminder.id)}
                     title="Delete reminder"
                   >
                     <IconTrash class="w-3.5 h-3.5" />

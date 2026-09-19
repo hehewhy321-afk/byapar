@@ -27,6 +27,20 @@ export const ReceiptModal: Component<ReceiptModalProps> = (props) => {
     window.open(`https://wa.me/?text=${text}`, '_blank');
   };
 
+  const uniqueItems = () => {
+    const raw = props.invoice.items || [];
+    const seen = new Set<string>();
+    const res: typeof raw = [];
+    for (const item of raw) {
+      const key = `${item.itemId || ''}_${item.itemName}_${item.unitPrice}_${item.quantity}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        res.push(item);
+      }
+    }
+    return res.length > 0 ? res : raw;
+  };
+
   return (
     <div class="modal-overlay">
       <div class="relative w-full max-w-sm bg-white text-gray-900 rounded-2xl shadow-2xl p-5 font-receipt text-xs max-h-[90vh] overflow-y-auto">
@@ -108,7 +122,7 @@ export const ReceiptModal: Component<ReceiptModalProps> = (props) => {
           </div>
 
           <div class="divide-y divide-dotted divide-slate-200 text-[10px] my-1">
-            {props.invoice.items.map((item) => (
+            {uniqueItems().map((item) => (
               <div class="grid grid-cols-12 py-1">
                 <span class="col-span-6 leading-tight">{item.itemName}</span>
                 <span class="col-span-2 text-right">{item.quantity}</span>

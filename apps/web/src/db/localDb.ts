@@ -1,4 +1,4 @@
-import { createSignal, createMemo, createStore } from 'solid-js';
+import { createSignal, createMemo, createStore, reconcile } from 'solid-js';
 import {
   Item,
   Party,
@@ -10,6 +10,8 @@ import {
   BusinessType,
   CATEGORY_PRESETS,
 } from '@byapar/core';
+
+export type { PaymentMode, BusinessType, InvoiceType, Item, Party, Invoice, KhataEntry, CartItem };
 import { adToBs, getNepaliFiscalYear } from '@byapar/core';
 import { supabase, currentUser } from './auth';
 import { getDefaultRolePermissions, StaffRole } from './permissions';
@@ -309,13 +311,19 @@ export const [settings, setSettings] = createStore<AppSettings>(
 
 export interface BillItem {
   id: string;
-  title: string;
-  type: string;
+  title?: string;
+  type?: string;
   amount: number;
-  date: string;
-  image: string;
-  tags: string[];
+  date?: string;
+  image?: string;
+  tags?: string[];
   createdAt: string;
+  category?: string;
+  vendorName?: string;
+  invoiceNumber?: string;
+  imageUrl?: string;
+  billDate?: string;
+  notes?: string;
 }
 
 export interface NoteItem {
@@ -324,16 +332,14 @@ export interface NoteItem {
   content: string;
   category: string;
   updatedAt: string;
+  color?: string;
+  isPinned?: boolean;
 }
 
 export const [reminders, setReminders] = createStore<Reminder[]>(loadStored('reminders', []));
 export const [expenses, setExpenses] = createStore<ExpenseRecord[]>(loadStored('expenses', []));
 export const [incomes, setIncomes] = createStore<IncomeRecord[]>(loadStored('incomes', []));
-export const [accounts, setAccounts] = createStore<BankAccount[]>(loadStored('accounts', [
-  { id: 'b0000000-0000-0000-0000-000000000001', name: 'Cash in Hand / Main Drawer', accountType: 'cash', balance: 50000, bankName: 'Cash Drawer' },
-  { id: 'b0000000-0000-0000-0000-000000000002', name: 'Nabil Bank Current A/C', accountType: 'bank', accountNumber: '01928472918', balance: 185000, bankName: 'Nabil Bank', branch: 'New Road, Kathmandu' },
-  { id: 'b0000000-0000-0000-0000-000000000003', name: 'eSewa Merchant Wallet', accountType: 'wallet', accountNumber: '9841234567', balance: 15000, bankName: 'eSewa Nepal' },
-]));
+export const [accounts, setAccounts] = createStore<BankAccount[]>(loadStored('accounts', []));
 export const [accountTransactions, setAccountTransactions] = createStore<AccountTransaction[]>(loadStored('account_txs', []));
 export const [staffList, setStaffList] = createStore<StaffMember[]>(loadStored('staff', []));
 
@@ -346,6 +352,10 @@ export const [paymentRecords, setPaymentRecords] = createStore<PaymentRecord[]>(
 
 export const [bills, setBills] = createStore<BillItem[]>(loadStored('bills', []));
 export const [notes, setNotes] = createStore<NoteItem[]>(loadStored('notes', []));
+
+// Page routing for unauthenticated users
+export type AppPage = 'landing' | 'auth' | 'about' | 'faq' | 'privacy' | 'terms';
+export const [currentPage, setCurrentPage] = createSignal<AppPage>('landing');
 
 // Modals Global Signals
 export const [showAuthModal, setShowAuthModal] = createSignal(false);
@@ -372,15 +382,16 @@ export const [currentBusiness, setCurrentBusiness] = createStore({
 });
 
 export function resetAllLocalData() {
-  setItems([]);
-  setParties([]);
-  setKhataEntries([]);
-  setInvoices([]);
-  setAccounts([]);
-  setAccountTransactions([]);
-  setStaffList([]);
-  setCategories([]);
-  setCurrentBusiness({
+  setItems(reconcile([]));
+  setParties(reconcile([]));
+  setKhataEntries(reconcile([]));
+  setInvoices(reconcile([]));
+  setAccounts(reconcile([]));
+  setAccountTransactions(reconcile([]));
+  setStaffList(reconcile([]));
+  setCategories(reconcile([]));
+  setCurrentBusiness((prev) => ({
+    ...prev,
     id: 'a0000000-0000-0000-0000-000000000001',
     name: 'Shrestha Mart & General Store',
     nameEn: 'Shrestha Mart & General Store',
@@ -390,7 +401,7 @@ export function resetAllLocalData() {
     phone: '',
     businessType: 'general' as BusinessType,
     isVatRegistered: false,
-  });
+  }));
   localStorage.removeItem('byapar_items');
   localStorage.removeItem('byapar_parties');
   localStorage.removeItem('byapar_khata');
@@ -507,6 +518,7 @@ function mapDbKhata(row: any): KhataEntry {
     id: row.id,
     businessId: row.business_id,
     partyId: row.party_id,
+    partyName: row.parties?.name || row.party_name || '',
     invoiceId: row.invoice_id,
     entryType: row.entry_type,
     amount: Number(row.amount) || 0,
@@ -519,11 +531,47 @@ function mapDbKhata(row: any): KhataEntry {
   };
 }
 
+function toValidPaymentMode(mode?: string): string {
+  const m = (mode || '').toLowerCase();
+  if (m === 'fonepay' || m === 'esewa' || m === 'khalti' || m === 'fonepay_qr') return 'fonepay_qr';
+  if (m === 'bank' || m === 'bank_transfer') return 'bank_transfer';
+  if (m === 'cheque') return 'cheque';
+  if (m === 'credit') return 'credit';
+  if (m === 'connectips') return 'connectips';
+  return 'cash';
+}
+
 function mapDbInvoice(row: any): Invoice {
+  const rawItems = (row.invoice_items || []).map((ii: any) => ({
+    id: ii.id,
+    invoiceId: row.id,
+    itemId: ii.item_id,
+    itemName: ii.item_name,
+    quantity: Number(ii.quantity) || 1,
+    unitPrice: Number(ii.unit_price) || 0,
+    discountAmount: Number(ii.discount_amount) || 0,
+    taxRate: Number(ii.tax_rate) || 0,
+    taxAmount: Number(ii.tax_amount) || 0,
+    totalAmount: Number(ii.total_amount) || 0,
+  }));
+
+  // Deduplicate items defensively
+  const seenItems = new Set<string>();
+  const deduplicatedItems: typeof rawItems = [];
+  for (const item of rawItems) {
+    const key = `${item.itemId || ''}_${item.itemName}_${item.unitPrice}_${item.quantity}`;
+    if (!seenItems.has(key)) {
+      seenItems.add(key);
+      deduplicatedItems.push(item);
+    }
+  }
+
   return {
     id: row.id,
     businessId: row.business_id,
     partyId: row.party_id,
+    partyName: row.parties?.name || row.party_name || 'Counter Customer',
+    partyPhone: row.parties?.phone || row.party_phone || '',
     invoiceType: row.invoice_type || 'sale',
     invoiceNumber: row.invoice_number,
     fiscalYear: row.fiscal_year,
@@ -539,35 +587,115 @@ function mapDbInvoice(row: any): Invoice {
     dueAmount: Number(row.due_amount) || 0,
     status: row.status || 'paid',
     paymentMode: row.payment_mode || 'cash',
+    cbmsStatus: row.cbms_status || 'not_applicable',
     notes: row.notes,
-    items: (row.invoice_items || []).map((ii: any) => ({
-      id: ii.id,
-      invoiceId: row.id,
-      itemId: ii.item_id,
-      itemName: ii.item_name,
-      quantity: Number(ii.quantity) || 1,
-      unitPrice: Number(ii.unit_price) || 0,
-      discountAmount: Number(ii.discount_amount) || 0,
-      taxRate: Number(ii.tax_rate) || 0,
-      taxAmount: Number(ii.tax_amount) || 0,
-      totalAmount: Number(ii.total_amount) || 0,
-    })),
+    items: deduplicatedItems.length > 0 ? deduplicatedItems : rawItems,
     createdAt: row.created_at || new Date().toISOString(),
     updatedAt: row.updated_at || new Date().toISOString(),
   };
 }
 
+function mapDbQuotation(row: any): Quotation {
+  return {
+    id: row.id,
+    businessId: row.business_id,
+    quotationNumber: row.invoice_number,
+    partyId: row.party_id,
+    partyName: row.parties?.name || row.party_name || 'Customer',
+    partyPhone: row.parties?.phone || row.party_phone || '',
+    date: row.invoice_date_ad,
+    validUntil: undefined,
+    totalAmount: Number(row.total_amount) || 0,
+    notes: row.notes,
+    status: (row.status as any) || 'draft',
+    items: (row.invoice_items || []).map((ii: any) => ({
+      id: ii.id,
+      itemId: ii.item_id,
+      itemName: ii.item_name,
+      quantity: Number(ii.quantity) || 1,
+      unitPrice: Number(ii.unit_price) || 0,
+      totalAmount: Number(ii.total_amount) || 0,
+    })),
+    createdAt: row.created_at || new Date().toISOString(),
+  };
+}
+
+function mapDbSalesReturn(row: any): SalesReturn {
+  return {
+    id: row.id,
+    businessId: row.business_id,
+    returnNumber: row.invoice_number,
+    partyId: row.party_id,
+    partyName: row.parties?.name || row.party_name || 'Customer',
+    date: row.invoice_date_ad,
+    totalAmount: Number(row.total_amount) || 0,
+    refundAmount: Number(row.paid_amount) || 0,
+    creditAmount: Number(row.due_amount) || 0,
+    reason: row.notes,
+    items: (row.invoice_items || []).map((ii: any) => ({
+      id: ii.id,
+      itemId: ii.item_id,
+      itemName: ii.item_name,
+      quantity: Number(ii.quantity) || 1,
+      unitPrice: Number(ii.unit_price) || 0,
+      totalAmount: Number(ii.total_amount) || 0,
+    })),
+    createdAt: row.created_at || new Date().toISOString(),
+  };
+}
+
+function mapDbPurchaseReturn(row: any): PurchaseReturn {
+  return {
+    id: row.id,
+    businessId: row.business_id,
+    returnNumber: row.invoice_number,
+    supplierId: row.party_id,
+    supplierName: row.parties?.name || row.party_name || 'Supplier',
+    date: row.invoice_date_ad,
+    totalAmount: Number(row.total_amount) || 0,
+    refundAmount: Number(row.paid_amount) || 0,
+    reason: row.notes,
+    items: (row.invoice_items || []).map((ii: any) => ({
+      id: ii.id,
+      itemId: ii.item_id,
+      itemName: ii.item_name,
+      quantity: Number(ii.quantity) || 1,
+      costPrice: Number(ii.unit_price) || 0,
+      totalAmount: Number(ii.total_amount) || 0,
+    })),
+    createdAt: row.created_at || new Date().toISOString(),
+  };
+}
+
+function mapDbPayment(row: any): PaymentRecord {
+  const meta = row.payment_metadata || {};
+  return {
+    id: row.id,
+    businessId: row.business_id,
+    type: meta.type || (row.reference_id === 'out' ? 'out' : 'in'),
+    partyId: row.party_id || '',
+    partyName: row.parties?.name || meta.party_name || 'Party',
+    amount: Number(row.amount) || 0,
+    paymentMode: row.payment_mode || 'cash',
+    accountId: meta.account_id || row.reference_id || undefined,
+    date: row.payment_date_ad || row.created_at?.split('T')[0],
+    notes: meta.notes || row.notes || undefined,
+    createdAt: row.created_at || new Date().toISOString(),
+  };
+}
+
 function mapDbAccount(row: any): BankAccount {
+  const branchLower = (row.branch || '').toLowerCase();
+  const nameLower = (row.account_name || '').toLowerCase();
+  const isWallet = branchLower.includes('wallet') || nameLower.includes('esewa') || nameLower.includes('khalti') || nameLower.includes('ime pay');
+  const isCash = branchLower.includes('cash') || nameLower.includes('cash') || nameLower.includes('drawer') || (!row.branch && !row.bank_name);
+
   return {
     id: row.id,
     name: row.account_name,
     bankName: row.bank_name,
     accountNumber: row.account_number,
-    accountType: (row.branch || '').toLowerCase().includes('wallet')
-      ? 'wallet'
-      : row.branch
-      ? 'bank'
-      : 'cash',
+    accountType: isWallet ? 'wallet' : isCash ? 'cash' : 'bank',
     balance: Number(row.balance) || 0,
     branch: row.branch,
   };
@@ -605,13 +733,107 @@ function mapDbStaff(row: any): StaffMember {
   };
 }
 
+// Helpers for additional cloud tables
+function mapDbBill(b: any): BillItem {
+  return {
+    id: b.id,
+    title: b.title || 'Bill',
+    vendorName: b.title || 'Vendor',
+    amount: Number(b.amount) || 0,
+    date: b.bill_date,
+    billDate: b.bill_date,
+    type: b.bill_type || 'General',
+    category: b.bill_type || 'General',
+    image: b.image_url || '',
+    imageUrl: b.image_url || '',
+    tags: b.tags || [],
+    notes: b.notes || '',
+    createdAt: b.created_at || new Date().toISOString(),
+  };
+}
+
+function mapDbExpense(e: any): ExpenseRecord {
+  return {
+    id: e.id,
+    category: e.category || 'Other',
+    amount: Number(e.amount) || 0,
+    paymentMode: e.payment_mode || 'Cash',
+    date: e.date_ad || (e.created_at ? e.created_at.split('T')[0] : new Date().toISOString().split('T')[0]),
+    recipientName: e.recipient_name,
+    note: e.notes,
+    createdAt: e.created_at || new Date().toISOString(),
+  };
+}
+
+function mapDbIncome(inc: any): IncomeRecord {
+  return {
+    id: inc.id,
+    source: inc.category || 'Other',
+    amount: Number(inc.amount) || 0,
+    paymentMode: inc.payment_mode || 'Cash',
+    date: inc.date_ad || (inc.created_at ? inc.created_at.split('T')[0] : new Date().toISOString().split('T')[0]),
+    payerName: inc.payer_name,
+    note: inc.notes,
+    createdAt: inc.created_at || new Date().toISOString(),
+  };
+}
+
+function mapDbReminder(r: any): Reminder {
+  return {
+    id: r.id,
+    title: r.title,
+    partyId: r.party_id,
+    partyName: r.parties?.name,
+    amount: Number(r.amount) || 0,
+    dueDate: r.due_date_ad || (r.created_at ? r.created_at.split('T')[0] : new Date().toISOString().split('T')[0]),
+    status: r.status || 'upcoming',
+    note: r.notes || '',
+    createdAt: r.created_at || new Date().toISOString(),
+  };
+}
+
+function mapDbNote(n: any): NoteItem {
+  return {
+    id: n.id,
+    title: n.title,
+    content: n.content || '',
+    category: n.category || 'General',
+    color: n.color || 'emerald',
+    isPinned: n.is_pinned ?? false,
+    updatedAt: n.updated_at ? new Date(n.updated_at).toLocaleDateString() : new Date().toLocaleDateString(),
+  };
+}
+
 // ----------------------------------------------------------------------------
 // Cloud Supabase Hydration & Realtime Synchronization
 // ----------------------------------------------------------------------------
 export async function syncFromCloud() {
   const bizId = currentBusiness.id;
   try {
-    // 0. Categories
+    // 0. Business Profile
+    const { data: dbBiz } = await supabase
+      .from('businesses')
+      .select('*')
+      .eq('id', bizId)
+      .maybeSingle();
+
+    if (dbBiz) {
+      setCurrentBusiness((prev) => ({
+        ...prev,
+        id: dbBiz.id,
+        name: dbBiz.name || prev.name,
+        nameEn: dbBiz.name || prev.nameEn,
+        ownerName: dbBiz.owner_name || prev.ownerName,
+        pan: dbBiz.pan_vat_number || prev.pan,
+        address: dbBiz.address_line || prev.address,
+        phone: dbBiz.phone || prev.phone,
+        businessType: (dbBiz.business_type as BusinessType) || prev.businessType,
+        isVatRegistered: dbBiz.is_vat_registered ?? prev.isVatRegistered,
+      }));
+      localStorage.setItem('byapar_current_business', JSON.stringify(currentBusiness));
+    }
+
+    // 1. Categories
     const { data: dbCats } = await supabase
       .from('categories')
       .select('*')
@@ -620,7 +842,7 @@ export async function syncFromCloud() {
       .order('created_at', { ascending: true });
 
     if (dbCats && dbCats.length > 0) {
-      setCategories(dbCats.map((c: any) => ({ id: c.id, name: c.name, colorCode: c.color_code })));
+      setCategories(reconcile(dbCats.map((c: any) => ({ id: c.id, name: c.name, colorCode: c.color_code }))));
       localStorage.setItem('byapar_categories', JSON.stringify(categories));
     } else {
       try {
@@ -635,7 +857,7 @@ export async function syncFromCloud() {
           .is('deleted_at', null)
           .order('created_at', { ascending: true });
         if (seededCats && seededCats.length > 0) {
-          setCategories(seededCats.map((c: any) => ({ id: c.id, name: c.name, colorCode: c.color_code })));
+          setCategories(reconcile(seededCats.map((c: any) => ({ id: c.id, name: c.name, colorCode: c.color_code }))));
           localStorage.setItem('byapar_categories', JSON.stringify(categories));
         }
       } catch (seedErr) {
@@ -643,7 +865,7 @@ export async function syncFromCloud() {
       }
     }
 
-    // 1. Items
+    // 2. Items
     const { data: dbItems } = await supabase
       .from('items')
       .select('*')
@@ -651,9 +873,9 @@ export async function syncFromCloud() {
       .is('deleted_at', null)
       .order('created_at', { ascending: false });
 
-    if (dbItems) setItems(dbItems.map(mapDbItem));
+    if (dbItems) setItems(reconcile(dbItems.map(mapDbItem)));
 
-    // 2. Parties
+    // 3. Parties
     const { data: dbParties } = await supabase
       .from('parties')
       .select('*')
@@ -661,56 +883,158 @@ export async function syncFromCloud() {
       .is('deleted_at', null)
       .order('created_at', { ascending: false });
 
-    if (dbParties) setParties(dbParties.map(mapDbParty));
+    if (dbParties) setParties(reconcile(dbParties.map(mapDbParty)));
 
-    // 3. Khata Entries
+    // 4. Khata Entries
     const { data: dbKhata } = await supabase
       .from('khata_entries')
-      .select('*')
+      .select('*, parties(name, phone)')
       .eq('business_id', bizId)
       .is('deleted_at', null)
       .order('created_at', { ascending: false });
 
-    if (dbKhata) setKhataEntries(dbKhata.map(mapDbKhata));
+    if (dbKhata) setKhataEntries(reconcile(dbKhata.map(mapDbKhata)));
 
-    // 4. Invoices
+    // 5. Invoices, Quotations, Sales Returns, Purchase Returns
     const { data: dbInvoices } = await supabase
       .from('invoices')
-      .select('*, invoice_items(*)')
+      .select('*, parties(name, phone), invoice_items(*)')
       .eq('business_id', bizId)
       .is('deleted_at', null)
       .order('created_at', { ascending: false });
 
-    if (dbInvoices) setInvoices(dbInvoices.map(mapDbInvoice));
+    if (dbInvoices) {
+      const sales = dbInvoices.filter((r: any) => r.invoice_type === 'sale' || !r.invoice_type);
+      setInvoices(reconcile(sales.map(mapDbInvoice)));
 
-    // 5. Bank Accounts
+      const quotes = dbInvoices.filter((r: any) => r.invoice_type === 'quotation');
+      setQuotations(reconcile(quotes.map(mapDbQuotation)));
+
+      const sReturns = dbInvoices.filter((r: any) => r.invoice_type === 'sale_return');
+      setSalesReturns(reconcile(sReturns.map(mapDbSalesReturn)));
+
+      const pReturns = dbInvoices.filter((r: any) => r.invoice_type === 'purchase_return');
+      setPurchaseReturns(reconcile(pReturns.map(mapDbPurchaseReturn)));
+    }
+
+    // 6. Bank Accounts
     const { data: dbAccounts } = await supabase
       .from('bank_accounts')
       .select('*')
       .eq('business_id', bizId);
 
-    if (dbAccounts && dbAccounts.length > 0) {
-      setAccounts(dbAccounts.map(mapDbAccount));
+    if (dbAccounts) {
+      setAccounts(reconcile(dbAccounts.map(mapDbAccount)));
     }
 
-    // 6. Account Transactions
+    // 7. Account Transactions
     const { data: dbTxs } = await supabase
       .from('account_transactions')
       .select('*')
       .eq('business_id', bizId)
       .order('date_ad', { ascending: false });
 
-    if (dbTxs) setAccountTransactions(dbTxs.map(mapDbAccountTx));
+    if (dbTxs) setAccountTransactions(reconcile(dbTxs.map(mapDbAccountTx)));
 
-    // 7. Staff Members
+    // 8. Staff Members
     const { data: dbStaff } = await supabase
       .from('staff')
       .select('*')
       .eq('business_id', bizId)
       .order('created_at', { ascending: false });
 
-    if (dbStaff && dbStaff.length > 0) {
-      setStaffList(dbStaff.map(mapDbStaff));
+    if (dbStaff) {
+      setStaffList(reconcile(dbStaff.map(mapDbStaff)));
+    }
+
+    // 9. Bills & Purchase Bills
+    const { data: dbBills } = await supabase
+      .from('bills')
+      .select('*')
+      .eq('business_id', bizId)
+      .order('created_at', { ascending: false });
+
+    if (dbBills) {
+      setBills(reconcile(dbBills.map(mapDbBill)));
+
+      const purchaseMapped: PurchaseBill[] = dbBills
+        .filter((b: any) => (b.bill_type || '').toLowerCase() === 'purchase')
+        .map((b: any) => ({
+          id: b.id,
+          businessId: b.business_id,
+          billNumber: `PB-${b.id.slice(0, 6).toUpperCase()}`,
+          supplierName: b.title || 'Supplier',
+          date: b.bill_date || b.created_at?.split('T')[0] || new Date().toISOString().split('T')[0],
+          subtotal: Number(b.amount) || 0,
+          taxAmount: 0,
+          totalAmount: Number(b.amount) || 0,
+          paidAmount: Number(b.amount) || 0,
+          dueAmount: 0,
+          paymentMode: 'cash' as PaymentMode,
+          status: 'paid' as const,
+          items: [],
+          createdAt: b.created_at,
+        }));
+      if (purchaseMapped.length > 0) {
+        setPurchaseBills(reconcile(purchaseMapped));
+      }
+    }
+
+    // 10. Expenses
+    const { data: dbExpenses } = await supabase
+      .from('expenses')
+      .select('*')
+      .eq('business_id', bizId)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false });
+
+    if (dbExpenses) {
+      setExpenses(reconcile(dbExpenses.map(mapDbExpense)));
+    }
+
+    // 11. Incomes
+    const { data: dbIncomes } = await supabase
+      .from('incomes')
+      .select('*')
+      .eq('business_id', bizId)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false });
+
+    if (dbIncomes) {
+      setIncomes(reconcile(dbIncomes.map(mapDbIncome)));
+    }
+
+    // 12. Reminders
+    const { data: dbReminders } = await supabase
+      .from('reminders')
+      .select('*, parties(name)')
+      .eq('business_id', bizId)
+      .order('created_at', { ascending: false });
+
+    if (dbReminders) {
+      setReminders(reconcile(dbReminders.map(mapDbReminder)));
+    }
+
+    // 13. Notes
+    const { data: dbNotes } = await supabase
+      .from('notes')
+      .select('*')
+      .eq('business_id', bizId)
+      .order('created_at', { ascending: false });
+
+    if (dbNotes) {
+      setNotes(reconcile(dbNotes.map(mapDbNote)));
+    }
+
+    // 14. Payments (Payment In & Payment Out)
+    const { data: dbPayments } = await supabase
+      .from('payments')
+      .select('*, parties(name, phone)')
+      .eq('business_id', bizId)
+      .order('created_at', { ascending: false });
+
+    if (dbPayments) {
+      setPaymentRecords(reconcile(dbPayments.map(mapDbPayment)));
     }
 
     persistState();
@@ -730,6 +1054,53 @@ export function initRealtimeSync() {
   const bizId = currentBusiness.id;
   const channel = supabase
     .channel(`realtime_biz_${bizId}`)
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'businesses', filter: `id=eq.${bizId}` },
+      (payload) => {
+        if (payload.eventType === 'UPDATE') {
+          const b = payload.new as any;
+          setCurrentBusiness((prev) => ({
+            ...prev,
+            id: b.id,
+            name: b.name || prev.name,
+            nameEn: b.name || prev.nameEn,
+            ownerName: b.owner_name || prev.ownerName,
+            pan: b.pan_vat_number || prev.pan,
+            address: b.address_line || prev.address,
+            phone: b.phone || prev.phone,
+            businessType: (b.business_type as BusinessType) || prev.businessType,
+            isVatRegistered: b.is_vat_registered ?? prev.isVatRegistered,
+          }));
+          localStorage.setItem('byapar_current_business', JSON.stringify(currentBusiness));
+        }
+      }
+    )
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'categories', filter: `business_id=eq.${bizId}` },
+      (payload) => {
+        if (payload.eventType === 'INSERT') {
+          const c = payload.new as any;
+          const newCat: CategoryItem = { id: c.id, name: c.name, colorCode: c.color_code };
+          setCategories((draft) => {
+            if (!draft.some((x) => x.id === newCat.id)) draft.push(newCat);
+          });
+        } else if (payload.eventType === 'UPDATE') {
+          const c = payload.new as any;
+          setCategories((draft) => {
+            const idx = draft.findIndex((x) => x.id === c.id);
+            if (idx >= 0) draft[idx] = { id: c.id, name: c.name, colorCode: c.color_code };
+          });
+        } else if (payload.eventType === 'DELETE') {
+          setCategories((draft) => {
+            const idx = draft.findIndex((x) => x.id === (payload.old as any).id);
+            if (idx >= 0) draft.splice(idx, 1);
+          });
+        }
+        persistState();
+      }
+    )
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'items', filter: `business_id=eq.${bizId}` },
@@ -793,6 +1164,11 @@ export function initRealtimeSync() {
             const idx = draft.findIndex((a) => a.id === updated.id);
             if (idx >= 0) draft[idx] = updated;
           });
+        } else if (payload.eventType === 'DELETE') {
+          setAccounts((draft) => {
+            const idx = draft.findIndex((a) => a.id === (payload.old as any).id);
+            if (idx >= 0) draft.splice(idx, 1);
+          });
         }
         persistState();
       }
@@ -828,6 +1204,235 @@ export function initRealtimeSync() {
         } else if (payload.eventType === 'DELETE') {
           setStaffList((draft) => {
             const idx = draft.findIndex((s) => s.id === (payload.old as any).id);
+            if (idx >= 0) draft.splice(idx, 1);
+          });
+        }
+        persistState();
+      }
+    )
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'invoices', filter: `business_id=eq.${bizId}` },
+      (payload) => {
+        const row = payload.new as any;
+        const oldRow = payload.old as any;
+        const type = (row?.invoice_type || oldRow?.invoice_type || 'sale').toLowerCase();
+
+        if (type === 'quotation') {
+          if (payload.eventType === 'INSERT') {
+            const q = mapDbQuotation(row);
+            setQuotations((draft) => { if (!draft.some((x) => x.id === q.id)) draft.unshift(q); });
+          } else if (payload.eventType === 'UPDATE') {
+            const q = mapDbQuotation(row);
+            setQuotations((draft) => { const idx = draft.findIndex((x) => x.id === q.id); if (idx >= 0) draft[idx] = q; });
+          } else if (payload.eventType === 'DELETE') {
+            setQuotations((draft) => { const idx = draft.findIndex((x) => x.id === oldRow.id); if (idx >= 0) draft.splice(idx, 1); });
+          }
+        } else if (type === 'sale_return') {
+          if (payload.eventType === 'INSERT') {
+            const sr = mapDbSalesReturn(row);
+            setSalesReturns((draft) => { if (!draft.some((x) => x.id === sr.id)) draft.unshift(sr); });
+          } else if (payload.eventType === 'UPDATE') {
+            const sr = mapDbSalesReturn(row);
+            setSalesReturns((draft) => { const idx = draft.findIndex((x) => x.id === sr.id); if (idx >= 0) draft[idx] = sr; });
+          } else if (payload.eventType === 'DELETE') {
+            setSalesReturns((draft) => { const idx = draft.findIndex((x) => x.id === oldRow.id); if (idx >= 0) draft.splice(idx, 1); });
+          }
+        } else if (type === 'purchase_return') {
+          if (payload.eventType === 'INSERT') {
+            const pr = mapDbPurchaseReturn(row);
+            setPurchaseReturns((draft) => { if (!draft.some((x) => x.id === pr.id)) draft.unshift(pr); });
+          } else if (payload.eventType === 'UPDATE') {
+            const pr = mapDbPurchaseReturn(row);
+            setPurchaseReturns((draft) => { const idx = draft.findIndex((x) => x.id === pr.id); if (idx >= 0) draft[idx] = pr; });
+          } else if (payload.eventType === 'DELETE') {
+            setPurchaseReturns((draft) => { const idx = draft.findIndex((x) => x.id === oldRow.id); if (idx >= 0) draft.splice(idx, 1); });
+          }
+        } else {
+          // Default: Sales Invoice
+          if (payload.eventType === 'INSERT') {
+            const newInv = mapDbInvoice(row);
+            setInvoices((draft) => { if (!draft.some((i) => i.id === newInv.id)) draft.unshift(newInv); });
+          } else if (payload.eventType === 'UPDATE') {
+            const updated = mapDbInvoice(row);
+            setInvoices((draft) => { const idx = draft.findIndex((i) => i.id === updated.id); if (idx >= 0) draft[idx] = updated; });
+          } else if (payload.eventType === 'DELETE') {
+            setInvoices((draft) => { const idx = draft.findIndex((i) => i.id === oldRow.id); if (idx >= 0) draft.splice(idx, 1); });
+          }
+        }
+        persistState();
+      }
+    )
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'payments', filter: `business_id=eq.${bizId}` },
+      (payload) => {
+        if (payload.eventType === 'INSERT') {
+          const newP = mapDbPayment(payload.new);
+          setPaymentRecords((draft) => {
+            if (!draft.some((p) => p.id === newP.id)) draft.unshift(newP);
+          });
+        } else if (payload.eventType === 'UPDATE') {
+          const updated = mapDbPayment(payload.new);
+          setPaymentRecords((draft) => {
+            const idx = draft.findIndex((p) => p.id === updated.id);
+            if (idx >= 0) draft[idx] = updated;
+          });
+        } else if (payload.eventType === 'DELETE') {
+          setPaymentRecords((draft) => {
+            const idx = draft.findIndex((p) => p.id === (payload.old as any).id);
+            if (idx >= 0) draft.splice(idx, 1);
+          });
+        }
+        persistState();
+      }
+    )
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'khata_entries', filter: `business_id=eq.${bizId}` },
+      (payload) => {
+        if (payload.eventType === 'INSERT') {
+          const newKhata = mapDbKhata(payload.new);
+          setKhataEntries((draft) => {
+            if (!draft.some((k) => k.id === newKhata.id)) draft.unshift(newKhata);
+          });
+        } else if (payload.eventType === 'UPDATE') {
+          const updated = mapDbKhata(payload.new);
+          setKhataEntries((draft) => {
+            const idx = draft.findIndex((k) => k.id === updated.id);
+            if (idx >= 0) draft[idx] = updated;
+          });
+        } else if (payload.eventType === 'DELETE') {
+          setKhataEntries((draft) => {
+            const idx = draft.findIndex((k) => k.id === (payload.old as any).id);
+            if (idx >= 0) draft.splice(idx, 1);
+          });
+        }
+        persistState();
+      }
+    )
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'bills', filter: `business_id=eq.${bizId}` },
+      (payload) => {
+        if (payload.eventType === 'INSERT') {
+          const newBill = mapDbBill(payload.new);
+          setBills((draft) => {
+            if (!draft.some((b) => b.id === newBill.id)) draft.unshift(newBill);
+          });
+          if (((payload.new as any).bill_type || '').toLowerCase() === 'purchase') {
+            const row = payload.new as any;
+            const pb: PurchaseBill = {
+              id: row.id,
+              businessId: row.business_id,
+              billNumber: `PB-${row.id.slice(0, 6).toUpperCase()}`,
+              supplierName: row.title || 'Supplier',
+              date: row.bill_date || row.created_at?.split('T')[0] || new Date().toISOString().split('T')[0],
+              subtotal: Number(row.amount) || 0,
+              taxAmount: 0,
+              totalAmount: Number(row.amount) || 0,
+              paidAmount: Number(row.amount) || 0,
+              dueAmount: 0,
+              paymentMode: 'cash' as PaymentMode,
+              status: 'paid' as const,
+              items: [],
+              createdAt: row.created_at,
+            };
+            setPurchaseBills((draft) => {
+              if (!draft.some((b) => b.id === pb.id)) draft.unshift(pb);
+            });
+          }
+        } else if (payload.eventType === 'DELETE') {
+          setBills((draft) => {
+            const idx = draft.findIndex((b) => b.id === (payload.old as any).id);
+            if (idx >= 0) draft.splice(idx, 1);
+          });
+          setPurchaseBills((draft) => {
+            const idx = draft.findIndex((b) => b.id === (payload.old as any).id);
+            if (idx >= 0) draft.splice(idx, 1);
+          });
+        }
+        persistState();
+      }
+    )
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'expenses', filter: `business_id=eq.${bizId}` },
+      (payload) => {
+        if (payload.eventType === 'INSERT') {
+          const newExp = mapDbExpense(payload.new);
+          setExpenses((draft) => {
+            if (!draft.some((e) => e.id === newExp.id)) draft.unshift(newExp);
+          });
+        } else if (payload.eventType === 'DELETE') {
+          setExpenses((draft) => {
+            const idx = draft.findIndex((e) => e.id === (payload.old as any).id);
+            if (idx >= 0) draft.splice(idx, 1);
+          });
+        }
+        persistState();
+      }
+    )
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'incomes', filter: `business_id=eq.${bizId}` },
+      (payload) => {
+        if (payload.eventType === 'INSERT') {
+          const newInc = mapDbIncome(payload.new);
+          setIncomes((draft) => {
+            if (!draft.some((i) => i.id === newInc.id)) draft.unshift(newInc);
+          });
+        } else if (payload.eventType === 'DELETE') {
+          setIncomes((draft) => {
+            const idx = draft.findIndex((i) => i.id === (payload.old as any).id);
+            if (idx >= 0) draft.splice(idx, 1);
+          });
+        }
+        persistState();
+      }
+    )
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'reminders', filter: `business_id=eq.${bizId}` },
+      (payload) => {
+        if (payload.eventType === 'INSERT') {
+          const newRem = mapDbReminder(payload.new);
+          setReminders((draft) => {
+            if (!draft.some((r) => r.id === newRem.id)) draft.unshift(newRem);
+          });
+        } else if (payload.eventType === 'UPDATE') {
+          const updated = mapDbReminder(payload.new);
+          setReminders((draft) => {
+            const idx = draft.findIndex((r) => r.id === updated.id);
+            if (idx >= 0) draft[idx] = updated;
+          });
+        } else if (payload.eventType === 'DELETE') {
+          setReminders((draft) => {
+            const idx = draft.findIndex((r) => r.id === (payload.old as any).id);
+            if (idx >= 0) draft.splice(idx, 1);
+          });
+        }
+        persistState();
+      }
+    )
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'notes', filter: `business_id=eq.${bizId}` },
+      (payload) => {
+        if (payload.eventType === 'INSERT') {
+          const newNote = mapDbNote(payload.new);
+          setNotes((draft) => {
+            if (!draft.some((n) => n.id === newNote.id)) draft.unshift(newNote);
+          });
+        } else if (payload.eventType === 'UPDATE') {
+          const updated = mapDbNote(payload.new);
+          setNotes((draft) => {
+            const idx = draft.findIndex((n) => n.id === updated.id);
+            if (idx >= 0) draft[idx] = updated;
+          });
+        } else if (payload.eventType === 'DELETE') {
+          setNotes((draft) => {
+            const idx = draft.findIndex((n) => n.id === (payload.old as any).id);
             if (idx >= 0) draft.splice(idx, 1);
           });
         }
@@ -1116,6 +1721,7 @@ export async function addStaffMember(data: {
   phone?: string;
   email?: string;
   permissions?: Record<string, boolean>;
+  isActive?: boolean;
 }) {
   const newStaff: StaffMember = {
     id: crypto.randomUUID(),
@@ -1125,7 +1731,7 @@ export async function addStaffMember(data: {
     phone: data.phone || '',
     email: data.email || '',
     permissions: data.permissions || getDefaultRolePermissions(data.role),
-    isActive: true,
+    isActive: data.isActive ?? true,
     createdAt: new Date().toISOString(),
   };
 
@@ -1183,25 +1789,67 @@ export async function deleteStaffMember(id: string) {
 // ----------------------------------------------------------------------------
 
 export async function createQuotation(quotation: Omit<Quotation, 'id' | 'businessId' | 'createdAt'>) {
+  const now = new Date();
+  const dateStr = quotation.date || now.toISOString().split('T')[0];
+  const bs = adToBs(new Date(dateStr));
+  const fiscalYear = getNepaliFiscalYear(new Date(dateStr));
+
   const newQ: Quotation = {
     ...quotation,
     id: crypto.randomUUID(),
     businessId: currentBusiness.id,
-    createdAt: new Date().toISOString(),
+    createdAt: now.toISOString(),
   };
   setQuotations((draft) => {
     draft.unshift(newQ);
   });
   persistState();
+
+  const { error: invErr } = await supabase.from('invoices').insert({
+    id: newQ.id,
+    business_id: currentBusiness.id,
+    party_id: quotation.partyId || null,
+    invoice_type: 'quotation',
+    invoice_number: quotation.quotationNumber || `QT-${Date.now().toString().slice(-6)}`,
+    fiscal_year: fiscalYear,
+    invoice_date_ad: dateStr,
+    invoice_date_bs: bs.formatted,
+    subtotal: quotation.totalAmount,
+    total_amount: quotation.totalAmount,
+    paid_amount: 0,
+    due_amount: quotation.totalAmount,
+    status: quotation.status || 'draft',
+    payment_mode: 'credit',
+    notes: quotation.notes || (quotation.validUntil ? `Valid until: ${quotation.validUntil}` : ''),
+  });
+
+  if (!invErr && quotation.items && quotation.items.length > 0) {
+    const itemsToInsert = quotation.items.map((it) => ({
+      id: crypto.randomUUID(),
+      invoice_id: newQ.id,
+      item_id: it.itemId || null,
+      item_name: it.itemName,
+      quantity: it.quantity || 1,
+      unit_price: it.unitPrice || 0,
+      total_amount: it.totalAmount || (it.quantity || 1) * (it.unitPrice || 0),
+    }));
+    await supabase.from('invoice_items').insert(itemsToInsert);
+  }
+
   return newQ;
 }
 
 export async function createSalesReturn(ret: Omit<SalesReturn, 'id' | 'businessId' | 'createdAt'>) {
+  const now = new Date();
+  const dateStr = ret.date || now.toISOString().split('T')[0];
+  const bs = adToBs(new Date(dateStr));
+  const fiscalYear = getNepaliFiscalYear(new Date(dateStr));
+
   const newR: SalesReturn = {
     ...ret,
     id: crypto.randomUUID(),
     businessId: currentBusiness.id,
-    createdAt: new Date().toISOString(),
+    createdAt: now.toISOString(),
   };
   setSalesReturns((draft) => {
     draft.unshift(newR);
@@ -1213,7 +1861,9 @@ export async function createSalesReturn(ret: Omit<SalesReturn, 'id' | 'businessI
       const idx = items.findIndex((i) => i.id === item.itemId);
       if (idx >= 0) {
         const newStock = items[idx].currentStock + item.quantity;
-        setItems(idx, 'currentStock', newStock);
+        setItems((draft) => {
+          if (draft[idx]) draft[idx].currentStock = newStock;
+        });
         supabase.from('items').update({ current_stock: newStock }).eq('id', item.itemId);
       }
     }
@@ -1224,9 +1874,42 @@ export async function createSalesReturn(ret: Omit<SalesReturn, 'id' | 'businessI
     const pIdx = parties.findIndex((p) => p.id === ret.partyId);
     if (pIdx >= 0) {
       const newBal = parties[pIdx].currentBalance - ret.creditAmount;
-      setParties(pIdx, 'currentBalance', newBal);
+      setParties((draft) => {
+        if (draft[pIdx]) draft[pIdx].currentBalance = newBal;
+      });
       supabase.from('parties').update({ current_balance: newBal }).eq('id', ret.partyId);
     }
+  }
+
+  const { error: invErr } = await supabase.from('invoices').insert({
+    id: newR.id,
+    business_id: currentBusiness.id,
+    party_id: ret.partyId || null,
+    invoice_type: 'sale_return',
+    invoice_number: ret.returnNumber || `RTN-${Date.now().toString().slice(-6)}`,
+    fiscal_year: fiscalYear,
+    invoice_date_ad: dateStr,
+    invoice_date_bs: bs.formatted,
+    subtotal: ret.totalAmount,
+    total_amount: ret.totalAmount,
+    paid_amount: ret.refundAmount || 0,
+    due_amount: ret.creditAmount || 0,
+    status: 'paid',
+    payment_mode: 'cash',
+    notes: ret.reason || '',
+  });
+
+  if (!invErr && ret.items && ret.items.length > 0) {
+    const itemsToInsert = ret.items.map((it) => ({
+      id: crypto.randomUUID(),
+      invoice_id: newR.id,
+      item_id: it.itemId || null,
+      item_name: it.itemName,
+      quantity: it.quantity || 1,
+      unit_price: it.unitPrice || 0,
+      total_amount: it.totalAmount || (it.quantity || 1) * (it.unitPrice || 0),
+    }));
+    await supabase.from('invoice_items').insert(itemsToInsert);
   }
 
   persistState();
@@ -1244,6 +1927,7 @@ export async function createPaymentIn(data: {
   const party = parties.find((p) => p.id === data.partyId);
   const now = new Date();
   const dateAd = data.date || now.toISOString().split('T')[0];
+  const bs = adToBs(new Date(dateAd));
 
   const payment: PaymentRecord = {
     id: crypto.randomUUID(),
@@ -1276,6 +1960,24 @@ export async function createPaymentIn(data: {
     await depositMoney(data.accountId, data.amount, 'Customer Payment Received', data.notes, dateAd);
   }
 
+  // Sync to Supabase payments table
+  await supabase.from('payments').insert({
+    id: payment.id,
+    business_id: currentBusiness.id,
+    party_id: data.partyId || null,
+    payment_mode: toValidPaymentMode(data.paymentMode),
+    amount: data.amount,
+    reference_id: data.accountId || null,
+    payment_metadata: {
+      type: 'in',
+      notes: data.notes || `Payment In (${data.paymentMode})`,
+      party_name: party?.name || 'Customer',
+      account_id: data.accountId,
+    },
+    payment_date_ad: dateAd,
+    payment_date_bs: bs.formatted,
+  });
+
   persistState();
   return payment;
 }
@@ -1298,7 +2000,9 @@ export async function createPurchaseBill(bill: Omit<PurchaseBill, 'id' | 'busine
       const idx = items.findIndex((i) => i.id === item.itemId);
       if (idx >= 0) {
         const newStock = items[idx].currentStock + item.quantity;
-        setItems(idx, 'currentStock', newStock);
+        setItems((draft) => {
+          if (draft[idx]) draft[idx].currentStock = newStock;
+        });
         supabase.from('items').update({ current_stock: newStock }).eq('id', item.itemId);
       }
     }
@@ -1309,21 +2013,44 @@ export async function createPurchaseBill(bill: Omit<PurchaseBill, 'id' | 'busine
     const sIdx = parties.findIndex((p) => p.id === bill.supplierId);
     if (sIdx >= 0) {
       const newBal = parties[sIdx].currentBalance - bill.dueAmount;
-      setParties(sIdx, 'currentBalance', newBal);
+      setParties((draft) => {
+        if (draft[sIdx]) draft[sIdx].currentBalance = newBal;
+      });
       supabase.from('parties').update({ current_balance: newBal }).eq('id', bill.supplierId);
     }
   }
+
+  // Cloud insert into Supabase bills table
+  supabase
+    .from('bills')
+    .upsert({
+      id: newBill.id,
+      business_id: currentBusiness.id,
+      title: bill.supplierName || 'Purchase Bill',
+      bill_type: 'purchase',
+      amount: bill.totalAmount,
+      bill_date: bill.date,
+      tags: ['purchase'],
+    })
+    .then(({ error }) => {
+      if (error) console.error('Cloud purchase bill sync error:', error);
+    });
 
   persistState();
   return newBill;
 }
 
 export async function createPurchaseReturn(ret: Omit<PurchaseReturn, 'id' | 'businessId' | 'createdAt'>) {
+  const now = new Date();
+  const dateStr = ret.date || now.toISOString().split('T')[0];
+  const bs = adToBs(new Date(dateStr));
+  const fiscalYear = getNepaliFiscalYear(new Date(dateStr));
+
   const newR: PurchaseReturn = {
     ...ret,
     id: crypto.randomUUID(),
     businessId: currentBusiness.id,
-    createdAt: new Date().toISOString(),
+    createdAt: now.toISOString(),
   };
 
   setPurchaseReturns((draft) => {
@@ -1336,11 +2063,44 @@ export async function createPurchaseReturn(ret: Omit<PurchaseReturn, 'id' | 'bus
       const idx = items.findIndex((i) => i.id === item.itemId);
       if (idx >= 0) {
         const newStock = Math.max(0, items[idx].currentStock - item.quantity);
-        setItems(idx, 'currentStock', newStock);
+        setItems((draft) => {
+          if (draft[idx]) draft[idx].currentStock = newStock;
+        });
         supabase.from('items').update({ current_stock: newStock }).eq('id', item.itemId);
       }
     }
   });
+
+  const { error: invErr } = await supabase.from('invoices').insert({
+    id: newR.id,
+    business_id: currentBusiness.id,
+    party_id: ret.supplierId || null,
+    invoice_type: 'purchase_return',
+    invoice_number: ret.returnNumber || `PR-${Date.now().toString().slice(-6)}`,
+    fiscal_year: fiscalYear,
+    invoice_date_ad: dateStr,
+    invoice_date_bs: bs.formatted,
+    subtotal: ret.totalAmount,
+    total_amount: ret.totalAmount,
+    paid_amount: ret.refundAmount || 0,
+    due_amount: 0,
+    status: 'paid',
+    payment_mode: 'cash',
+    notes: ret.reason || '',
+  });
+
+  if (!invErr && ret.items && ret.items.length > 0) {
+    const itemsToInsert = ret.items.map((it) => ({
+      id: crypto.randomUUID(),
+      invoice_id: newR.id,
+      item_id: it.itemId || null,
+      item_name: it.itemName,
+      quantity: it.quantity || 1,
+      unit_price: it.costPrice || 0,
+      total_amount: it.totalAmount || (it.quantity || 1) * (it.costPrice || 0),
+    }));
+    await supabase.from('invoice_items').insert(itemsToInsert);
+  }
 
   persistState();
   return newR;
@@ -1357,6 +2117,7 @@ export async function createPaymentOut(data: {
   const party = parties.find((p) => p.id === data.partyId);
   const now = new Date();
   const dateAd = data.date || now.toISOString().split('T')[0];
+  const bs = adToBs(new Date(dateAd));
 
   const payment: PaymentRecord = {
     id: crypto.randomUUID(),
@@ -1388,6 +2149,24 @@ export async function createPaymentOut(data: {
   if (data.accountId) {
     await withdrawMoney(data.accountId, data.amount, 'Supplier Payment Made', data.notes, dateAd);
   }
+
+  // Sync to Supabase payments table
+  await supabase.from('payments').insert({
+    id: payment.id,
+    business_id: currentBusiness.id,
+    party_id: data.partyId || null,
+    payment_mode: toValidPaymentMode(data.paymentMode),
+    amount: data.amount,
+    reference_id: data.accountId || null,
+    payment_metadata: {
+      type: 'out',
+      notes: data.notes || `Payment Out (${data.paymentMode})`,
+      party_name: party?.name || 'Supplier',
+      account_id: data.accountId,
+    },
+    payment_date_ad: dateAd,
+    payment_date_bs: bs.formatted,
+  });
 
   persistState();
   return payment;
@@ -1896,6 +2675,26 @@ export async function addIncome(income: Omit<IncomeRecord, 'id' | 'createdAt'>) 
   return newInc;
 }
 
+export async function deleteExpense(id: string) {
+  setExpenses((draft) => {
+    const idx = draft.findIndex((e) => e.id === id);
+    if (idx >= 0) draft.splice(idx, 1);
+  });
+  persistState();
+
+  await supabase.from('expenses').delete().eq('id', id);
+}
+
+export async function deleteIncome(id: string) {
+  setIncomes((draft) => {
+    const idx = draft.findIndex((i) => i.id === id);
+    if (idx >= 0) draft.splice(idx, 1);
+  });
+  persistState();
+
+  await supabase.from('incomes').delete().eq('id', id);
+}
+
 export async function addReminder(reminder: Omit<Reminder, 'id' | 'createdAt'>) {
   const newRem: Reminder = {
     ...reminder,
@@ -1945,6 +2744,11 @@ export async function addBill(bill: Omit<BillItem, 'id' | 'createdAt'>) {
   const newBill: BillItem = {
     ...bill,
     id: crypto.randomUUID(),
+    title: bill.title || bill.vendorName || 'Bill',
+    type: bill.type || bill.category || 'General',
+    date: bill.date || bill.billDate || new Date().toISOString().split('T')[0],
+    image: bill.image || bill.imageUrl || '',
+    tags: bill.tags || [],
     createdAt: new Date().toISOString(),
   };
   setBills((draft) => {
@@ -1959,7 +2763,7 @@ export async function addBill(bill: Omit<BillItem, 'id' | 'createdAt'>) {
     bill_type: newBill.type,
     amount: newBill.amount,
     bill_date: newBill.date,
-    image_url: newBill.image,
+    image_url: newBill.imageUrl || newBill.image,
     tags: newBill.tags,
   });
 

@@ -23,7 +23,13 @@ import { ProfileModal } from './components/modals/ProfileModal';
 import { ChangePasswordModal } from './components/modals/ChangePasswordModal';
 import { SubscriptionModal } from './components/modals/SubscriptionModal';
 import { AuthModal } from './components/auth/AuthModal';
-import { activeTab, setActiveTab, currentBusiness, toggleSidebar, toggleDarkMode } from './db/localDb';
+import { AuthPage } from './components/auth/AuthPage';
+import { LandingPage } from './components/landing/LandingPage';
+import { AboutPage } from './components/pages/AboutPage';
+import { FaqPage } from './components/pages/FaqPage';
+import { LegalPage } from './components/pages/LegalPage';
+import { currentUser } from './db/auth';
+import { activeTab, setActiveTab, currentBusiness, currentPage, toggleSidebar, toggleDarkMode } from './db/localDb';
 import {
   IconDashboard,
   IconSales,
@@ -115,15 +121,40 @@ export const App: Component = () => {
   });
 
   return (
-    <div class="flex h-screen bg-gray-50 dark:bg-black text-gray-900 dark:text-white font-sans overflow-hidden transition-colors">
-      {/* Left Sidebar (Desktop Rail + Mobile Drawer) */}
-      <Sidebar />
+    <Show
+      when={currentUser()}
+      fallback={
+        <Switch fallback={<LandingPage />}>
+          <Match when={currentPage() === 'landing'}>
+            <LandingPage />
+          </Match>
+          <Match when={currentPage() === 'auth'}>
+            <AuthPage />
+          </Match>
+          <Match when={currentPage() === 'about'}>
+            <AboutPage />
+          </Match>
+          <Match when={currentPage() === 'faq'}>
+            <FaqPage />
+          </Match>
+          <Match when={currentPage() === 'privacy'}>
+            <LegalPage type="privacy" />
+          </Match>
+          <Match when={currentPage() === 'terms'}>
+            <LegalPage type="terms" />
+          </Match>
+        </Switch>
+      }
+    >
+      <div class="flex h-screen bg-gray-50 dark:bg-black text-gray-900 dark:text-white font-sans overflow-hidden transition-colors">
+        {/* Left Sidebar (Desktop Rail + Mobile Drawer) */}
+        <Sidebar />
 
       {/* Main Content Area */}
       <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
         <TopBar />
 
-        <main class="flex-1 overflow-y-auto bg-gray-50 dark:bg-black transition-colors">
+        <main class="flex-1 overflow-y-auto bg-gray-50 dark:bg-black transition-colors p-10">
           <Switch>
             <Match when={activeTab() === 'dashboard'}>
               <DashboardView />
@@ -364,5 +395,6 @@ export const App: Component = () => {
       <SubscriptionModal />
       <AuthModal />
     </div>
+  </Show>
   );
 };

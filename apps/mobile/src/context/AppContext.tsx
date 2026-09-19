@@ -27,6 +27,7 @@ import { ThemeMode, Theme, getTheme } from '../theme';
 import { supabase } from '../config/supabase';
 import { User } from '@supabase/supabase-js';
 import { updateService } from '../services/updateService';
+import { adToBs, getNepaliFiscalYear } from '@byapar/core';
 
 const DEFAULT_BIZ_ID = 'a0000000-0000-0000-0000-000000000001';
 
@@ -189,19 +190,117 @@ function mapDbToLedger(row: any): LedgerEntry {
   };
 }
 
+function toValidPaymentMode(mode?: string): string {
+  const m = (mode || '').toLowerCase();
+  if (m === 'fonepay' || m === 'esewa' || m === 'khalti' || m === 'fonepay_qr') return 'fonepay_qr';
+  if (m === 'bank' || m === 'bank_transfer') return 'bank_transfer';
+  if (m === 'cheque') return 'cheque';
+  if (m === 'credit') return 'credit';
+  if (m === 'connectips') return 'connectips';
+  return 'cash';
+}
+
 function mapDbToInvoice(row: any): Invoice {
+  const rawItems = (row.invoice_items || []).map((i: any) => ({
+    name: i.item_name,
+    qty: Number(i.quantity) || 1,
+    price: Number(i.unit_price) || 0,
+  }));
+
+  const seen = new Set<string>();
+  const items = rawItems.filter((item: any) => {
+    const key = `${item.name}-${item.qty}-${item.price}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
   return {
     id: row.id,
     invoiceNumber: row.invoice_number,
     date: row.invoice_date_ad,
-    partyName: row.party_id || 'Counter Sale',
+    partyName: row.parties?.name || row.party_id || 'Counter Sale',
     total: Number(row.total_amount) || 0,
     paymentMode: row.payment_mode || 'cash',
-    items: (row.invoice_items || []).map((i: any) => ({
-      name: i.item_name,
-      qty: Number(i.quantity) || 1,
-      price: Number(i.unit_price) || 0,
+    items,
+  };
+}
+
+function mapDbToQuotation(row: any): Quotation {
+  return {
+    id: row.id,
+    quotationNumber: row.invoice_number,
+    partyId: row.party_id,
+    partyName: row.parties?.name || row.party_name || 'Customer',
+    partyPhone: row.parties?.phone || row.party_phone || undefined,
+    date: row.invoice_date_ad,
+    validUntil: undefined,
+    totalAmount: Number(row.total_amount) || 0,
+    notes: row.notes || undefined,
+    status: (row.status as any) || 'draft',
+    items: (row.invoice_items || []).map((ii: any) => ({
+      id: ii.id,
+      itemName: ii.item_name,
+      quantity: Number(ii.quantity) || 1,
+      unitPrice: Number(ii.unit_price) || 0,
+      totalAmount: Number(ii.total_amount) || 0,
     })),
+  };
+}
+
+function mapDbToSalesReturn(row: any): SalesReturn {
+  return {
+    id: row.id,
+    returnNumber: row.invoice_number,
+    partyId: row.party_id,
+    partyName: row.parties?.name || row.party_name || 'Customer',
+    date: row.invoice_date_ad,
+    totalAmount: Number(row.total_amount) || 0,
+    refundAmount: Number(row.paid_amount) || 0,
+    creditAmount: Number(row.due_amount) || 0,
+    reason: row.notes || undefined,
+    items: (row.invoice_items || []).map((ii: any) => ({
+      id: ii.id,
+      itemName: ii.item_name,
+      quantity: Number(ii.quantity) || 1,
+      unitPrice: Number(ii.unit_price) || 0,
+      totalAmount: Number(ii.total_amount) || 0,
+    })),
+  };
+}
+
+function mapDbToPurchaseReturn(row: any): PurchaseReturn {
+  return {
+    id: row.id,
+    returnNumber: row.invoice_number,
+    supplierId: row.party_id,
+    supplierName: row.parties?.name || row.party_name || 'Supplier',
+    date: row.invoice_date_ad,
+    totalAmount: Number(row.total_amount) || 0,
+    refundAmount: Number(row.paid_amount) || 0,
+    reason: row.notes || undefined,
+    items: (row.invoice_items || []).map((ii: any) => ({
+      id: ii.id,
+      itemName: ii.item_name,
+      quantity: Number(ii.quantity) || 1,
+      costPrice: Number(ii.unit_price) || 0,
+      totalAmount: Number(ii.total_amount) || 0,
+    })),
+  };
+}
+
+function mapDbToPaymentRecord(row: any): PaymentRecord {
+  const meta = row.payment_metadata || {};
+  return {
+    id: row.id,
+    type: meta.type || (row.reference_id === 'out' ? 'out' : 'in'),
+    partyId: row.party_id || '',
+    partyName: meta.party_name || row.parties?.name || 'Party',
+    amount: Number(row.amount) || 0,
+    paymentMode: row.payment_mode || 'cash',
+    accountId: meta.account_id || row.reference_id || undefined,
+    date: row.payment_date_ad || row.created_at?.split('T')[0],
+    notes: meta.notes || row.notes || undefined,
   };
 }
 
@@ -231,6 +330,35 @@ function mapDbToAccountTx(row: any): AccountTransaction {
     category: row.category,
     notes: row.notes,
     dateAd: row.date_ad,
+    createdAt: row.created_at,
+  };
+}
+
+function mapDbToAccount(row: any): BankAccount {
+  const branchLower = (row.branch || '').toLowerCase();
+  const nameLower = (row.account_name || '').toLowerCase();
+  const isWallet = branchLower.includes('wallet') || nameLower.includes('esewa') || nameLower.includes('khalti') || nameLower.includes('ime pay');
+  const isCash = branchLower.includes('cash') || nameLower.includes('cash') || nameLower.includes('drawer') || (!row.branch && !row.bank_name);
+  return {
+    id: row.id,
+    name: row.account_name,
+    bankName: row.bank_name,
+    accountNumber: row.account_number,
+    accountType: isWallet ? 'wallet' : isCash ? 'cash' : 'bank',
+    balance: Number(row.balance) || 0,
+    branch: row.branch,
+  };
+}
+
+function mapDbToStaff(row: any): StaffMember {
+  return {
+    id: row.id,
+    name: row.name,
+    phone: row.phone,
+    email: row.email,
+    role: row.role || 'Sales Person',
+    permissions: row.permissions || {},
+    isActive: row.is_active ?? true,
     createdAt: row.created_at,
   };
 }
@@ -306,10 +434,142 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [activeBizId, setActiveBizId] = useState<string>(DEFAULT_BIZ_ID);
   const [categories, setCategories] = useState<CategoryItem[]>([]);
 
+  // Automatic backfill of local offline data to cloud
+  const backfillLocalDataToCloud = async (bizId: string) => {
+    if (!bizId) return;
+    try {
+      // 1. Backfill products
+      const localProds = await storage.get<Product[]>('products', []);
+      if (localProds && localProds.length > 0) {
+        for (const p of localProds) {
+          const matchedCat = categories.find(
+            (c) => c.name.toLowerCase() === (p.category || '').toLowerCase()
+          );
+          await supabase.from('items').upsert({
+            id: p.id,
+            business_id: bizId,
+            category_id: matchedCat?.id || null,
+            name: p.name,
+            barcode: p.barcode || null,
+            selling_price: p.salePrice || 0,
+            mrp: p.salePrice || 0,
+            wholesale_price: p.salePrice || 0,
+            purchase_cost: p.costPrice || 0,
+            current_stock: p.stock || 0,
+            image_url: p.imageUri || null,
+          });
+        }
+      }
+
+      // 2. Backfill parties
+      const localParties = await storage.get<Party[]>('parties', []);
+      if (localParties && localParties.length > 0) {
+        for (const p of localParties) {
+          await supabase.from('parties').upsert({
+            id: p.id,
+            business_id: bizId,
+            name: p.name,
+            phone: p.phone || null,
+            party_type: p.type || 'customer',
+            address: p.address || null,
+            current_balance: p.balance || 0,
+          });
+        }
+      }
+
+      // 3. Backfill invoices
+      const localInvoices = await storage.get<Invoice[]>('invoices', []);
+      if (localInvoices && localInvoices.length > 0) {
+        for (const inv of localInvoices) {
+          const dateStr = inv.date || new Date().toISOString().split('T')[0];
+          const bs = adToBs(new Date(dateStr));
+          const fiscalYear = getNepaliFiscalYear(bs.formatted);
+          const isCredit = inv.paymentMode === 'credit';
+          const total = Number(inv.total) || 0;
+
+          await supabase.from('invoices').upsert({
+            id: inv.id,
+            business_id: bizId,
+            invoice_number: inv.invoiceNumber,
+            invoice_type: 'sale',
+            fiscal_year: fiscalYear,
+            invoice_date_ad: dateStr,
+            invoice_date_bs: bs.formatted,
+            subtotal: total,
+            total_amount: total,
+            paid_amount: isCredit ? 0 : total,
+            due_amount: isCredit ? total : 0,
+            payment_mode: inv.paymentMode || 'cash',
+            status: isCredit ? 'unpaid' : 'paid',
+          });
+
+          if (inv.items && inv.items.length > 0) {
+            const { count } = await supabase
+              .from('invoice_items')
+              .select('id', { count: 'exact', head: true })
+              .eq('invoice_id', inv.id);
+
+            if (!count || count === 0) {
+              const itemsToInsert = inv.items.map((item) => ({
+                id: generateUUID(),
+                invoice_id: inv.id,
+                item_name: item.name,
+                quantity: item.qty || 1,
+                unit_price: item.price || 0,
+                total_amount: (item.qty || 1) * (item.price || 0),
+              }));
+              await supabase.from('invoice_items').insert(itemsToInsert);
+            }
+          }
+        }
+      }
+
+      // 4. Backfill ledger entries
+      const localLedger = await storage.get<LedgerEntry[]>('ledger', []);
+      if (localLedger && localLedger.length > 0) {
+        for (const entry of localLedger) {
+          const dateStr = entry.date || new Date().toISOString().split('T')[0];
+          const bs = adToBs(new Date(dateStr));
+          await supabase.from('khata_entries').upsert({
+            id: entry.id,
+            business_id: bizId,
+            party_id: entry.partyId,
+            entry_type: entry.type === 'credit' ? 'diyo' : 'liyo',
+            amount: Number(entry.amount) || 0,
+            date_ad: dateStr,
+            date_bs: bs.formatted,
+            notes: entry.note || null,
+          });
+        }
+      }
+
+      // 5. Backfill purchase bills
+      const localPBills = await storage.get<PurchaseBill[]>('purchase_bills', []);
+      if (localPBills && localPBills.length > 0) {
+        for (const pb of localPBills) {
+          await supabase.from('bills').upsert({
+            id: pb.id,
+            business_id: bizId,
+            title: pb.supplierName || 'Purchase Bill',
+            bill_type: 'purchase',
+            amount: Number(pb.totalAmount) || 0,
+            bill_date: pb.date || new Date().toISOString().split('T')[0],
+            tags: ['purchase'],
+          });
+        }
+      }
+    } catch (backfillErr) {
+      console.warn('Backfill to cloud non-fatal:', backfillErr);
+    }
+  };
+
   // Hydrate Cloud Supabase data
   const hydrateFromCloud = async (targetBizId?: string) => {
     const bizId = targetBizId || activeBizId;
     if (!bizId) return;
+
+    // First auto-backfill any local unsynced records to cloud
+    await backfillLocalDataToCloud(bizId);
 
     try {
       // 1. Categories
@@ -397,7 +657,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         await storage.set('ledger', mapped);
       }
 
-      // 5. Invoices
+      // 5. Invoices & Vouchers
       const { data: dbInvoices } = await supabase
         .from('invoices')
         .select('*, invoice_items(*)')
@@ -406,9 +666,46 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         .order('created_at', { ascending: false });
 
       if (dbInvoices) {
-        const mapped = dbInvoices.map(mapDbToInvoice);
-        setInvoices(mapped);
-        await storage.set('invoices', mapped);
+        const salesInvoices = dbInvoices
+          .filter((r: any) => !r.invoice_type || r.invoice_type === 'sale')
+          .map(mapDbToInvoice);
+        setInvoices(salesInvoices);
+        await storage.set('invoices', salesInvoices);
+
+        const quots = dbInvoices
+          .filter((r: any) => r.invoice_type === 'quotation')
+          .map(mapDbToQuotation);
+        setQuotations(quots);
+        await storage.set('quotations', quots);
+
+        const sReturns = dbInvoices
+          .filter((r: any) => r.invoice_type === 'sale_return')
+          .map(mapDbToSalesReturn);
+        setSalesReturns(sReturns);
+        await storage.set('sales_returns', sReturns);
+
+        const pReturns = dbInvoices
+          .filter((r: any) => r.invoice_type === 'purchase_return')
+          .map(mapDbToPurchaseReturn);
+        setPurchaseReturns(pReturns);
+        await storage.set('purchase_returns', pReturns);
+      }
+
+      // Payments (Payment In & Payment Out)
+      const { data: dbPayments } = await supabase
+        .from('payments')
+        .select('*')
+        .eq('business_id', bizId)
+        .order('created_at', { ascending: false });
+
+      if (dbPayments) {
+        const allPayments = dbPayments.map(mapDbToPaymentRecord);
+        const payIn = allPayments.filter((p) => p.type === 'in');
+        const payOut = allPayments.filter((p) => p.type === 'out');
+        setPaymentInRecords(payIn);
+        setPaymentOutRecords(payOut);
+        await storage.set('pay_in', payIn);
+        await storage.set('pay_out', payOut);
       }
 
       // 6. Bills
@@ -422,6 +719,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const mapped = dbBills.map(mapDbToBill);
         setBills(mapped);
         await storage.set('bills', mapped);
+
+        // Also map purchase bills
+        const purchaseMapped: PurchaseBill[] = dbBills
+          .filter((b: any) => (b.bill_type || '').toLowerCase() === 'purchase')
+          .map((b: any) => ({
+            id: b.id,
+            billNumber: `PB-${b.id.slice(0, 6).toUpperCase()}`,
+            supplierName: b.title || 'Supplier',
+            date: b.bill_date || b.created_at?.split('T')[0] || new Date().toISOString().split('T')[0],
+            subtotal: Number(b.amount) || 0,
+            totalAmount: Number(b.amount) || 0,
+            paidAmount: Number(b.amount) || 0,
+            dueAmount: 0,
+            paymentMode: 'cash',
+            status: 'paid',
+            items: [],
+          }));
+        if (purchaseMapped.length > 0) {
+          setPurchaseBills(purchaseMapped);
+          await storage.set('purchase_bills', purchaseMapped);
+        }
       }
 
       // 7. Account Transactions
@@ -429,12 +747,60 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         .from('account_transactions')
         .select('*')
         .eq('business_id', bizId)
-        .order('created_at', { ascending: false });
+        .order('date_ad', { ascending: false });
 
       if (dbTxs) {
         const mapped = dbTxs.map(mapDbToAccountTx);
         setAccountTransactions(mapped);
         await storage.set('account_txs', mapped);
+      }
+
+      // 8. Bank Accounts
+      const { data: dbAccounts } = await supabase
+        .from('bank_accounts')
+        .select('*')
+        .eq('business_id', bizId);
+
+      if (dbAccounts) {
+        const mapped = dbAccounts.map(mapDbToAccount);
+        setAccounts(mapped);
+        await storage.set('accounts', mapped);
+      }
+
+      // 9. Staff Members
+      const { data: dbStaff } = await supabase
+        .from('staff')
+        .select('*')
+        .eq('business_id', bizId)
+        .order('created_at', { ascending: false });
+
+      if (dbStaff) {
+        const mapped = dbStaff.map(mapDbToStaff);
+        setStaffList(mapped);
+        await storage.set('staff_list', mapped);
+      }
+
+      // 10. Store Profile / Business
+      const { data: dbBiz } = await supabase
+        .from('businesses')
+        .select('*')
+        .eq('id', bizId)
+        .maybeSingle();
+
+      if (dbBiz) {
+        const updatedStore: StoreProfile = {
+          ...store,
+          id: dbBiz.id,
+          name: dbBiz.name || store.name,
+          ownerName: dbBiz.owner_name || store.ownerName,
+          phone: dbBiz.phone || store.phone,
+          panNumber: dbBiz.pan_vat_number || store.panNumber,
+          address: dbBiz.address_line || store.address,
+          vatEnabled: dbBiz.is_vat_registered ?? store.vatEnabled,
+          businessType: (dbBiz.business_type as BusinessType) || store.businessType || 'general',
+        };
+        setStore(updatedStore);
+        await storage.set('store', updatedStore);
       }
     } catch (err) {
       console.warn('Error hydrating mobile app from cloud:', err);
@@ -567,10 +933,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Realtime updates subscription whenever activeBizId changes
   useEffect(() => {
-    if (!activeBizId || activeBizId === DEFAULT_BIZ_ID) return;
+    if (!activeBizId) return;
 
     const channel = supabase
       .channel(`mobile_realtime_${activeBizId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'businesses', filter: `id=eq.${activeBizId}` },
+        (payload) => {
+          if (payload.eventType === 'UPDATE') {
+            const b = payload.new as any;
+            setStore((prev) => ({
+              ...prev,
+              name: b.name || prev.name,
+              ownerName: b.owner_name || prev.ownerName,
+              phone: b.phone || prev.phone,
+              panNumber: b.pan_vat_number || prev.panNumber,
+              address: b.address_line || prev.address,
+              vatEnabled: b.is_vat_registered ?? prev.vatEnabled,
+              businessType: (b.business_type as BusinessType) || prev.businessType,
+            }));
+          }
+        }
+      )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'items', filter: `business_id=eq.${activeBizId}` },
@@ -614,11 +999,142 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       )
       .on(
         'postgres_changes',
+        { event: '*', schema: 'public', table: 'invoices', filter: `business_id=eq.${activeBizId}` },
+        (payload) => {
+          const invType = (payload.new as any)?.invoice_type || (payload.old as any)?.invoice_type || 'sale';
+
+          if (invType === 'quotation') {
+            if (payload.eventType === 'INSERT') {
+              const newQ = mapDbToQuotation(payload.new);
+              setQuotations((prev) => (prev.some((q) => q.id === newQ.id) ? prev : [newQ, ...prev]));
+            } else if (payload.eventType === 'UPDATE') {
+              const updated = mapDbToQuotation(payload.new);
+              setQuotations((prev) => prev.map((q) => (q.id === updated.id ? updated : q)));
+            } else if (payload.eventType === 'DELETE') {
+              setQuotations((prev) => prev.filter((q) => q.id !== (payload.old as any).id));
+            }
+          } else if (invType === 'sale_return') {
+            if (payload.eventType === 'INSERT') {
+              const newSR = mapDbToSalesReturn(payload.new);
+              setSalesReturns((prev) => (prev.some((s) => s.id === newSR.id) ? prev : [newSR, ...prev]));
+            } else if (payload.eventType === 'UPDATE') {
+              const updated = mapDbToSalesReturn(payload.new);
+              setSalesReturns((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+            } else if (payload.eventType === 'DELETE') {
+              setSalesReturns((prev) => prev.filter((s) => s.id !== (payload.old as any).id));
+            }
+          } else if (invType === 'purchase_return') {
+            if (payload.eventType === 'INSERT') {
+              const newPR = mapDbToPurchaseReturn(payload.new);
+              setPurchaseReturns((prev) => (prev.some((p) => p.id === newPR.id) ? prev : [newPR, ...prev]));
+            } else if (payload.eventType === 'UPDATE') {
+              const updated = mapDbToPurchaseReturn(payload.new);
+              setPurchaseReturns((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+            } else if (payload.eventType === 'DELETE') {
+              setPurchaseReturns((prev) => prev.filter((p) => p.id !== (payload.old as any).id));
+            }
+          } else {
+            if (payload.eventType === 'INSERT') {
+              const newInv = mapDbToInvoice(payload.new);
+              setInvoices((prev) => (prev.some((i) => i.id === newInv.id) ? prev : [newInv, ...prev]));
+            } else if (payload.eventType === 'UPDATE') {
+              const updated = mapDbToInvoice(payload.new);
+              setInvoices((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
+            } else if (payload.eventType === 'DELETE') {
+              setInvoices((prev) => prev.filter((i) => i.id !== (payload.old as any).id));
+            }
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'payments', filter: `business_id=eq.${activeBizId}` },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            const newP = mapDbToPaymentRecord(payload.new);
+            if (newP.type === 'in') {
+              setPaymentInRecords((prev) => (prev.some((p) => p.id === newP.id) ? prev : [newP, ...prev]));
+            } else {
+              setPaymentOutRecords((prev) => (prev.some((p) => p.id === newP.id) ? prev : [newP, ...prev]));
+            }
+          } else if (payload.eventType === 'UPDATE') {
+            const updated = mapDbToPaymentRecord(payload.new);
+            if (updated.type === 'in') {
+              setPaymentInRecords((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+            } else {
+              setPaymentOutRecords((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+            }
+          } else if (payload.eventType === 'DELETE') {
+            const id = (payload.old as any).id;
+            setPaymentInRecords((prev) => prev.filter((p) => p.id !== id));
+            setPaymentOutRecords((prev) => prev.filter((p) => p.id !== id));
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'khata_entries', filter: `business_id=eq.${activeBizId}` },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            const newE = mapDbToLedger(payload.new);
+            setLedgerEntries((prev) => (prev.some((e) => e.id === newE.id) ? prev : [newE, ...prev]));
+          } else if (payload.eventType === 'UPDATE') {
+            const updated = mapDbToLedger(payload.new);
+            setLedgerEntries((prev) => prev.map((e) => (e.id === updated.id ? updated : e)));
+          } else if (payload.eventType === 'DELETE') {
+            setLedgerEntries((prev) => prev.filter((e) => e.id !== (payload.old as any).id));
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'bank_accounts', filter: `business_id=eq.${activeBizId}` },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            const newA = mapDbToAccount(payload.new);
+            setAccounts((prev) => (prev.some((a) => a.id === newA.id) ? prev : [...prev, newA]));
+          } else if (payload.eventType === 'UPDATE') {
+            const updated = mapDbToAccount(payload.new);
+            setAccounts((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
+          } else if (payload.eventType === 'DELETE') {
+            setAccounts((prev) => prev.filter((a) => a.id !== (payload.old as any).id));
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
         { event: '*', schema: 'public', table: 'account_transactions', filter: `business_id=eq.${activeBizId}` },
         (payload) => {
           if (payload.eventType === 'INSERT') {
             const newTx = mapDbToAccountTx(payload.new);
             setAccountTransactions((prev) => (prev.some((t) => t.id === newTx.id) ? prev : [newTx, ...prev]));
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'staff', filter: `business_id=eq.${activeBizId}` },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            const newS = mapDbToStaff(payload.new);
+            setStaffList((prev) => (prev.some((s) => s.id === newS.id) ? prev : [newS, ...prev]));
+          } else if (payload.eventType === 'UPDATE') {
+            const updated = mapDbToStaff(payload.new);
+            setStaffList((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+          } else if (payload.eventType === 'DELETE') {
+            setStaffList((prev) => prev.filter((s) => s.id !== (payload.old as any).id));
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'bills', filter: `business_id=eq.${activeBizId}` },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            const newB = mapDbToBill(payload.new);
+            setBills((prev) => (prev.some((b) => b.id === newB.id) ? prev : [newB, ...prev]));
+          } else if (payload.eventType === 'DELETE') {
+            setBills((prev) => prev.filter((b) => b.id !== (payload.old as any).id));
           }
         }
       )
@@ -752,6 +1268,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const updated = { ...store, ...updates };
     setStore(updated);
     await storage.set('store', updated);
+
+    const payload: any = {};
+    if (updates.name !== undefined) payload.name = updates.name;
+    if (updates.phone !== undefined) payload.phone = updates.phone;
+    if (updates.panNumber !== undefined) payload.pan_vat_number = updates.panNumber;
+    if (updates.address !== undefined) payload.address_line = updates.address;
+    if (updates.vatEnabled !== undefined) payload.is_vat_registered = updates.vatEnabled;
+    if (updates.businessType !== undefined) payload.business_type = updates.businessType;
+
+    if (Object.keys(payload).length > 0 && activeBizId) {
+      await supabase.from('businesses').update(payload).eq('id', activeBizId);
+    }
+
+    if (updates.ownerName !== undefined && user?.id) {
+      await supabase.from('profiles').update({ full_name: updates.ownerName }).eq('id', user.id);
+    }
   };
 
   const completeOnboarding = async (storeData: StoreProfile) => {
@@ -759,6 +1291,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setIsOnboarded(true);
     await storage.set('store', storeData);
     await storage.set('onboarded', true);
+
+    if (activeBizId) {
+      await supabase
+        .from('businesses')
+        .update({
+          name: storeData.name,
+          phone: storeData.phone,
+          pan_vat_number: storeData.panNumber,
+          address_line: storeData.address,
+          is_vat_registered: storeData.vatEnabled,
+          business_type: storeData.businessType,
+        })
+        .eq('id', activeBizId);
+    }
+
+    if (storeData.ownerName && user?.id) {
+      await supabase.from('profiles').update({ full_name: storeData.ownerName }).eq('id', user.id);
+    }
   };
 
   const resetOnboarding = async () => {
@@ -801,29 +1351,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setProducts(updated);
     await storage.set('products', updated);
 
-    const payload: any = {};
-    if (updates.name !== undefined) payload.name = updates.name;
-    if (updates.barcode !== undefined) payload.barcode = updates.barcode;
-    if (updates.costPrice !== undefined) payload.purchase_cost = updates.costPrice;
-    if (updates.salePrice !== undefined) {
-      payload.selling_price = updates.salePrice;
-      payload.mrp = updates.salePrice;
-    }
-    if (updates.stock !== undefined) payload.current_stock = updates.stock;
-    if (updates.imageUri !== undefined) payload.image_url = updates.imageUri;
+    const fullProd = updated.find((p) => p.id === id);
+    const catName = updates.category !== undefined ? updates.category : fullProd?.category;
+    const matchedCategory = categories.find(
+      (c) => c.name.toLowerCase() === (catName || '').toLowerCase()
+    );
 
-    if (updates.category) {
-      const matchedCategory = categories.find(
-        (c) => c.name.toLowerCase() === updates.category!.toLowerCase()
-      );
-      if (matchedCategory) {
-        payload.category_id = matchedCategory.id;
-      }
-    }
-
-    if (Object.keys(payload).length > 0) {
-      await supabase.from('items').update(payload).eq('id', id);
-    }
+    await supabase.from('items').upsert({
+      id,
+      business_id: activeBizId,
+      category_id: matchedCategory?.id || null,
+      name: updates.name ?? fullProd?.name ?? 'Item',
+      barcode: updates.barcode ?? fullProd?.barcode ?? null,
+      purchase_cost: updates.costPrice ?? fullProd?.costPrice ?? 0,
+      selling_price: updates.salePrice ?? fullProd?.salePrice ?? 0,
+      mrp: updates.salePrice ?? fullProd?.salePrice ?? 0,
+      wholesale_price: updates.salePrice ?? fullProd?.salePrice ?? 0,
+      current_stock: updates.stock ?? fullProd?.stock ?? 0,
+      image_url: updates.imageUri ?? fullProd?.imageUri ?? null,
+      updated_at: new Date().toISOString(),
+    });
   };
 
   const deleteProduct = async (id: string) => {
@@ -861,14 +1408,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setParties(updated);
     await storage.set('parties', updated);
 
-    await supabase
-      .from('parties')
-      .update({
-        name: updates.name,
-        phone: updates.phone,
-        address: updates.address,
-      })
-      .eq('id', id);
+    const dbPayload: Record<string, any> = {};
+    if (updates.name !== undefined) dbPayload.name = updates.name;
+    if (updates.phone !== undefined) dbPayload.phone = updates.phone;
+    if (updates.address !== undefined) dbPayload.address = updates.address;
+    if (updates.balance !== undefined) dbPayload.current_balance = updates.balance;
+
+    if (Object.keys(dbPayload).length > 0) {
+      await supabase
+        .from('parties')
+        .update(dbPayload)
+        .eq('id', id);
+    }
   };
 
   const deleteParty = async (id: string) => {
@@ -897,13 +1448,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       editParty(targetParty.id, { balance: newBal });
     }
 
-    await supabase.from('khata_entries').insert({
+    const bs = adToBs(new Date(newEntry.date));
+
+    await supabase.from('khata_entries').upsert({
       id: newEntry.id,
       business_id: activeBizId,
       party_id: newEntry.partyId,
       entry_type: newEntry.type === 'credit' ? 'diyo' : 'liyo',
       amount: newEntry.amount,
       date_ad: newEntry.date,
+      date_bs: bs.formatted,
       notes: newEntry.note,
     });
   };
@@ -1061,15 +1615,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
     }
 
+    const bs = adToBs(new Date(newInvoice.date));
+    const fiscalYear = getNepaliFiscalYear(bs.formatted);
+    const isCredit = mode === 'credit';
+
     // Cloud insert
-    const { error: invErr } = await supabase.from('invoices').insert({
+    const { error: invErr } = await supabase.from('invoices').upsert({
       id: newInvoice.id,
       business_id: activeBizId,
+      party_id: partyId && partyId.length === 36 ? partyId : null,
+      invoice_type: 'sale',
       invoice_number: newInvoice.invoiceNumber,
+      fiscal_year: fiscalYear,
       invoice_date_ad: newInvoice.date,
+      invoice_date_bs: bs.formatted,
+      subtotal: newInvoice.total,
       total_amount: newInvoice.total,
+      paid_amount: isCredit ? 0 : newInvoice.total,
+      due_amount: isCredit ? newInvoice.total : 0,
       payment_mode: mode,
-      status: mode === 'credit' ? 'unpaid' : 'paid',
+      status: isCredit ? 'unpaid' : 'paid',
     });
 
     if (!invErr && cart.length > 0) {
@@ -1082,7 +1647,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         unit_price: item.salePrice,
         total_amount: item.salePrice * item.qty,
       }));
-      await supabase.from('invoice_items').insert(invItems);
+      await supabase.from('invoice_items').upsert(invItems);
     }
 
     clearCart();
@@ -1099,18 +1664,41 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const updated = [...accounts, newAcc];
     setAccounts(updated);
     await storage.set('accounts', updated);
+
+    await supabase.from('bank_accounts').insert({
+      id: newAcc.id,
+      business_id: activeBizId,
+      account_name: newAcc.name,
+      bank_name: newAcc.bankName || '',
+      account_number: newAcc.accountNumber || '',
+      branch: newAcc.branch || newAcc.accountType,
+      balance: newAcc.balance || 0,
+    });
   };
 
   const editAccount = async (id: string, updates: Partial<BankAccount>) => {
     const updated = accounts.map((a) => (a.id === id ? { ...a, ...updates } : a));
     setAccounts(updated);
     await storage.set('accounts', updated);
+
+    const payload: any = {};
+    if (updates.name !== undefined) payload.account_name = updates.name;
+    if (updates.bankName !== undefined) payload.bank_name = updates.bankName;
+    if (updates.accountNumber !== undefined) payload.account_number = updates.accountNumber;
+    if (updates.branch !== undefined) payload.branch = updates.branch;
+    if (updates.balance !== undefined) payload.balance = updates.balance;
+
+    if (Object.keys(payload).length > 0) {
+      await supabase.from('bank_accounts').update(payload).eq('id', id);
+    }
   };
 
   const deleteAccount = async (id: string) => {
     const updated = accounts.filter((a) => a.id !== id);
     setAccounts(updated);
     await storage.set('accounts', updated);
+
+    await supabase.from('bank_accounts').delete().eq('id', id);
   };
 
   const depositMoney = async (
@@ -1251,6 +1839,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       notes,
       date_ad: date,
     });
+
+    await supabase.from('bank_accounts').update({ balance: fromBal }).eq('id', fromId);
+    await supabase.from('bank_accounts').update({ balance: toBal }).eq('id', toId);
   };
 
   // Sales Vouchers
@@ -1259,6 +1850,41 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const updated = [newQ, ...quotations];
     setQuotations(updated);
     await storage.set('quotations', updated);
+
+    const dateStr = q.date || new Date().toISOString().split('T')[0];
+    const bs = adToBs(new Date(dateStr));
+    const fiscalYear = getNepaliFiscalYear(bs.formatted);
+
+    await supabase.from('invoices').upsert({
+      id: newQ.id,
+      business_id: activeBizId,
+      party_id: q.partyId && q.partyId.length === 36 ? q.partyId : null,
+      invoice_number: newQ.quotationNumber,
+      invoice_type: 'quotation',
+      fiscal_year: fiscalYear,
+      invoice_date_ad: dateStr,
+      invoice_date_bs: bs.formatted,
+      subtotal: newQ.totalAmount,
+      total_amount: newQ.totalAmount,
+      paid_amount: 0,
+      due_amount: newQ.totalAmount,
+      payment_mode: 'cash',
+      status: q.status || 'draft',
+      notes: q.notes || null,
+    });
+
+    if (q.items && q.items.length > 0) {
+      const itemsToInsert = q.items.map((it) => ({
+        id: generateUUID(),
+        invoice_id: newQ.id,
+        item_name: it.itemName,
+        quantity: it.quantity || 1,
+        unit_price: it.unitPrice || 0,
+        total_amount: it.totalAmount || (it.quantity || 1) * (it.unitPrice || 0),
+      }));
+      await supabase.from('invoice_items').insert(itemsToInsert);
+    }
+
     return newQ;
   };
 
@@ -1267,6 +1893,41 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const updated = [newSR, ...salesReturns];
     setSalesReturns(updated);
     await storage.set('sales_returns', updated);
+
+    const dateStr = sr.date || new Date().toISOString().split('T')[0];
+    const bs = adToBs(new Date(dateStr));
+    const fiscalYear = getNepaliFiscalYear(bs.formatted);
+
+    await supabase.from('invoices').upsert({
+      id: newSR.id,
+      business_id: activeBizId,
+      party_id: sr.partyId && sr.partyId.length === 36 ? sr.partyId : null,
+      invoice_number: newSR.returnNumber,
+      invoice_type: 'sale_return',
+      fiscal_year: fiscalYear,
+      invoice_date_ad: dateStr,
+      invoice_date_bs: bs.formatted,
+      subtotal: newSR.totalAmount,
+      total_amount: newSR.totalAmount,
+      paid_amount: newSR.refundAmount || 0,
+      due_amount: newSR.creditAmount || 0,
+      payment_mode: 'cash',
+      status: 'paid',
+      notes: sr.reason || null,
+    });
+
+    if (sr.items && sr.items.length > 0) {
+      const itemsToInsert = sr.items.map((it) => ({
+        id: generateUUID(),
+        invoice_id: newSR.id,
+        item_name: it.itemName,
+        quantity: it.quantity || 1,
+        unit_price: it.unitPrice || 0,
+        total_amount: it.totalAmount || (it.quantity || 1) * (it.unitPrice || 0),
+      }));
+      await supabase.from('invoice_items').insert(itemsToInsert);
+    }
+
     return newSR;
   };
 
@@ -1288,6 +1949,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (pay.accountId) {
       await depositMoney(pay.accountId, pay.amount, 'Customer Payment', pay.notes, pay.date);
     }
+
+    const dateStr = pay.date || new Date().toISOString().split('T')[0];
+    const bs = adToBs(new Date(dateStr));
+
+    await supabase.from('payments').insert({
+      id: newP.id,
+      business_id: activeBizId,
+      party_id: pay.partyId && pay.partyId.length === 36 ? pay.partyId : null,
+      payment_mode: toValidPaymentMode(pay.paymentMode),
+      amount: pay.amount,
+      payment_metadata: {
+        type: 'in',
+        party_name: pay.partyName,
+        account_id: pay.accountId,
+        notes: pay.notes,
+      },
+      payment_date_ad: dateStr,
+      payment_date_bs: bs.formatted,
+    });
+
     return newP;
   };
 
@@ -1305,6 +1986,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         await editProduct(prod.id, { stock: prod.stock + it.quantity });
       }
     }
+
+    // Sync to Supabase bills table
+    await supabase.from('bills').upsert({
+      id: newB.id,
+      business_id: activeBizId,
+      title: b.supplierName || 'Purchase Bill',
+      bill_type: 'purchase',
+      amount: b.totalAmount,
+      bill_date: b.date,
+      tags: ['purchase'],
+    });
+
     return newB;
   };
 
@@ -1321,6 +2014,41 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         await editProduct(prod.id, { stock: Math.max(0, prod.stock - it.quantity) });
       }
     }
+
+    const dateStr = pr.date || new Date().toISOString().split('T')[0];
+    const bs = adToBs(new Date(dateStr));
+    const fiscalYear = getNepaliFiscalYear(bs.formatted);
+
+    await supabase.from('invoices').upsert({
+      id: newPR.id,
+      business_id: activeBizId,
+      party_id: pr.supplierId && pr.supplierId.length === 36 ? pr.supplierId : null,
+      invoice_number: newPR.returnNumber,
+      invoice_type: 'purchase_return',
+      fiscal_year: fiscalYear,
+      invoice_date_ad: dateStr,
+      invoice_date_bs: bs.formatted,
+      subtotal: newPR.totalAmount,
+      total_amount: newPR.totalAmount,
+      paid_amount: newPR.refundAmount || 0,
+      due_amount: 0,
+      payment_mode: 'cash',
+      status: 'paid',
+      notes: pr.reason || null,
+    });
+
+    if (pr.items && pr.items.length > 0) {
+      const itemsToInsert = pr.items.map((it) => ({
+        id: generateUUID(),
+        invoice_id: newPR.id,
+        item_name: it.itemName,
+        quantity: it.quantity || 1,
+        unit_price: it.costPrice || 0,
+        total_amount: it.totalAmount || (it.quantity || 1) * (it.costPrice || 0),
+      }));
+      await supabase.from('invoice_items').insert(itemsToInsert);
+    }
+
     return newPR;
   };
 
@@ -1333,6 +2061,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (pay.accountId) {
       await withdrawMoney(pay.accountId, pay.amount, 'Vendor Payment Out', pay.notes, pay.date);
     }
+
+    const dateStr = pay.date || new Date().toISOString().split('T')[0];
+    const bs = adToBs(new Date(dateStr));
+
+    await supabase.from('payments').insert({
+      id: newP.id,
+      business_id: activeBizId,
+      party_id: pay.partyId && pay.partyId.length === 36 ? pay.partyId : null,
+      payment_mode: toValidPaymentMode(pay.paymentMode),
+      amount: pay.amount,
+      payment_metadata: {
+        type: 'out',
+        party_name: pay.partyName,
+        account_id: pay.accountId,
+        notes: pay.notes,
+      },
+      payment_date_ad: dateStr,
+      payment_date_bs: bs.formatted,
+    });
+
     return newP;
   };
 
@@ -1340,12 +2088,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const addStaffMember = async (newStaff: Omit<StaffMember, 'id'>) => {
     const member: StaffMember = {
       ...newStaff,
-      id: 'staff-' + Date.now(),
+      id: generateUUID(),
       createdAt: new Date().toISOString(),
     };
     const updated = [member, ...staffList];
     setStaffList(updated);
     await storage.set('staff_list', updated);
+
+    await supabase.from('staff').insert({
+      id: member.id,
+      business_id: activeBizId,
+      name: member.name,
+      phone: member.phone || '',
+      email: member.email || '',
+      role: member.role,
+      permissions: member.permissions || {},
+      is_active: member.isActive ?? true,
+    });
+
     return member;
   };
 
@@ -1353,12 +2113,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const updated = staffList.map((s) => (s.id === id ? { ...s, ...updates } : s));
     setStaffList(updated);
     await storage.set('staff_list', updated);
+
+    const payload: any = {};
+    if (updates.name !== undefined) payload.name = updates.name;
+    if (updates.phone !== undefined) payload.phone = updates.phone;
+    if (updates.email !== undefined) payload.email = updates.email;
+    if (updates.role !== undefined) payload.role = updates.role;
+    if (updates.permissions !== undefined) payload.permissions = updates.permissions;
+    if (updates.isActive !== undefined) payload.is_active = updates.isActive;
+
+    if (Object.keys(payload).length > 0) {
+      await supabase.from('staff').update(payload).eq('id', id);
+    }
   };
 
   const deleteStaffMember = async (id: string) => {
     const updated = staffList.filter((s) => s.id !== id);
     setStaffList(updated);
     await storage.set('staff_list', updated);
+
+    await supabase.from('staff').delete().eq('id', id);
   };
 
   const resetAllData = async () => {

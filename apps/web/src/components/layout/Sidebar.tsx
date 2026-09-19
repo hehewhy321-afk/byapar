@@ -84,7 +84,6 @@ export const Sidebar: Component = () => {
     { label: 'Business Cards', tab: 'business-cards' as ActiveTab, icon: IconBusinessCard },
     { label: 'Greeting Cards', tab: 'greeting-cards' as ActiveTab, icon: IconGreetingCards },
     { label: 'Reminders', tab: 'reminders' as ActiveTab, icon: IconReminders },
-    { label: 'Bill Gallery', tab: 'bill-gallery' as ActiveTab, icon: IconBillGallery },
     { label: 'Notebook', tab: 'notebook' as ActiveTab, icon: IconNotebook },
   ];
 
@@ -209,6 +208,27 @@ export const Sidebar: Component = () => {
             onNavigate={closeMobileSidebar}
           />
           <NavItem
+            icon={IconBillGallery}
+            label="Bill Gallery"
+            tab="bill-gallery"
+            isCollapsed={isSidebarCollapsed() && !isMobileSidebarOpen()}
+            onNavigate={closeMobileSidebar}
+          />
+          <NavItem
+            icon={IconExpense}
+            label="Expenses"
+            tab="expense"
+            isCollapsed={isSidebarCollapsed() && !isMobileSidebarOpen()}
+            onNavigate={closeMobileSidebar}
+          />
+          <NavItem
+            icon={IconIncome}
+            label="Income"
+            tab="income"
+            isCollapsed={isSidebarCollapsed() && !isMobileSidebarOpen()}
+            onNavigate={closeMobileSidebar}
+          />
+          <NavItem
             icon={IconAccounts}
             label="Manage Accounts"
             tab="accounts"
@@ -234,19 +254,6 @@ export const Sidebar: Component = () => {
           <Show when={!isSidebarCollapsed() || isMobileSidebarOpen()}>
             <div class="nav-section">Others</div>
           </Show>
-          <button
-            class={`nav-item w-full ${isSidebarCollapsed() && !isMobileSidebarOpen() ? 'justify-center !px-0' : ''}`}
-            title={isSidebarCollapsed() && !isMobileSidebarOpen() ? 'Refer & Win' : undefined}
-            onClick={() => {
-              setActiveTab('business-cards');
-              closeMobileSidebar();
-            }}
-          >
-            <IconGift class="w-[18px] h-[18px] shrink-0" />
-            <Show when={!isSidebarCollapsed() || isMobileSidebarOpen()}>
-              <span>Refer & Win</span>
-            </Show>
-          </button>
 
           {/* Useful Tools - Collapsible / Flyout */}
           <Show

@@ -167,7 +167,7 @@ export const ChangePasswordModal: Component = () => {
                 <input
                   type={showNew() ? 'text' : 'password'}
                   required
-                  minLength={6}
+                  minlength={6}
                   value={newPassword()}
                   onInput={(e) => setNewPassword(e.currentTarget.value)}
                   placeholder="At least 6 characters"
@@ -197,7 +197,7 @@ export const ChangePasswordModal: Component = () => {
                 <input
                   type={showConfirm() ? 'text' : 'password'}
                   required
-                  minLength={6}
+                  minlength={6}
                   value={confirmPassword()}
                   onInput={(e) => setConfirmPassword(e.currentTarget.value)}
                   placeholder="Re-enter new password"

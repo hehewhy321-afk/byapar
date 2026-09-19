@@ -45,6 +45,20 @@ export default {
         'card-hover': '0 4px 12px 0 rgba(0, 0, 0, 0.08)',
         'sidebar': '2px 0 8px rgba(0, 0, 0, 0.04)',
       },
+      keyframes: {
+        float: {
+          '0%, 100%': { transform: 'translateY(0)' },
+          '50%': { transform: 'translateY(-20px)' },
+        },
+        'float-delayed': {
+          '0%, 100%': { transform: 'translateY(0)' },
+          '50%': { transform: 'translateY(20px)' },
+        }
+      },
+      animation: {
+        'float': 'float 6s ease-in-out infinite',
+        'float-delayed': 'float-delayed 8s ease-in-out infinite',
+      },
     },
   },
   plugins: [],

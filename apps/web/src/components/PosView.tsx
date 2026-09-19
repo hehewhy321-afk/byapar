@@ -58,9 +58,9 @@ export const PosView: Component = () => {
   const setExactTender = () => setTenderCash(cartTotal());
   const addTender = (amt: number) => setTenderCash((c) => c + amt);
 
-  const handleCashCheckout = () => {
+  const handleCashCheckout = async () => {
     if (cart.length === 0) return;
-    const inv = checkoutInvoice({
+    const inv = await checkoutInvoice({
       paymentMode: 'cash',
       partyId: selectedPartyId() || undefined,
       paidAmount: cartTotal(),
@@ -69,13 +69,13 @@ export const PosView: Component = () => {
     setTenderCash(0);
   };
 
-  const handleCreditCheckout = () => {
+  const handleCreditCheckout = async () => {
     if (cart.length === 0) return;
     if (!selectedPartyId()) {
       alert('Please select a customer for credit sales!');
       return;
     }
-    const inv = checkoutInvoice({
+    const inv = await checkoutInvoice({
       paymentMode: 'credit',
       partyId: selectedPartyId(),
       paidAmount: 0,
@@ -89,9 +89,9 @@ export const PosView: Component = () => {
     setShowFonepayModal(true);
   };
 
-  const handleFonepaySuccess = () => {
+  const handleFonepaySuccess = async () => {
     setShowFonepayModal(false);
-    const inv = checkoutInvoice({
+    const inv = await checkoutInvoice({
       paymentMode: 'fonepay_qr',
       partyId: selectedPartyId() || undefined,
       paidAmount: cartTotal(),

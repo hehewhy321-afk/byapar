@@ -124,12 +124,12 @@ export function StaffView() {
       <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <div class="flex items-center gap-2">
-            <div class="p-2 rounded-lg bg-purple-500/10 text-purple-400 border border-purple-500/20">
+            <div class="p-2 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
               <IconStaff class="w-6 h-6" />
             </div>
-            <h1 class="text-2xl font-bold text-white tracking-tight">Staff Management</h1>
+            <h1 class="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">Staff Management</h1>
           </div>
-          <p class="text-sm text-neutral-400 mt-1">
+          <p class="text-sm text-gray-500 dark:text-neutral-400 mt-1">
             Manage team members, assign operational roles, and configure granular access permissions.
           </p>
         </div>
@@ -145,13 +145,13 @@ export function StaffView() {
 
       {/* Search Input Bar */}
       <div class="relative">
-        <IconSearch class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" />
+        <IconSearch class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-neutral-500" />
         <input
           type="text"
           placeholder="Search staff by name, role, phone..."
           value={searchTerm()}
           onInput={(e) => setSearchTerm(e.currentTarget.value)}
-          class="w-full pl-10 pr-4 py-2.5 bg-neutral-950 border border-neutral-800 rounded-xl text-white placeholder-neutral-500 focus:outline-none focus:border-purple-500/50 text-sm transition-all"
+          class="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-neutral-950 border border-gray-200 dark:border-neutral-800 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-neutral-500 focus:outline-none focus:border-purple-500/50 text-sm transition-all shadow-sm"
         />
       </div>
 
@@ -160,10 +160,10 @@ export function StaffView() {
         <For
           each={filteredStaff()}
           fallback={
-            <div class="col-span-full py-16 text-center text-neutral-500 bg-neutral-950 border border-neutral-800 rounded-2xl">
-              <IconStaff class="w-12 h-12 mx-auto text-neutral-600 mb-3" />
-              <p class="text-base font-medium text-neutral-400">No staff members found</p>
-              <p class="text-xs text-neutral-500 mt-1">
+            <div class="col-span-full py-16 text-center text-gray-400 dark:text-neutral-500 bg-white dark:bg-neutral-950 border border-gray-200 dark:border-neutral-800 rounded-2xl shadow-sm">
+              <IconStaff class="w-12 h-12 mx-auto text-gray-300 dark:text-neutral-600 mb-3" />
+              <p class="text-base font-medium text-gray-600 dark:text-neutral-400">No staff members found</p>
+              <p class="text-xs text-gray-400 dark:text-neutral-500 mt-1">
                 Click "Add New Staff" to register team members and set permissions.
               </p>
             </div>
@@ -172,12 +172,12 @@ export function StaffView() {
           {(member) => {
             const activePermCount = Object.values(member.permissions || {}).filter(Boolean).length;
             return (
-              <div class="bg-neutral-950 border border-neutral-800 hover:border-neutral-700 rounded-2xl p-5 space-y-4 transition-all flex flex-col justify-between">
+              <div class="bg-white dark:bg-neutral-950 border border-gray-200 dark:border-neutral-800 hover:border-purple-300 dark:hover:border-neutral-700 rounded-2xl p-5 space-y-4 shadow-sm hover:shadow transition-all flex flex-col justify-between">
                 <div>
                   <div class="flex items-start justify-between">
                     <div>
-                      <h3 class="text-base font-bold text-white">{member.name}</h3>
-                      <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium uppercase tracking-wide bg-purple-500/10 text-purple-400 border border-purple-500/20 mt-1.5">
+                      <h3 class="text-base font-bold text-gray-900 dark:text-white">{member.name}</h3>
+                      <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium uppercase tracking-wide bg-purple-50 dark:bg-purple-500/10 text-purple-700 dark:text-purple-400 border border-purple-200 dark:border-purple-500/20 mt-1.5">
                         {member.role}
                       </span>
                     </div>
@@ -185,7 +185,7 @@ export function StaffView() {
                     <div class="flex items-center gap-1">
                       <button
                         onClick={() => openEditModal(member)}
-                        class="p-1.5 text-neutral-400 hover:text-white rounded-lg hover:bg-neutral-900 transition-colors"
+                        class="p-1.5 text-gray-400 hover:text-gray-700 dark:text-neutral-400 dark:hover:text-white rounded-lg hover:bg-gray-100 dark:hover:bg-neutral-900 transition-colors"
                         title="Edit Staff & Permissions"
                       >
                         <IconEdit class="w-4 h-4" />
@@ -196,7 +196,7 @@ export function StaffView() {
                             deleteStaffMember(member.id);
                           }
                         }}
-                        class="p-1.5 text-neutral-400 hover:text-rose-400 rounded-lg hover:bg-neutral-900 transition-colors"
+                        class="p-1.5 text-gray-400 hover:text-rose-600 dark:text-neutral-400 dark:hover:text-rose-400 rounded-lg hover:bg-gray-100 dark:hover:bg-neutral-900 transition-colors"
                         title="Delete Staff"
                       >
                         <IconTrash class="w-4 h-4" />
@@ -204,7 +204,7 @@ export function StaffView() {
                     </div>
                   </div>
 
-                  <div class="space-y-1 mt-3 text-xs text-neutral-400">
+                  <div class="space-y-1 mt-3 text-xs text-gray-500 dark:text-neutral-400">
                     <Show when={member.phone}>
                       <div>📱 {member.phone}</div>
                     </Show>
@@ -214,14 +214,14 @@ export function StaffView() {
                   </div>
                 </div>
 
-                <div class="pt-3 border-t border-neutral-800 flex items-center justify-between text-xs">
-                  <div class="flex items-center gap-1 text-neutral-400">
-                    <IconLock class="w-3.5 h-3.5 text-purple-400" />
+                <div class="pt-3 border-t border-gray-100 dark:border-neutral-800 flex items-center justify-between text-xs">
+                  <div class="flex items-center gap-1 text-gray-500 dark:text-neutral-400">
+                    <IconLock class="w-3.5 h-3.5 text-purple-500 dark:text-purple-400" />
                     <span>{activePermCount} permissions enabled</span>
                   </div>
                   <button
                     onClick={() => openEditModal(member)}
-                    class="text-purple-400 hover:text-purple-300 font-medium"
+                    class="text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 font-medium"
                   >
                     Modify
                   </button>
@@ -234,20 +234,20 @@ export function StaffView() {
 
       {/* MODAL: Add / Edit Staff & Granular Permissions */}
       <Show when={showAddModal()}>
-        <div class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div class="bg-neutral-950 border border-neutral-800 rounded-2xl w-full max-w-3xl p-6 space-y-5 shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div class="flex items-center justify-between border-b border-neutral-800 pb-3">
+        <div class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div class="bg-white dark:bg-neutral-950 border border-gray-200 dark:border-neutral-800 rounded-2xl w-full max-w-3xl p-6 space-y-5 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between border-b border-gray-200 dark:border-neutral-800 pb-3">
               <div>
-                <h2 class="text-lg font-bold text-white">
+                <h2 class="text-lg font-bold text-gray-900 dark:text-white">
                   {editingStaffId() ? 'Edit Staff & Permissions' : 'Add New Staff'}
                 </h2>
-                <p class="text-xs text-neutral-400">
+                <p class="text-xs text-gray-500 dark:text-neutral-400">
                   Select role preset or toggle individual permissions across all 14 categories.
                 </p>
               </div>
               <button
                 onClick={() => setShowAddModal(false)}
-                class="text-neutral-400 hover:text-white text-xl"
+                class="text-gray-400 hover:text-gray-600 dark:text-neutral-400 dark:hover:text-white text-xl"
               >
                 ✕
               </button>
@@ -257,23 +257,23 @@ export function StaffView() {
               {/* Basic Info */}
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label class="block text-xs text-neutral-400 mb-1">Staff Name *</label>
+                  <label class="block text-xs text-gray-600 dark:text-neutral-400 mb-1">Staff Name *</label>
                   <input
                     type="text"
                     required
                     value={staffName()}
                     onInput={(e) => setStaffName(e.currentTarget.value)}
                     placeholder="e.g. Ramesh Thapa"
-                    class="w-full px-3 py-2 bg-neutral-900 border border-neutral-800 rounded-lg text-white text-sm focus:outline-none focus:border-purple-500"
+                    class="w-full px-3 py-2 bg-gray-50 dark:bg-neutral-900 border border-gray-300 dark:border-neutral-800 rounded-lg text-gray-900 dark:text-white text-sm focus:outline-none focus:border-purple-500"
                   />
                 </div>
 
                 <div>
-                  <label class="block text-xs text-neutral-400 mb-1">Select Role *</label>
+                  <label class="block text-xs text-gray-600 dark:text-neutral-400 mb-1">Select Role *</label>
                   <select
                     value={staffRole()}
                     onChange={(e) => handleRoleChange(e.currentTarget.value as StaffRole)}
-                    class="w-full px-3 py-2 bg-neutral-900 border border-neutral-800 rounded-lg text-white text-sm focus:outline-none focus:border-purple-500"
+                    class="w-full px-3 py-2 bg-gray-50 dark:bg-neutral-900 border border-gray-300 dark:border-neutral-800 rounded-lg text-gray-900 dark:text-white text-sm focus:outline-none focus:border-purple-500"
                   >
                     <For each={STAFF_ROLES}>
                       {(r) => <option value={r}>{r}</option>}
@@ -282,36 +282,36 @@ export function StaffView() {
                 </div>
 
                 <div>
-                  <label class="block text-xs text-neutral-400 mb-1">Phone Number</label>
+                  <label class="block text-xs text-gray-600 dark:text-neutral-400 mb-1">Phone Number</label>
                   <input
                     type="text"
                     value={staffPhone()}
                     onInput={(e) => setStaffPhone(e.currentTarget.value)}
                     placeholder="98XXXXXXXX"
-                    class="w-full px-3 py-2 bg-neutral-900 border border-neutral-800 rounded-lg text-white text-sm focus:outline-none focus:border-purple-500"
+                    class="w-full px-3 py-2 bg-gray-50 dark:bg-neutral-900 border border-gray-300 dark:border-neutral-800 rounded-lg text-gray-900 dark:text-white text-sm focus:outline-none focus:border-purple-500"
                   />
                 </div>
 
                 <div>
-                  <label class="block text-xs text-neutral-400 mb-1">Email Address</label>
+                  <label class="block text-xs text-gray-600 dark:text-neutral-400 mb-1">Email Address</label>
                   <input
                     type="email"
                     value={staffEmail()}
                     onInput={(e) => setStaffEmail(e.currentTarget.value)}
                     placeholder="staff@kirana.np"
-                    class="w-full px-3 py-2 bg-neutral-900 border border-neutral-800 rounded-lg text-white text-sm focus:outline-none focus:border-purple-500"
+                    class="w-full px-3 py-2 bg-gray-50 dark:bg-neutral-900 border border-gray-300 dark:border-neutral-800 rounded-lg text-gray-900 dark:text-white text-sm focus:outline-none focus:border-purple-500"
                   />
                 </div>
               </div>
 
               {/* Granular Permissions Section */}
               <div class="space-y-4 pt-2">
-                <div class="flex items-center justify-between border-b border-neutral-800 pb-2">
+                <div class="flex items-center justify-between border-b border-gray-200 dark:border-neutral-800 pb-2">
                   <div>
-                    <h3 class="text-sm font-bold text-white uppercase tracking-wider">
+                    <h3 class="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">
                       Manage Permissions ({staffRole()} Permissions)
                     </h3>
-                    <p class="text-xs text-neutral-400">
+                    <p class="text-xs text-gray-500 dark:text-neutral-400">
                       You can view or modify the staff permission access below:
                     </p>
                   </div>
@@ -323,14 +323,14 @@ export function StaffView() {
                         PERMISSION_GROUPS.forEach((g) => g.permissions.forEach((p) => (all[p.id] = true)));
                         setPermissionsState(all);
                       }}
-                      class="px-2.5 py-1 text-xs bg-neutral-900 hover:bg-neutral-800 text-neutral-300 rounded border border-neutral-800"
+                      class="px-2.5 py-1 text-xs bg-gray-100 hover:bg-gray-200 dark:bg-neutral-900 dark:hover:bg-neutral-800 text-gray-700 dark:text-neutral-300 rounded border border-gray-200 dark:border-neutral-800 transition-colors"
                     >
                       Select All
                     </button>
                     <button
                       type="button"
                       onClick={() => setPermissionsState({})}
-                      class="px-2.5 py-1 text-xs bg-neutral-900 hover:bg-neutral-800 text-neutral-300 rounded border border-neutral-800"
+                      class="px-2.5 py-1 text-xs bg-gray-100 hover:bg-gray-200 dark:bg-neutral-900 dark:hover:bg-neutral-800 text-gray-700 dark:text-neutral-300 rounded border border-gray-200 dark:border-neutral-800 transition-colors"
                     >
                       Deselect All
                     </button>
@@ -345,22 +345,24 @@ export function StaffView() {
                       const someChecked = group.permissions.some((p) => permissionsState()[p.id]);
 
                       return (
-                        <div class="bg-neutral-900/50 border border-neutral-800 rounded-xl p-3.5 space-y-2.5">
+                        <div class="bg-gray-50/70 dark:bg-neutral-900/50 border border-gray-200 dark:border-neutral-800 rounded-xl p-3.5 space-y-2.5">
                           <div class="flex items-center justify-between">
                             <label class="flex items-center gap-2.5 cursor-pointer select-none">
                               <input
                                 type="checkbox"
                                 checked={allChecked}
-                                indeterminate={someChecked && !allChecked}
+                                ref={(el) => {
+                                  el.indeterminate = someChecked && !allChecked;
+                                }}
                                 onChange={(e) => toggleGroupAll(group.id, e.currentTarget.checked)}
-                                class="w-4 h-4 rounded bg-neutral-950 border-neutral-700 text-purple-600 focus:ring-purple-500 focus:ring-offset-neutral-900"
+                                class="w-4 h-4 rounded bg-white dark:bg-neutral-950 border-gray-300 dark:border-neutral-700 text-purple-600 focus:ring-purple-500 focus:ring-offset-gray-100 dark:focus:ring-offset-neutral-900"
                               />
-                              <span class="text-xs font-bold text-neutral-200 tracking-wide">
+                              <span class="text-xs font-bold text-gray-800 dark:text-neutral-200 tracking-wide">
                                 {group.name}
                               </span>
                             </label>
 
-                            <span class="text-xs text-neutral-500 font-mono">
+                            <span class="text-xs text-gray-500 dark:text-neutral-500 font-mono">
                               {group.permissions.filter((p) => permissionsState()[p.id]).length} / {group.permissions.length}
                             </span>
                           </div>
@@ -368,14 +370,14 @@ export function StaffView() {
                           <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 pl-6 pt-1">
                             <For each={group.permissions}>
                               {(perm) => (
-                                <label class="flex items-center gap-2 cursor-pointer select-none py-1 hover:text-white transition-colors">
+                                <label class="flex items-center gap-2 cursor-pointer select-none py-1 text-gray-600 dark:text-neutral-300 hover:text-gray-900 dark:hover:text-white transition-colors">
                                   <input
                                     type="checkbox"
                                     checked={!!permissionsState()[perm.id]}
                                     onChange={() => togglePermission(perm.id)}
-                                    class="w-3.5 h-3.5 rounded bg-neutral-950 border-neutral-700 text-purple-600 focus:ring-purple-500 focus:ring-offset-neutral-900"
+                                    class="w-3.5 h-3.5 rounded bg-white dark:bg-neutral-950 border-gray-300 dark:border-neutral-700 text-purple-600 focus:ring-purple-500 focus:ring-offset-gray-100 dark:focus:ring-offset-neutral-900"
                                   />
-                                  <span class="text-xs text-neutral-300">{perm.label}</span>
+                                  <span class="text-xs">{perm.label}</span>
                                 </label>
                               )}
                             </For>
@@ -388,11 +390,11 @@ export function StaffView() {
               </div>
 
               {/* Form Buttons */}
-              <div class="flex justify-end gap-3 pt-3 border-t border-neutral-800">
+              <div class="flex justify-end gap-3 pt-3 border-t border-gray-200 dark:border-neutral-800">
                 <button
                   type="button"
                   onClick={() => setShowAddModal(false)}
-                  class="px-4 py-2 bg-neutral-900 hover:bg-neutral-800 text-neutral-300 rounded-lg text-sm"
+                  class="px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-neutral-900 dark:hover:bg-neutral-800 text-gray-700 dark:text-neutral-300 rounded-lg text-sm transition-colors"
                 >
                   Cancel
                 </button>

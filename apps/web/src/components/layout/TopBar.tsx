@@ -218,7 +218,7 @@ export const TopBar: Component = () => {
               <div class="absolute right-0 top-full mt-1 w-56 bg-white dark:bg-black rounded-2xl shadow-2xl border border-gray-100 dark:border-neutral-800 py-2 animate-fade-in z-50">
                 <div class="px-3.5 py-2 border-b border-gray-100 dark:border-neutral-800">
                   <p class="text-xs font-bold text-gray-900 dark:text-white truncate">
-                    {currentUser()?.businessName || currentBusiness.name}
+                    {currentUser()?.businessName || currentUser()?.name || currentBusiness.name}
                   </p>
                   <p class="text-[11px] text-gray-400 dark:text-neutral-500 truncate">
                     {currentUser()?.email || 'PAN: ' + currentBusiness.pan}
@@ -233,18 +233,7 @@ export const TopBar: Component = () => {
                   }}
                 >
                   <IconUser class="w-4 h-4 text-gray-400 dark:text-neutral-400" />
-                  <span>Store Profile</span>
-                </button>
-
-                <button
-                  class="w-full text-left px-3.5 py-2 text-xs text-gray-700 dark:text-neutral-300 hover:bg-gray-50 dark:hover:bg-neutral-900 transition-colors flex items-center gap-2.5"
-                  onClick={() => {
-                    setProfileOpen(false);
-                    setShowSubscriptionModal(true);
-                  }}
-                >
-                  <IconSparkles class="w-4 h-4 text-amber-500" />
-                  <span>Subscription Plan</span>
+                  <span>Store Profile & Details</span>
                 </button>
 
                 <Show when={currentUser()}>
@@ -258,32 +247,47 @@ export const TopBar: Component = () => {
                     <IconLock class="w-4 h-4 text-[#FF4500]" />
                     <span>Change Password</span>
                   </button>
-                </Show>
 
-                <button
-                  class="w-full text-left px-3.5 py-2 text-xs text-brand-600 dark:text-emerald-400 hover:bg-gray-50 dark:hover:bg-neutral-900 transition-colors flex items-center gap-2.5"
-                  onClick={() => {
-                    setProfileOpen(false);
-                    setShowAuthModal(true);
-                  }}
-                >
-                  <IconLock class="w-4 h-4 text-emerald-500" />
-                  <span>Switch Account / Sign In</span>
-                </button>
-
-                <div class="border-t border-gray-100 dark:border-neutral-800 mt-1 pt-1">
                   <button
-                    class="w-full text-left px-3.5 py-2 text-xs text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors flex items-center gap-2.5"
+                    class="w-full text-left px-3.5 py-2 text-xs text-gray-700 dark:text-neutral-300 hover:bg-gray-50 dark:hover:bg-neutral-900 transition-colors flex items-center gap-2.5"
                     onClick={() => {
                       setProfileOpen(false);
                       signOut();
                       setShowAuthModal(true);
                     }}
                   >
-                    <IconLogOut class="w-4 h-4 text-red-500" />
-                    <span>Sign Out</span>
+                    <IconUser class="w-4 h-4 text-brand-500" />
+                    <span>Switch Account</span>
                   </button>
-                </div>
+                </Show>
+
+                <Show when={!currentUser()}>
+                  <button
+                    class="w-full text-left px-3.5 py-2 text-xs text-brand-600 dark:text-emerald-400 hover:bg-gray-50 dark:hover:bg-neutral-900 transition-colors flex items-center gap-2.5"
+                    onClick={() => {
+                      setProfileOpen(false);
+                      setShowAuthModal(true);
+                    }}
+                  >
+                    <IconLock class="w-4 h-4 text-emerald-500" />
+                    <span>Sign In / Register</span>
+                  </button>
+                </Show>
+
+                <Show when={currentUser()}>
+                  <div class="border-t border-gray-100 dark:border-neutral-800 mt-1 pt-1">
+                    <button
+                      class="w-full text-left px-3.5 py-2 text-xs text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors flex items-center gap-2.5"
+                      onClick={() => {
+                        setProfileOpen(false);
+                        signOut();
+                      }}
+                    >
+                      <IconLogOut class="w-4 h-4 text-red-500" />
+                      <span>Sign Out</span>
+                    </button>
+                  </div>
+                </Show>
               </div>
             </Show>
           </div>

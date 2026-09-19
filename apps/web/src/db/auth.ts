@@ -115,7 +115,8 @@ export async function syncUserBusiness(user: User): Promise<AuthUser> {
 
   // Sync with localDb to update currentBusiness and hydrate real cloud data
   import('./localDb').then(({ setCurrentBusiness, syncFromCloud, initRealtimeSync }) => {
-    setCurrentBusiness({
+    setCurrentBusiness((prev) => ({
+      ...prev,
       id: businessId,
       name: businessName,
       nameEn: businessName,
@@ -125,7 +126,7 @@ export async function syncUserBusiness(user: User): Promise<AuthUser> {
       address: address,
       businessType: businessType,
       isVatRegistered: !!pan,
-    });
+    }));
     syncFromCloud();
     initRealtimeSync();
   });

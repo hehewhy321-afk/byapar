@@ -148,7 +148,11 @@ export const InventoryScreen: React.FC = () => {
                 </View>
 
                 <View style={styles.bodyRow}>
-                  <View style={styles.infoCol}>
+                  <AnimatedPressable
+                    style={styles.infoCol}
+                    onPress={() => handleOpenEdit(item)}
+                    activeScale={0.98}
+                  >
                     <Text style={styles.productName} numberOfLines={1}>
                       {item.name}
                     </Text>
@@ -160,7 +164,7 @@ export const InventoryScreen: React.FC = () => {
                         Cost: Rs. {item.costPrice.toLocaleString()}
                       </Text>
                     </View>
-                  </View>
+                  </AnimatedPressable>
 
                   {/* QUICK ADJUST STEPPER */}
                   <View style={styles.stepperContainer}>

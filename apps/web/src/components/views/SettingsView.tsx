@@ -7,9 +7,10 @@ import {
   setActiveTab,
   setShowChangePasswordModal,
   setShowAuthModal,
+  setShowProfileModal,
 } from '../../db/localDb';
 import { currentUser } from '../../db/auth';
-import { IconShield, IconLock } from '../icons';
+import { IconShield, IconLock, IconStore, IconEdit } from '../icons';
 
 export const SettingsView: Component = () => {
   const toggleCalendar = () => {
@@ -102,23 +103,39 @@ export const SettingsView: Component = () => {
 
         {/* Business Profile */}
         <div class="stat-card">
-          <h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-3">Business Profile</h3>
+          <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center gap-2">
+              <IconStore class="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+              <h3 class="text-sm font-semibold text-gray-900 dark:text-white">Business Profile</h3>
+            </div>
+            <button
+              class="px-3 py-1 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 hover:bg-neutral-50 dark:hover:bg-neutral-800 text-brand-600 dark:text-emerald-400 text-xs font-semibold shadow-sm transition flex items-center gap-1.5"
+              onClick={() => setShowProfileModal(true)}
+            >
+              <IconEdit class="w-3.5 h-3.5" />
+              <span>Edit Store Details</span>
+            </button>
+          </div>
           <div class="space-y-2 text-sm">
             <div class="flex justify-between py-1.5">
-              <span class="text-gray-500 dark:text-neutral-400">Business Name</span>
-              <span class="text-gray-900 dark:text-white font-medium">{currentBusiness.nameEn}</span>
+              <span class="text-gray-500 dark:text-neutral-400">Store / Business Name</span>
+              <span class="text-gray-900 dark:text-white font-medium">{currentBusiness.nameEn || currentBusiness.name}</span>
             </div>
             <div class="flex justify-between py-1.5 border-t border-gray-100 dark:border-neutral-800">
-              <span class="text-gray-500 dark:text-neutral-400">PAN Number</span>
-              <span class="text-gray-900 dark:text-white font-medium font-mono">{currentBusiness.pan}</span>
+              <span class="text-gray-500 dark:text-neutral-400">Owner Name</span>
+              <span class="text-gray-900 dark:text-white font-medium">{currentBusiness.ownerName || 'Store Owner'}</span>
+            </div>
+            <div class="flex justify-between py-1.5 border-t border-gray-100 dark:border-neutral-800">
+              <span class="text-gray-500 dark:text-neutral-400">PAN / VAT Number</span>
+              <span class="text-gray-900 dark:text-white font-medium font-mono">{currentBusiness.pan || 'N/A'}</span>
             </div>
             <div class="flex justify-between py-1.5 border-t border-gray-100 dark:border-neutral-800">
               <span class="text-gray-500 dark:text-neutral-400">Address</span>
-              <span class="text-gray-900 dark:text-white font-medium">{currentBusiness.address}</span>
+              <span class="text-gray-900 dark:text-white font-medium">{currentBusiness.address || 'N/A'}</span>
             </div>
             <div class="flex justify-between py-1.5 border-t border-gray-100 dark:border-neutral-800">
               <span class="text-gray-500 dark:text-neutral-400">Phone</span>
-              <span class="text-gray-900 dark:text-white font-medium font-mono">{currentBusiness.phone}</span>
+              <span class="text-gray-900 dark:text-white font-medium font-mono">{currentBusiness.phone || 'N/A'}</span>
             </div>
           </div>
         </div>

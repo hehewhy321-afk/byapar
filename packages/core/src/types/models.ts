@@ -54,6 +54,7 @@ export interface Item {
   sellingPrice: number;
   wholesalePrice?: number;
   purchaseCost?: number;
+  costPrice?: number;
   currentStock: number;
   lowStockThreshold: number;
   taxRate: number; // 0 or 13 (VAT)

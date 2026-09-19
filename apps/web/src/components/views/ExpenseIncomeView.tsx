@@ -1,10 +1,11 @@
 import { Component, createSignal, createMemo, For, Show } from 'solid-js';
 import {
   expenses,
-  setExpenses,
   incomes,
-  setIncomes,
-  persistState,
+  addExpense,
+  deleteExpense,
+  addIncome,
+  deleteIncome,
   setActiveTab,
   type ExpenseRecord,
   type IncomeRecord,
@@ -47,47 +48,37 @@ export const ExpenseIncomeView: Component<ExpenseIncomeViewProps> = (props) => {
     return records().reduce((sum, r) => sum + r.amount, 0);
   });
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     if (!formCategory() || !formAmount()) return;
 
     if (isExpense()) {
-      const rec: ExpenseRecord = {
-        id: crypto.randomUUID(),
+      await addExpense({
         category: formCategory(),
         amount: formAmount(),
         paymentMode: formPaymentMode(),
         date: formDate(),
         note: formNote() || undefined,
-        createdAt: new Date().toISOString(),
-      };
-      setExpenses((draft) => { draft.unshift(rec); });
+      });
     } else {
-      const rec: IncomeRecord = {
-        id: crypto.randomUUID(),
+      await addIncome({
         source: formCategory(),
         amount: formAmount(),
         paymentMode: formPaymentMode(),
         date: formDate(),
         note: formNote() || undefined,
-        createdAt: new Date().toISOString(),
-      };
-      setIncomes((draft) => { draft.unshift(rec); });
+      });
     }
 
-    persistState();
     resetForm();
     setShowModal(false);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (isExpense()) {
-      const idx = expenses.findIndex((e) => e.id === id);
-      if (idx >= 0) setExpenses((d) => { d.splice(idx, 1); });
+      await deleteExpense(id);
     } else {
-      const idx = incomes.findIndex((i) => i.id === id);
-      if (idx >= 0) setIncomes((d) => { d.splice(idx, 1); });
+      await deleteIncome(id);
     }
-    persistState();
   };
 
   const resetForm = () => {

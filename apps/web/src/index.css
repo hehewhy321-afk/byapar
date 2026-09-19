@@ -143,3 +143,133 @@
 .animate-slide-in {
   animation: slideInLeft 0.2s ease-out;
 }
+
+/* 3D and High-End Landing Page Animations */
+@keyframes float3d {
+  0%, 100% {
+    transform: translateY(0px) rotateX(4deg) rotateY(-6deg);
+  }
+  50% {
+    transform: translateY(-14px) rotateX(7deg) rotateY(-3deg);
+  }
+}
+
+@keyframes floatReverse3d {
+  0%, 100% {
+    transform: translateY(0px) rotateX(-4deg) rotateY(6deg);
+  }
+  50% {
+    transform: translateY(12px) rotateX(-7deg) rotateY(3deg);
+  }
+}
+
+@keyframes glowPulse {
+  0%, 100% {
+    opacity: 0.4;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.08);
+  }
+}
+
+@keyframes gradientShift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.animate-float-3d {
+  animation: float3d 7s ease-in-out infinite;
+  transform-style: preserve-3d;
+}
+
+.animate-float-reverse-3d {
+  animation: floatReverse3d 8s ease-in-out infinite;
+  transform-style: preserve-3d;
+}
+
+.animate-glow-pulse {
+  animation: glowPulse 5s ease-in-out infinite;
+}
+
+.animate-gradient-shift {
+  background-size: 200% 200%;
+  animation: gradientShift 6s ease infinite;
+}
+
+.perspective-1200 {
+  perspective: 1200px;
+}
+
+.perspective-1500 {
+  perspective: 1500px;
+}
+
+.perspective-2000 {
+  perspective: 2000px;
+}
+
+.preserve-3d {
+  transform-style: preserve-3d;
+}
+
+.backface-hidden {
+  backface-visibility: hidden;
+}
+
+/* Minimalist Dot Grid Background */
+.dot-grid-dark {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.dot-grid-light {
+  background-image: radial-gradient(rgba(0, 0, 0, 0.06) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* Subtle Orange Accent Glow */
+@keyframes orangeGlowPulse {
+  0%, 100% {
+    box-shadow: 0 0 25px rgba(255, 69, 0, 0.15);
+  }
+  50% {
+    box-shadow: 0 0 50px rgba(255, 69, 0, 0.35);
+  }
+}
+
+.animate-orange-glow {
+  animation: orangeGlowPulse 4s ease-in-out infinite;
+}
+
+/* Thermal Receipt Spool Animation */
+@keyframes receiptSpool {
+  0% {
+    max-height: 0;
+    opacity: 0;
+    transform: translateY(-16px) scaleY(0.9);
+  }
+  60% {
+    opacity: 1;
+  }
+  100% {
+    max-height: 520px;
+    opacity: 1;
+    transform: translateY(0) scaleY(1);
+  }
+}
+
+.animate-receipt-spool {
+  animation: receiptSpool 0.75s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  transform-origin: top center;
+}
+
+/* Jagged / Perforated Receipt Bottom */
+.receipt-perforation {
+  background-image: radial-gradient(circle at 10px 0, transparent 6px, #ffffff 6.5px);
+  background-size: 16px 12px;
+  background-repeat: repeat-x;
+}
+
