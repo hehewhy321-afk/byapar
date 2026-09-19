@@ -69,7 +69,7 @@ const NavItem: Component<NavItemProps> = (props) => {
 };
 
 export const Sidebar: Component = () => {
-  const [toolsOpen, setToolsOpen] = createSignal(true);
+  const [toolsOpen, setToolsOpen] = createSignal(false);
   const [collapsedToolsOpen, setCollapsedToolsOpen] = createSignal(false);
 
   const storeInitials = () =>
@@ -305,7 +305,7 @@ export const Sidebar: Component = () => {
           >
             <button
               class={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 cursor-pointer w-full ${
-                toolsOpen()
+                usefulTools.some((t) => t.tab === activeTab())
                   ? 'bg-emerald-600 text-white shadow-sm'
                   : 'text-gray-600 dark:text-neutral-300 hover:bg-gray-50 dark:hover:bg-neutral-900 hover:text-gray-900 dark:hover:text-white'
               }`}

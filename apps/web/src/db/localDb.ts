@@ -267,10 +267,20 @@ export const [isOnline, setIsOnline] = createSignal<boolean>(true);
 export const [activeTab, setActiveTab] = createSignal<ActiveTab>('dashboard');
 export const [pricingTier, setPricingTier] = createSignal<'retail' | 'wholesale'>('retail');
 
-// Dark mode state
-export const [isDarkMode, setIsDarkMode] = createSignal<boolean>(
-  loadStored('theme', 'dark') === 'dark'
-);
+// Dark mode state - default to dark theme
+function initTheme(): boolean {
+  if (typeof window === 'undefined') return true;
+  const stored = localStorage.getItem('byapar_theme');
+  const isDark = stored ? stored === 'dark' : true;
+  if (isDark) {
+    document.documentElement.classList.add('dark');
+  } else {
+    document.documentElement.classList.remove('dark');
+  }
+  return isDark;
+}
+
+export const [isDarkMode, setIsDarkMode] = createSignal<boolean>(initTheme());
 
 export function toggleDarkMode() {
   const next = !isDarkMode();
@@ -1792,7 +1802,7 @@ export async function createQuotation(quotation: Omit<Quotation, 'id' | 'busines
   const now = new Date();
   const dateStr = quotation.date || now.toISOString().split('T')[0];
   const bs = adToBs(new Date(dateStr));
-  const fiscalYear = getNepaliFiscalYear(new Date(dateStr));
+  const fiscalYear = getNepaliFiscalYear(bs.formatted);
 
   const newQ: Quotation = {
     ...quotation,
@@ -1843,7 +1853,7 @@ export async function createSalesReturn(ret: Omit<SalesReturn, 'id' | 'businessI
   const now = new Date();
   const dateStr = ret.date || now.toISOString().split('T')[0];
   const bs = adToBs(new Date(dateStr));
-  const fiscalYear = getNepaliFiscalYear(new Date(dateStr));
+  const fiscalYear = getNepaliFiscalYear(bs.formatted);
 
   const newR: SalesReturn = {
     ...ret,
@@ -2044,7 +2054,7 @@ export async function createPurchaseReturn(ret: Omit<PurchaseReturn, 'id' | 'bus
   const now = new Date();
   const dateStr = ret.date || now.toISOString().split('T')[0];
   const bs = adToBs(new Date(dateStr));
-  const fiscalYear = getNepaliFiscalYear(new Date(dateStr));
+  const fiscalYear = getNepaliFiscalYear(bs.formatted);
 
   const newR: PurchaseReturn = {
     ...ret,
