@@ -87,6 +87,9 @@ export async function syncUserBusiness(user: User): Promise<AuthUser> {
         phone = biz.phone || phone;
         pan = biz.pan_vat_number || pan;
         address = biz.address_line || address;
+        if (biz.owner_name) {
+          name = biz.owner_name;
+        }
         if (biz.business_type) {
           businessType = biz.business_type as BusinessType;
         }
@@ -114,7 +117,7 @@ export async function syncUserBusiness(user: User): Promise<AuthUser> {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(authUser));
 
   // Sync with localDb to update currentBusiness and hydrate real cloud data
-  import('./localDb').then(({ setCurrentBusiness, syncFromCloud, initRealtimeSync }) => {
+  import('./localDb').then(({ currentBusiness, setCurrentBusiness, syncFromCloud, initRealtimeSync }) => {
     setCurrentBusiness((prev) => ({
       ...prev,
       id: businessId,
@@ -127,6 +130,7 @@ export async function syncUserBusiness(user: User): Promise<AuthUser> {
       businessType: businessType,
       isVatRegistered: !!pan,
     }));
+    localStorage.setItem('byapar_current_business', JSON.stringify(currentBusiness));
     syncFromCloud();
     initRealtimeSync();
   });

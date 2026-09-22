@@ -788,11 +788,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         .maybeSingle();
 
       if (dbBiz) {
+        let cloudOwner = dbBiz.owner_name;
+        if (!cloudOwner && user?.id) {
+          const { data: prof } = await supabase
+            .from('profiles')
+            .select('full_name')
+            .eq('id', user.id)
+            .maybeSingle();
+          if (prof?.full_name) cloudOwner = prof.full_name;
+        }
+
         const updatedStore: StoreProfile = {
           ...store,
           id: dbBiz.id,
           name: dbBiz.name || store.name,
-          ownerName: dbBiz.owner_name || store.ownerName,
+          ownerName: cloudOwner || store.ownerName,
           phone: dbBiz.phone || store.phone,
           panNumber: dbBiz.pan_vat_number || store.panNumber,
           address: dbBiz.address_line || store.address,
@@ -824,10 +834,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         const biz = (membership as any).businesses;
         if (biz) {
+          let cloudOwner = biz.owner_name;
+          if (!cloudOwner && supabaseUser?.id) {
+            const { data: prof } = await supabase
+              .from('profiles')
+              .select('full_name')
+              .eq('id', supabaseUser.id)
+              .maybeSingle();
+            if (prof?.full_name) cloudOwner = prof.full_name;
+          }
+
           const updatedStore: StoreProfile = {
             ...store,
             id: biz.id,
             name: biz.name || store.name,
+            ownerName: cloudOwner || store.ownerName,
             businessType: (biz.business_type as BusinessType) || store.businessType || 'general',
             phone: biz.phone || store.phone,
             address: biz.address_line || store.address,
@@ -1271,6 +1292,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const payload: any = {};
     if (updates.name !== undefined) payload.name = updates.name;
+    if (updates.ownerName !== undefined) payload.owner_name = updates.ownerName;
     if (updates.phone !== undefined) payload.phone = updates.phone;
     if (updates.panNumber !== undefined) payload.pan_vat_number = updates.panNumber;
     if (updates.address !== undefined) payload.address_line = updates.address;
@@ -1281,8 +1303,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       await supabase.from('businesses').update(payload).eq('id', activeBizId);
     }
 
-    if (updates.ownerName !== undefined && user?.id) {
-      await supabase.from('profiles').update({ full_name: updates.ownerName }).eq('id', user.id);
+    if (user?.id) {
+      const profileUpdates: any = {};
+      if (updates.ownerName !== undefined) profileUpdates.full_name = updates.ownerName;
+      if (updates.phone !== undefined) profileUpdates.phone_number = updates.phone;
+
+      if (Object.keys(profileUpdates).length > 0) {
+        await supabase.from('profiles').update(profileUpdates).eq('id', user.id);
+      }
+
+      await supabase.auth.updateUser({
+        data: {
+          ...(updates.ownerName !== undefined ? { full_name: updates.ownerName } : {}),
+          ...(updates.name !== undefined ? { business_name: updates.name } : {}),
+          ...(updates.phone !== undefined ? { phone: updates.phone } : {}),
+          ...(updates.address !== undefined ? { address: updates.address } : {}),
+          ...(updates.panNumber !== undefined ? { pan: updates.panNumber } : {}),
+        },
+      });
     }
   };
 
@@ -1297,6 +1335,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         .from('businesses')
         .update({
           name: storeData.name,
+          owner_name: storeData.ownerName,
           phone: storeData.phone,
           pan_vat_number: storeData.panNumber,
           address_line: storeData.address,
@@ -1306,8 +1345,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         .eq('id', activeBizId);
     }
 
-    if (storeData.ownerName && user?.id) {
-      await supabase.from('profiles').update({ full_name: storeData.ownerName }).eq('id', user.id);
+    if (user?.id) {
+      if (storeData.ownerName || storeData.phone) {
+        await supabase.from('profiles').update({
+          full_name: storeData.ownerName,
+          phone_number: storeData.phone,
+        }).eq('id', user.id);
+      }
+      await supabase.auth.updateUser({
+        data: {
+          full_name: storeData.ownerName,
+          business_name: storeData.name,
+          phone: storeData.phone,
+          address: storeData.address,
+          pan: storeData.panNumber,
+        },
+      });
     }
   };
 

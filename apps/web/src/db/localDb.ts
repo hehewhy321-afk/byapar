@@ -13,7 +13,7 @@ import {
 
 export type { PaymentMode, BusinessType, InvoiceType, Item, Party, Invoice, KhataEntry, CartItem };
 import { adToBs, getNepaliFiscalYear } from '@byapar/core';
-import { supabase, currentUser } from './auth';
+import { supabase, currentUser, updateAuthProfile } from './auth';
 import { getDefaultRolePermissions, StaffRole } from './permissions';
 
 export interface AppSettings {
@@ -422,24 +422,91 @@ export function resetAllLocalData() {
   localStorage.removeItem('byapar_current_business');
 }
 
-export function updateBusinessProfile(data: Partial<typeof currentBusiness>) {
-  setCurrentBusiness((prev) => Object.assign(prev, data));
+export async function updateBusinessProfile(
+  data: Partial<typeof currentBusiness>
+): Promise<{ success: boolean; error?: string }> {
+  const updatedName = data.name !== undefined ? data.name : currentBusiness.name;
+  const updatedOwner = data.ownerName !== undefined ? data.ownerName : currentBusiness.ownerName;
+  const updatedAddress = data.address !== undefined ? data.address : currentBusiness.address;
+  const updatedPhone = data.phone !== undefined ? data.phone : currentBusiness.phone;
+  const updatedPan = data.pan !== undefined ? data.pan : currentBusiness.pan;
+  const updatedVat = data.isVatRegistered !== undefined ? data.isVatRegistered : currentBusiness.isVatRegistered;
+
+  // 1. Immediately update reactive store with a new merged object to trigger Solid reactivity in all subscribers
+  setCurrentBusiness((prev) => ({
+    ...prev,
+    ...data,
+    name: updatedName,
+    nameEn: data.nameEn || updatedName,
+    ownerName: updatedOwner,
+    address: updatedAddress,
+    phone: updatedPhone,
+    pan: updatedPan,
+    isVatRegistered: updatedVat,
+  }));
   localStorage.setItem('byapar_current_business', JSON.stringify(currentBusiness));
 
-  // Sync with Supabase
-  supabase
-    .from('businesses')
-    .update({
-      name: data.name,
-      pan_vat_number: data.pan,
-      phone: data.phone,
-      address_line: data.address,
-      is_vat_registered: data.isVatRegistered,
-    })
-    .eq('id', currentBusiness.id)
-    .then(({ error }) => {
-      if (error) console.error('Error updating business on cloud:', error);
+  // 2. Update currentUser in auth.ts if logged in
+  const user = currentUser();
+  if (user) {
+    updateAuthProfile({
+      name: updatedOwner || user.name,
+      businessName: updatedName || user.businessName,
+      phone: updatedPhone || user.phone,
+      address: updatedAddress || user.address,
+      pan: updatedPan || user.pan,
     });
+  }
+
+  // 3. Supabase Cloud Sync
+  try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const activeUser = sessionData?.session?.user;
+
+    const bizId =
+      activeUser && user?.businessId && user.businessId !== 'a0000000-0000-0000-0000-000000000001'
+        ? user.businessId
+        : currentBusiness.id;
+
+    if (activeUser && bizId && bizId !== 'a0000000-0000-0000-0000-000000000001') {
+      const bizPayload: any = {
+        name: updatedName,
+        owner_name: updatedOwner,
+        pan_vat_number: updatedPan,
+        phone: updatedPhone,
+        address_line: updatedAddress,
+        is_vat_registered: updatedVat,
+      };
+
+      const { error: bizErr } = await supabase.from('businesses').update(bizPayload).eq('id', bizId);
+      if (bizErr) console.warn('Supabase business update warning:', bizErr.message);
+    }
+
+    if (activeUser) {
+      const profileUpdates: any = {
+        full_name: updatedOwner || user?.name || activeUser.email?.split('@')[0] || 'Store Owner',
+      };
+      if (updatedPhone) profileUpdates.phone_number = updatedPhone;
+
+      const { error: profErr } = await supabase.from('profiles').update(profileUpdates).eq('id', activeUser.id);
+      if (profErr) console.warn('Supabase profile update warning:', profErr.message);
+
+      await supabase.auth.updateUser({
+        data: {
+          full_name: updatedOwner,
+          business_name: updatedName,
+          phone: updatedPhone,
+          address: updatedAddress,
+          pan: updatedPan,
+        },
+      });
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    console.error('Error updating business on cloud:', err);
+    return { success: false, error: err.message || 'Failed to update cloud profile' };
+  }
 }
 
 // Notifications computed
@@ -828,12 +895,18 @@ export async function syncFromCloud() {
       .maybeSingle();
 
     if (dbBiz) {
+      let cloudOwner = dbBiz.owner_name;
+      const user = currentUser();
+      if (!cloudOwner && user?.id) {
+        const { data: prof } = await supabase.from('profiles').select('full_name').eq('id', user.id).maybeSingle();
+        if (prof?.full_name) cloudOwner = prof.full_name;
+      }
       setCurrentBusiness((prev) => ({
         ...prev,
         id: dbBiz.id,
         name: dbBiz.name || prev.name,
         nameEn: dbBiz.name || prev.nameEn,
-        ownerName: dbBiz.owner_name || prev.ownerName,
+        ownerName: cloudOwner || prev.ownerName || user?.name || '',
         pan: dbBiz.pan_vat_number || prev.pan,
         address: dbBiz.address_line || prev.address,
         phone: dbBiz.phone || prev.phone,
