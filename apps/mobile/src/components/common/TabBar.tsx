@@ -21,14 +21,9 @@ export const TabBar: React.FC = () => {
     badge?: number;
   }[] = [
     { key: 'dashboard', label: 'Home', icon: 'home' },
-    {
-      key: 'pos',
-      label: 'POS',
-      icon: 'shopping-bag',
-      badge: cart.reduce((sum, item) => sum + item.qty, 0) || undefined,
-    },
-    { key: 'ledger', label: 'Ledger', icon: 'book-open' },
-    { key: 'inventory', label: 'Stock', icon: 'box' },
+    { key: 'sales', label: 'Sales Hub', icon: 'trending-up' },
+    { key: 'bills', label: 'Bills Archive', icon: 'archive' },
+    { key: 'expenses', label: 'Expenses', icon: 'dollar-sign' },
     { key: 'more', label: 'More', icon: 'grid' },
   ];
 
@@ -42,12 +37,28 @@ export const TabBar: React.FC = () => {
     bg: string;
   }[] = [
     {
-      key: 'sales',
-      label: 'Sales Hub',
-      sub: 'Invoices, Quotes, Payments',
-      icon: 'trending-up',
-      color: '#10B981',
-      bg: 'rgba(16, 185, 129, 0.14)',
+      key: 'pos',
+      label: 'POS Billing',
+      sub: 'Fast barcode & cash register',
+      icon: 'shopping-bag',
+      color: '#FF4500',
+      bg: 'rgba(255, 69, 0, 0.14)',
+    },
+    {
+      key: 'ledger',
+      label: 'Customer Ledger',
+      sub: 'Parties, credit & udharo khata',
+      icon: 'book-open',
+      color: '#3B82F6',
+      bg: 'rgba(59, 130, 246, 0.14)',
+    },
+    {
+      key: 'inventory',
+      label: 'Stock & Inventory',
+      sub: 'Products, catalog & low stock',
+      icon: 'box',
+      color: '#F59E0B',
+      bg: 'rgba(245, 158, 11, 0.14)',
     },
     {
       key: 'purchase',
@@ -74,14 +85,6 @@ export const TabBar: React.FC = () => {
       bg: 'rgba(14, 165, 233, 0.14)',
     },
     {
-      key: 'bills',
-      label: 'Bills Archive',
-      sub: 'Physical receipts & photos',
-      icon: 'camera',
-      color: '#F59E0B',
-      bg: 'rgba(245, 158, 11, 0.14)',
-    },
-    {
       key: 'reports',
       label: 'Reports & P&L',
       sub: 'Statements, Daybook, VAT',
@@ -100,11 +103,12 @@ export const TabBar: React.FC = () => {
   ];
 
   const isMoreActive = [
-    'sales',
+    'pos',
+    'ledger',
+    'inventory',
     'purchase',
     'accounts',
     'staff',
-    'bills',
     'reports',
     'settings',
     'more',

@@ -1,6 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { View, Text, StyleSheet, Modal, TextInput, Alert, ScrollView, Image } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { Theme } from '../../theme';
 import { useApp } from '../../context/AppContext';
 import { BillImage } from '../../types';
@@ -11,6 +12,7 @@ interface Props {
   visible: boolean;
   onClose: () => void;
   onSave: (data: Omit<BillImage, 'id'>) => void;
+  initialImageUri?: string;
 }
 
 const CATEGORIES: BillImage['category'][] = [
@@ -22,21 +24,73 @@ const CATEGORIES: BillImage['category'][] = [
   'Other',
 ];
 
-const PRESET_SAMPLE_RECEIPTS = [
-  'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=600&auto=format&fit=crop&q=80',
-  'https://images.unsplash.com/photo-1554224155-6726b3ff858f?w=600&auto=format&fit=crop&q=80',
-  'https://images.unsplash.com/photo-1450133064473-71024230f91b?w=600&auto=format&fit=crop&q=80',
-];
-
-export const BillCollectorModal: React.FC<Props> = ({ visible, onClose, onSave }) => {
+export const BillCollectorModal: React.FC<Props> = ({
+  visible,
+  onClose,
+  onSave,
+  initialImageUri = '',
+}) => {
   const { theme, themeMode } = useApp();
   const styles = useMemo(() => createStyles(theme, themeMode), [theme, themeMode]);
   const [title, setTitle] = useState('');
   const [vendorName, setVendorName] = useState('');
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState<BillImage['category']>('Inventory');
-  const [imageUri, setImageUri] = useState(PRESET_SAMPLE_RECEIPTS[0]);
+  const [imageUri, setImageUri] = useState(initialImageUri);
   const [notes, setNotes] = useState('');
+
+  useEffect(() => {
+    if (visible) {
+      if (initialImageUri) {
+        setImageUri(initialImageUri);
+      }
+    } else {
+      setImageUri('');
+      setTitle('');
+      setVendorName('');
+      setAmount('');
+      setNotes('');
+    }
+  }, [visible, initialImageUri]);
+
+  const handleCaptureCamera = async () => {
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'Camera permission is required to capture bill photos.');
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        quality: 0.85,
+      });
+      if (!result.canceled && result.assets && result.assets[0]?.uri) {
+        setImageUri(result.assets[0].uri);
+      }
+    } catch (e: any) {
+      Alert.alert('Camera Error', e.message || 'Could not open camera');
+    }
+  };
+
+  const handlePickGallery = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'Media library access is needed to select bills.');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        quality: 0.85,
+      });
+      if (!result.canceled && result.assets && result.assets[0]?.uri) {
+        setImageUri(result.assets[0].uri);
+      }
+    } catch (e: any) {
+      Alert.alert('Gallery Error', e.message || 'Could not open gallery');
+    }
+  };
 
   const handleSave = () => {
     if (!title.trim()) {
@@ -55,7 +109,7 @@ export const BillCollectorModal: React.FC<Props> = ({ visible, onClose, onSave }
       amount: amt,
       date: new Date().toISOString().split('T')[0],
       category,
-      imageUri,
+      imageUri: imageUri || '',
       notes: notes.trim(),
     });
 
@@ -63,6 +117,7 @@ export const BillCollectorModal: React.FC<Props> = ({ visible, onClose, onSave }
     setVendorName('');
     setAmount('');
     setNotes('');
+    setImageUri('');
     onClose();
   };
 
@@ -135,23 +190,74 @@ export const BillCollectorModal: React.FC<Props> = ({ visible, onClose, onSave }
               })}
             </ScrollView>
 
-            {/* RECEIPT IMAGE PREVIEWS / ATTACHMENT */}
-            <Text style={styles.label}>Attached Scan</Text>
-            <View style={styles.imageSelectorBox}>
-              <Image source={{ uri: imageUri }} style={styles.selectedImg} resizeMode="cover" />
-              <View style={styles.sampleThumbRow}>
-                {PRESET_SAMPLE_RECEIPTS.map((uri, idx) => (
+            {/* ATTACHED SCAN / IMAGE PICKER */}
+            <Text style={styles.label}>Attached Scan / Photo</Text>
+            {imageUri ? (
+              <View style={styles.imageSelectedBox}>
+                <Image source={{ uri: imageUri }} style={styles.selectedImg} resizeMode="contain" />
+                <View style={styles.imageControlBar}>
                   <AnimatedPressable
-                    key={idx}
-                    style={[styles.thumbOption, imageUri === uri && styles.thumbOptionActive]}
-                    onPress={() => setImageUri(uri)}
+                    style={styles.ctrlBtn}
+                    onPress={handleCaptureCamera}
                     activeScale={0.9}
                   >
-                    <Image source={{ uri }} style={styles.thumbMini} />
+                    <Feather name="camera" size={13} color={theme.colors.textPrimary} />
+                    <Text style={styles.ctrlBtnText}>Retake</Text>
                   </AnimatedPressable>
-                ))}
+
+                  <AnimatedPressable
+                    style={styles.ctrlBtn}
+                    onPress={handlePickGallery}
+                    activeScale={0.9}
+                  >
+                    <Feather name="image" size={13} color={theme.colors.textPrimary} />
+                    <Text style={styles.ctrlBtnText}>Files / Gallery</Text>
+                  </AnimatedPressable>
+
+                  <AnimatedPressable
+                    style={[styles.ctrlBtn, styles.ctrlBtnDanger]}
+                    onPress={() => setImageUri('')}
+                    activeScale={0.9}
+                  >
+                    <Feather name="trash-2" size={13} color={theme.colors.danger} />
+                    <Text style={[styles.ctrlBtnText, { color: theme.colors.danger }]}>Remove</Text>
+                  </AnimatedPressable>
+                </View>
               </View>
-            </View>
+            ) : (
+              <View style={styles.emptyUploadBox}>
+                <Feather
+                  name="camera"
+                  size={26}
+                  color={theme.colors.primary}
+                  style={{ marginBottom: 4 }}
+                />
+                <Text style={styles.emptyUploadTitle}>Add Bill or Receipt Photo</Text>
+                <Text style={styles.emptyUploadSub}>
+                  Take a photo or choose from your device files
+                </Text>
+
+                <View style={styles.uploadBtnRow}>
+                  <AnimatedPressable
+                    style={styles.pickCameraBtn}
+                    onPress={handleCaptureCamera}
+                    activeScale={0.92}
+                  >
+                    <Feather name="camera" size={14} color="#FFFFFF" />
+                    <Text style={styles.pickCameraBtnText}>Take Photo</Text>
+                  </AnimatedPressable>
+
+                  <AnimatedPressable
+                    style={styles.pickGalleryBtn}
+                    onPress={handlePickGallery}
+                    activeScale={0.92}
+                  >
+                    <Feather name="folder" size={14} color={theme.colors.textPrimary} />
+                    <Text style={styles.pickGalleryBtnText}>Files / Gallery</Text>
+                  </AnimatedPressable>
+                </View>
+              </View>
+            )}
 
             {/* NOTES */}
             <Text style={styles.label}>Notes</Text>
@@ -278,38 +384,102 @@ const createStyles = (theme: Theme, themeMode: 'dark' | 'light') =>
       color: theme.colors.primary,
       fontWeight: '800',
     },
-    imageSelectorBox: {
+    imageSelectedBox: {
       backgroundColor: theme.colors.card,
       borderRadius: theme.borderRadius.md,
       borderWidth: 1,
       borderColor: theme.colors.borderGlass,
       padding: 8,
-      gap: 8,
+      alignItems: 'center',
     },
     selectedImg: {
       width: '100%',
-      height: 110,
+      height: 140,
       borderRadius: theme.borderRadius.sm,
       backgroundColor: theme.colors.surface,
     },
-    sampleThumbRow: {
+    imageControlBar: {
       flexDirection: 'row',
       gap: 8,
-    },
-    thumbOption: {
-      width: 44,
-      height: 36,
-      borderRadius: 6,
-      overflow: 'hidden',
-      borderWidth: 2,
-      borderColor: 'transparent',
-    },
-    thumbOptionActive: {
-      borderColor: theme.colors.primary,
-    },
-    thumbMini: {
+      marginTop: 8,
       width: '100%',
-      height: '100%',
+      justifyContent: 'center',
+    },
+    ctrlBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: theme.borderRadius.sm,
+      borderWidth: 1,
+      borderColor: theme.colors.borderGlass,
+      backgroundColor: theme.colors.surface,
+    },
+    ctrlBtnDanger: {
+      borderColor: 'rgba(239, 68, 68, 0.4)',
+    },
+    ctrlBtnText: {
+      fontSize: 11,
+      fontWeight: '600',
+      color: theme.colors.textPrimary,
+    },
+    emptyUploadBox: {
+      backgroundColor: theme.colors.card,
+      borderRadius: theme.borderRadius.md,
+      borderWidth: 1,
+      borderColor: theme.colors.borderGlass,
+      borderStyle: 'dashed',
+      paddingVertical: 14,
+      paddingHorizontal: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    emptyUploadTitle: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: theme.colors.textPrimary,
+      marginBottom: 2,
+    },
+    emptyUploadSub: {
+      fontSize: 10,
+      color: theme.colors.textMuted,
+      marginBottom: 10,
+      textAlign: 'center',
+    },
+    uploadBtnRow: {
+      flexDirection: 'row',
+      gap: 10,
+    },
+    pickCameraBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      backgroundColor: theme.colors.primary,
+      paddingHorizontal: 14,
+      paddingVertical: 7,
+      borderRadius: theme.borderRadius.md,
+    },
+    pickCameraBtnText: {
+      color: '#FFFFFF',
+      fontSize: 12,
+      fontWeight: '700',
+    },
+    pickGalleryBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      backgroundColor: theme.colors.surface,
+      borderWidth: 1,
+      borderColor: theme.colors.borderGlass,
+      paddingHorizontal: 14,
+      paddingVertical: 7,
+      borderRadius: theme.borderRadius.md,
+    },
+    pickGalleryBtnText: {
+      color: theme.colors.textPrimary,
+      fontSize: 12,
+      fontWeight: '600',
     },
     actions: {
       flexDirection: 'row',

@@ -258,7 +258,7 @@ export function SalesView() {
       <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <div class="flex items-center gap-2">
-            <div class="p-2 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+            <div class="p-2 rounded-lg bg-brand-500/10 text-brand-600 dark:text-brand-400 border border-brand-500/20">
               <IconSales class="w-6 h-6" />
             </div>
             <h1 class="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">Sales Management</h1>
@@ -272,7 +272,7 @@ export function SalesView() {
           <Show when={activeSubTab() === 'invoices'}>
             <button
               onClick={() => setActiveTab('pos')}
-              class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-medium text-sm transition-all shadow-md shadow-emerald-900/20 flex items-center gap-2"
+              class="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-lg font-medium text-sm transition-all shadow-md shadow-brand-500/20 flex items-center gap-2"
             >
               <IconPlus class="w-4 h-4" />
               <span>Create Sale (POS)</span>
@@ -282,7 +282,7 @@ export function SalesView() {
           <Show when={activeSubTab() === 'payment_in'}>
             <button
               onClick={() => setShowPaymentInModal(true)}
-              class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-medium text-sm transition-all shadow-md shadow-emerald-900/20 flex items-center gap-2"
+              class="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-lg font-medium text-sm transition-all shadow-md shadow-brand-500/20 flex items-center gap-2"
             >
               <IconPlus class="w-4 h-4" />
               <span>Record Payment In</span>
@@ -292,7 +292,7 @@ export function SalesView() {
           <Show when={activeSubTab() === 'quotations'}>
             <button
               onClick={() => setShowQuotationModal(true)}
-              class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-medium text-sm transition-all shadow-md shadow-emerald-900/20 flex items-center gap-2"
+              class="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-lg font-medium text-sm transition-all shadow-md shadow-brand-500/20 flex items-center gap-2"
             >
               <IconPlus class="w-4 h-4" />
               <span>New Quotation</span>
@@ -317,7 +317,7 @@ export function SalesView() {
           onClick={() => setActiveSubTab('invoices')}
           class={`px-4 py-2 rounded-lg font-medium text-sm transition-all flex items-center gap-2 ${
             activeSubTab() === 'invoices'
-              ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 shadow-sm'
+              ? 'bg-brand-500/10 text-brand-600 dark:text-brand-400 border border-brand-500/30 shadow-sm'
               : 'text-gray-500 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-neutral-900'
           }`}
         >
@@ -332,7 +332,7 @@ export function SalesView() {
           onClick={() => setActiveSubTab('payment_in')}
           class={`px-4 py-2 rounded-lg font-medium text-sm transition-all flex items-center gap-2 ${
             activeSubTab() === 'payment_in'
-              ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 shadow-sm'
+              ? 'bg-brand-500/10 text-brand-600 dark:text-brand-400 border border-brand-500/30 shadow-sm'
               : 'text-gray-500 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-neutral-900'
           }`}
         >
@@ -347,7 +347,7 @@ export function SalesView() {
           onClick={() => setActiveSubTab('quotations')}
           class={`px-4 py-2 rounded-lg font-medium text-sm transition-all flex items-center gap-2 ${
             activeSubTab() === 'quotations'
-              ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 shadow-sm'
+              ? 'bg-brand-500/10 text-brand-600 dark:text-brand-400 border border-brand-500/30 shadow-sm'
               : 'text-gray-500 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-neutral-900'
           }`}
         >
@@ -734,7 +734,7 @@ export function SalesView() {
                 </button>
                 <button
                   type="submit"
-                  class="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-medium rounded-lg text-sm shadow-lg shadow-emerald-900/30"
+                  class="px-5 py-2 bg-brand-500 hover:bg-brand-600 text-white font-medium rounded-lg text-sm shadow-lg shadow-brand-500/30"
                 >
                   Save Payment In
                 </button>

@@ -10,6 +10,7 @@ import {
   Modal,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { Theme } from '../theme';
 import { useApp } from '../context/AppContext';
 import { BillImage } from '../types';
@@ -26,7 +27,49 @@ export const BillArchiveScreen: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [isCollectorOpen, setIsCollectorOpen] = useState(false);
+  const [collectorInitialImage, setCollectorInitialImage] = useState<string>('');
   const [previewBill, setPreviewBill] = useState<BillImage | null>(null);
+
+  const handleDirectCapture = async () => {
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'Camera permission is required to capture bill photos.');
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        quality: 0.85,
+      });
+      if (!result.canceled && result.assets && result.assets[0]?.uri) {
+        setCollectorInitialImage(result.assets[0].uri);
+        setIsCollectorOpen(true);
+      }
+    } catch (e: any) {
+      Alert.alert('Camera Error', e.message || 'Could not open camera');
+    }
+  };
+
+  const handlePickFromGallery = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'Media library access is needed to select bills.');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        quality: 0.85,
+      });
+      if (!result.canceled && result.assets && result.assets[0]?.uri) {
+        setCollectorInitialImage(result.assets[0].uri);
+        setIsCollectorOpen(true);
+      }
+    } catch (e: any) {
+      Alert.alert('Gallery Error', e.message || 'Could not open gallery');
+    }
+  };
 
   const filteredBills = bills.filter((b) => {
     const matchesCat = selectedCategory === 'All' || b.category === selectedCategory;
@@ -58,20 +101,31 @@ export const BillArchiveScreen: React.FC = () => {
     <View style={[styles.container, { backgroundColor: theme.colors.bg }]}>
       {/* OVERVIEW HERO BANNER */}
       <View style={styles.heroBanner}>
-        <View>
+        <View style={{ flex: 1 }}>
           <Text style={styles.heroLabel}>DIGITIZED EXPENSES</Text>
           <Text style={styles.heroAmount}>Rs. {totalExpense.toLocaleString()}</Text>
           <Text style={styles.heroSub}>{bills.length} bills archived</Text>
         </View>
 
-        <AnimatedPressable
-          style={styles.collectBtn}
-          onPress={() => setIsCollectorOpen(true)}
-          activeScale={0.92}
-        >
-          <Feather name="camera" size={16} color="#FFFFFF" />
-          <Text style={styles.collectBtnText}>Capture</Text>
-        </AnimatedPressable>
+        <View style={styles.heroBtnGroup}>
+          <AnimatedPressable
+            style={styles.galleryBtn}
+            onPress={handlePickFromGallery}
+            activeScale={0.92}
+          >
+            <Feather name="folder" size={14} color={theme.colors.textPrimary} />
+            <Text style={styles.galleryBtnText}>Gallery</Text>
+          </AnimatedPressable>
+
+          <AnimatedPressable
+            style={styles.collectBtn}
+            onPress={handleDirectCapture}
+            activeScale={0.92}
+          >
+            <Feather name="camera" size={14} color="#FFFFFF" />
+            <Text style={styles.collectBtnText}>Capture</Text>
+          </AnimatedPressable>
+        </View>
       </View>
 
       {/* SEARCH & FILTERS */}
@@ -180,20 +234,46 @@ export const BillArchiveScreen: React.FC = () => {
           </FadeInView>
         )}
         ListEmptyComponent={
-          <EmptyState
-            icon="file-text"
-            title="No bills collected"
-            subtitle="Capture receipts and invoices to keep your records audit-ready"
-            actionLabel="Capture Bill"
-            onAction={() => setIsCollectorOpen(true)}
-          />
+          <View style={styles.emptyContainer}>
+            <View style={styles.emptyIconBox}>
+              <Feather name="file-text" size={26} color={theme.colors.primary} />
+            </View>
+            <Text style={[styles.emptyTitle, { color: theme.colors.textPrimary }]}>
+              No bills collected
+            </Text>
+            <Text style={[styles.emptySub, { color: theme.colors.textMuted }]}>
+              Capture receipts and invoices to keep your records audit-ready
+            </Text>
+            <View style={styles.emptyBtnRow}>
+              <AnimatedPressable
+                style={styles.galleryBtn}
+                onPress={handlePickFromGallery}
+                activeScale={0.92}
+              >
+                <Feather name="folder" size={14} color={theme.colors.textPrimary} />
+                <Text style={styles.galleryBtnText}>Select from Files</Text>
+              </AnimatedPressable>
+              <AnimatedPressable
+                style={styles.collectBtn}
+                onPress={handleDirectCapture}
+                activeScale={0.92}
+              >
+                <Feather name="camera" size={14} color="#FFFFFF" />
+                <Text style={styles.collectBtnText}>Take Photo</Text>
+              </AnimatedPressable>
+            </View>
+          </View>
         }
       />
 
       {/* COLLECTOR MODAL */}
       <BillCollectorModal
         visible={isCollectorOpen}
-        onClose={() => setIsCollectorOpen(false)}
+        initialImageUri={collectorInitialImage}
+        onClose={() => {
+          setIsCollectorOpen(false);
+          setCollectorInitialImage('');
+        }}
         onSave={addBill}
       />
 
@@ -301,14 +381,35 @@ const createStyles = (theme: Theme, themeMode: 'dark' | 'light') =>
       color: theme.colors.textMuted,
       marginTop: 1,
     },
+    heroBtnGroup: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    galleryBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: theme.colors.surface,
+      borderWidth: 1,
+      borderColor: theme.colors.borderGlass,
+      paddingHorizontal: 12,
+      paddingVertical: 9,
+      borderRadius: theme.borderRadius.lg,
+      gap: 5,
+    },
+    galleryBtnText: {
+      color: theme.colors.textPrimary,
+      fontSize: 12,
+      fontWeight: '700',
+    },
     collectBtn: {
       flexDirection: 'row',
       alignItems: 'center',
       backgroundColor: theme.colors.primary,
-      paddingHorizontal: 16,
-      paddingVertical: 10,
+      paddingHorizontal: 14,
+      paddingVertical: 9,
       borderRadius: theme.borderRadius.lg,
-      gap: 6,
+      gap: 5,
       shadowColor: '#FF4500',
       shadowOffset: { width: 0, height: 2 },
       shadowOpacity: 0.3,
@@ -317,7 +418,7 @@ const createStyles = (theme: Theme, themeMode: 'dark' | 'light') =>
     },
     collectBtnText: {
       color: '#FFFFFF',
-      fontSize: 13,
+      fontSize: 12,
       fontWeight: '800',
     },
     filterSection: {
@@ -586,5 +687,40 @@ const createStyles = (theme: Theme, themeMode: 'dark' | 'light') =>
       color: theme.colors.primaryText,
       fontSize: 13,
       fontWeight: '800',
+    },
+    emptyContainer: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 45,
+      paddingHorizontal: 20,
+    },
+    emptyIconBox: {
+      width: 58,
+      height: 58,
+      borderRadius: 29,
+      backgroundColor: theme.colors.card,
+      borderWidth: 1,
+      borderColor: theme.colors.borderGlass,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 12,
+    },
+    emptyTitle: {
+      fontSize: 15,
+      fontWeight: '800',
+      marginBottom: 4,
+      textAlign: 'center',
+    },
+    emptySub: {
+      fontSize: 12,
+      textAlign: 'center',
+      lineHeight: 18,
+      maxWidth: 260,
+    },
+    emptyBtnRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      marginTop: 16,
     },
   });

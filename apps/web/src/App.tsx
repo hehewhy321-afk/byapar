@@ -112,7 +112,7 @@ export const App: Component = () => {
     if (e.key === 'F2') { e.preventDefault(); setActiveTab('pos'); }
     if (e.key === 'F3') { e.preventDefault(); setActiveTab('khata'); }
     if (e.key === 'F4') { e.preventDefault(); setActiveTab('inventory'); }
-    if (e.key === 'F5') { e.preventDefault(); setActiveTab('reports'); }
+    if (e.key === 'F6') { e.preventDefault(); setActiveTab('reports'); }
   };
 
   onSettled(() => {

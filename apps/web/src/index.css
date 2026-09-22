@@ -4,8 +4,8 @@
 
 @layer base {
   :root {
-    --brand-primary: #059669;
-    --brand-light: #ecfdf5;
+    --brand-primary: #FF4500;
+    --brand-light: #fff7ed;
     --khata-got: #10b981;
     --khata-gave: #ef4444;
   }
@@ -49,13 +49,15 @@
   @apply flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-gray-600 dark:text-neutral-300 transition-all duration-150 cursor-pointer select-none;
 }
 .nav-item:hover {
-  @apply bg-gray-50 dark:bg-neutral-900 text-gray-900 dark:text-white;
+  @apply bg-orange-50/50 dark:bg-neutral-900 text-[#FF4500] dark:text-white;
 }
 .nav-item.active {
-  @apply bg-brand-600 text-white shadow-sm dark:bg-brand-600 dark:text-white;
+  background-color: #FF4500 !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 10px rgba(255, 69, 0, 0.3) !important;
 }
 .nav-item.active:hover {
-  @apply bg-brand-700 dark:bg-brand-700;
+  background-color: #E03D00 !important;
 }
 
 /* Section label */
@@ -78,7 +80,22 @@
 
 /* Button base */
 .btn-primary {
-  @apply inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-brand-600 text-white text-sm font-semibold transition-all duration-150 hover:bg-brand-700 active:scale-[0.98] shadow-sm;
+  @apply inline-flex items-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-semibold transition-all duration-150 active:scale-[0.98] shadow-sm;
+  background-color: #FF4500 !important;
+  color: #ffffff !important;
+}
+.btn-primary:hover {
+  background-color: #E03D00 !important;
+}
+
+.bg-brand-500, .bg-brand-600 {
+  background-color: #FF4500 !important;
+}
+.text-brand-500, .text-brand-600 {
+  color: #FF4500 !important;
+}
+.border-brand-500, .border-brand-600 {
+  border-color: #FF4500 !important;
 }
 
 .btn-outline {

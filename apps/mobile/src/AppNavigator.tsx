@@ -27,17 +27,19 @@ import { StaffScreen } from './screens/StaffScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
 import { AuthScreen } from './screens/AuthScreen';
 import { DashboardScreen } from './screens/DashboardScreen';
+import { ExpenseIncomeScreen } from './screens/ExpenseIncomeScreen';
 import { ActiveTab } from './types';
 
 const MAIN_TABS: ActiveTab[] = [
   'dashboard',
-  'pos',
   'sales',
+  'bills',
+  'expenses',
+  'pos',
   'purchase',
   'accounts',
   'inventory',
   'ledger',
-  'bills',
   'reports',
   'staff',
   'settings',
@@ -151,13 +153,14 @@ export const AppNavigator: React.FC = () => {
       {/* Screen Body with Swipe Gesture Handler */}
       <View style={styles.screenBody} {...panResponder.panHandlers}>
         {activeTab === 'dashboard' && <DashboardScreen />}
-        {activeTab === 'pos' && <POSScreen />}
         {activeTab === 'sales' && <SalesHubScreen />}
+        {activeTab === 'bills' && <BillArchiveScreen />}
+        {activeTab === 'expenses' && <ExpenseIncomeScreen />}
+        {activeTab === 'pos' && <POSScreen />}
         {activeTab === 'purchase' && <PurchaseHubScreen />}
         {activeTab === 'accounts' && <AccountsScreen />}
         {activeTab === 'inventory' && <InventoryScreen />}
         {activeTab === 'ledger' && <LedgerScreen />}
-        {activeTab === 'bills' && <BillArchiveScreen />}
         {activeTab === 'reports' && <ReportsScreen />}
         {activeTab === 'staff' && <StaffScreen />}
         {activeTab === 'settings' && <SettingsScreen />}

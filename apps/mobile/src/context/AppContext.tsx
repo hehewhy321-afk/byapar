@@ -19,6 +19,8 @@ import {
   StaffMember,
   CategoryItem,
   BusinessType,
+  ExpenseRecord,
+  IncomeRecord,
 } from '../types';
 import { generateUUID } from '../utils/uuid';
 import { getDefaultRolePermissions, StaffRole } from '../db/permissions';
@@ -142,6 +144,14 @@ interface AppContextType {
   addStaffMember: (staff: Omit<StaffMember, 'id'>) => Promise<StaffMember>;
   updateStaffMember: (id: string, updates: Partial<StaffMember>) => Promise<void>;
   deleteStaffMember: (id: string) => Promise<void>;
+
+  // Expenses & Income
+  expenses: ExpenseRecord[];
+  addExpense: (expense: Omit<ExpenseRecord, 'id'>) => Promise<ExpenseRecord>;
+  deleteExpense: (id: string) => Promise<void>;
+  incomes: IncomeRecord[];
+  addIncome: (income: Omit<IncomeRecord, 'id'>) => Promise<IncomeRecord>;
+  deleteIncome: (id: string) => Promise<void>;
 
   // Reset
   resetAllData: () => Promise<void>;
@@ -430,6 +440,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Staff Members
   const [staffList, setStaffList] = useState<StaffMember[]>([]);
+
+  // Expenses & Income
+  const [expenses, setExpenses] = useState<ExpenseRecord[]>([]);
+  const [incomes, setIncomes] = useState<IncomeRecord[]>([]);
 
   const [activeBizId, setActiveBizId] = useState<string>(DEFAULT_BIZ_ID);
   const [categories, setCategories] = useState<CategoryItem[]>([]);
@@ -780,7 +794,51 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         await storage.set('staff_list', mapped);
       }
 
-      // 10. Store Profile / Business
+      // 10. Expenses
+      const { data: dbExpenses } = await supabase
+        .from('expenses')
+        .select('*')
+        .eq('business_id', bizId)
+        .order('created_at', { ascending: false });
+
+      if (dbExpenses) {
+        const mappedExpenses: ExpenseRecord[] = dbExpenses.map((e: any) => ({
+          id: e.id,
+          category: e.category || 'Other',
+          amount: Number(e.amount) || 0,
+          paymentMode: e.payment_mode || 'Cash',
+          date: e.date_ad || e.created_at?.split('T')[0] || new Date().toISOString().split('T')[0],
+          recipientName: e.recipient_name || undefined,
+          note: e.notes || undefined,
+          createdAt: e.created_at,
+        }));
+        setExpenses(mappedExpenses);
+        await storage.set('expenses', mappedExpenses);
+      }
+
+      // 11. Incomes
+      const { data: dbIncomes } = await supabase
+        .from('incomes')
+        .select('*')
+        .eq('business_id', bizId)
+        .order('created_at', { ascending: false });
+
+      if (dbIncomes) {
+        const mappedIncomes: IncomeRecord[] = dbIncomes.map((inc: any) => ({
+          id: inc.id,
+          category: inc.category || 'Other',
+          amount: Number(inc.amount) || 0,
+          paymentMode: inc.payment_mode || 'Cash',
+          date: inc.date_ad || inc.created_at?.split('T')[0] || new Date().toISOString().split('T')[0],
+          payerName: inc.payer_name || undefined,
+          note: inc.notes || undefined,
+          createdAt: inc.created_at,
+        }));
+        setIncomes(mappedIncomes);
+        await storage.set('incomes', mappedIncomes);
+      }
+
+      // 12. Store Profile / Business
       const { data: dbBiz } = await supabase
         .from('businesses')
         .select('*')
@@ -893,6 +951,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const storedPayIn = await storage.get<PaymentRecord[]>('pay_in', []);
       const storedPayOut = await storage.get<PaymentRecord[]>('pay_out', []);
       const storedStaff = await storage.get<StaffMember[]>('staff_list', []);
+      const storedExpenses = await storage.get<ExpenseRecord[]>('expenses', []);
+      const storedIncomes = await storage.get<IncomeRecord[]>('incomes', []);
 
       const storedActiveTab = await storage.get<ActiveTab>('active_tab', 'dashboard');
       if (storedActiveTab && storedActiveTab !== 'dashboard') {
@@ -918,6 +978,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setPurchaseReturns(storedPReturns);
       setPaymentInRecords(storedPayIn);
       setPaymentOutRecords(storedPayOut);
+      setExpenses(storedExpenses);
+      setIncomes(storedIncomes);
       if (storedStaff && storedStaff.length > 0) {
         setStaffList(storedStaff);
       }
@@ -1156,6 +1218,50 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             setBills((prev) => (prev.some((b) => b.id === newB.id) ? prev : [newB, ...prev]));
           } else if (payload.eventType === 'DELETE') {
             setBills((prev) => prev.filter((b) => b.id !== (payload.old as any).id));
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'expenses', filter: `business_id=eq.${activeBizId}` },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            const e = payload.new as any;
+            const newE: ExpenseRecord = {
+              id: e.id,
+              category: e.category || 'Other',
+              amount: Number(e.amount) || 0,
+              paymentMode: e.payment_mode || 'Cash',
+              date: e.date_ad || e.created_at?.split('T')[0] || new Date().toISOString().split('T')[0],
+              recipientName: e.recipient_name || undefined,
+              note: e.notes || undefined,
+              createdAt: e.created_at,
+            };
+            setExpenses((prev) => (prev.some((x) => x.id === newE.id) ? prev : [newE, ...prev]));
+          } else if (payload.eventType === 'DELETE') {
+            setExpenses((prev) => prev.filter((x) => x.id !== (payload.old as any).id));
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'incomes', filter: `business_id=eq.${activeBizId}` },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            const inc = payload.new as any;
+            const newI: IncomeRecord = {
+              id: inc.id,
+              category: inc.category || 'Other',
+              amount: Number(inc.amount) || 0,
+              paymentMode: inc.payment_mode || 'Cash',
+              date: inc.date_ad || inc.created_at?.split('T')[0] || new Date().toISOString().split('T')[0],
+              payerName: inc.payer_name || undefined,
+              note: inc.notes || undefined,
+              createdAt: inc.created_at,
+            };
+            setIncomes((prev) => (prev.some((x) => x.id === newI.id) ? prev : [newI, ...prev]));
+          } else if (payload.eventType === 'DELETE') {
+            setIncomes((prev) => prev.filter((x) => x.id !== (payload.old as any).id));
           }
         }
       )
@@ -2188,6 +2294,87 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await supabase.from('staff').delete().eq('id', id);
   };
 
+  // Expenses & Income Handlers
+  const addExpense = async (exp: Omit<ExpenseRecord, 'id'>): Promise<ExpenseRecord> => {
+    const newExp: ExpenseRecord = {
+      ...exp,
+      id: generateUUID(),
+      createdAt: new Date().toISOString(),
+    };
+    const updated = [newExp, ...expenses];
+    setExpenses(updated);
+    await storage.set('expenses', updated);
+
+    try {
+      const bs = adToBs(new Date(newExp.date));
+      await supabase.from('expenses').insert({
+        id: newExp.id,
+        business_id: activeBizId,
+        category: newExp.category,
+        amount: newExp.amount,
+        payment_mode: newExp.paymentMode,
+        recipient_name: newExp.recipientName || null,
+        notes: newExp.note || null,
+        date_ad: newExp.date,
+        date_bs: bs.formatted,
+      });
+    } catch (err) {
+      console.warn('Failed to insert expense to cloud:', err);
+    }
+    return newExp;
+  };
+
+  const deleteExpense = async (id: string): Promise<void> => {
+    const updated = expenses.filter((e) => e.id !== id);
+    setExpenses(updated);
+    await storage.set('expenses', updated);
+    try {
+      await supabase.from('expenses').delete().eq('id', id);
+    } catch (err) {
+      console.warn('Failed to delete expense from cloud:', err);
+    }
+  };
+
+  const addIncome = async (inc: Omit<IncomeRecord, 'id'>): Promise<IncomeRecord> => {
+    const newInc: IncomeRecord = {
+      ...inc,
+      id: generateUUID(),
+      createdAt: new Date().toISOString(),
+    };
+    const updated = [newInc, ...incomes];
+    setIncomes(updated);
+    await storage.set('incomes', updated);
+
+    try {
+      const bs = adToBs(new Date(newInc.date));
+      await supabase.from('incomes').insert({
+        id: newInc.id,
+        business_id: activeBizId,
+        category: newInc.category,
+        amount: newInc.amount,
+        payment_mode: newInc.paymentMode,
+        payer_name: newInc.payerName || null,
+        notes: newInc.note || null,
+        date_ad: newInc.date,
+        date_bs: bs.formatted,
+      });
+    } catch (err) {
+      console.warn('Failed to insert income to cloud:', err);
+    }
+    return newInc;
+  };
+
+  const deleteIncome = async (id: string): Promise<void> => {
+    const updated = incomes.filter((i) => i.id !== id);
+    setIncomes(updated);
+    await storage.set('incomes', updated);
+    try {
+      await supabase.from('incomes').delete().eq('id', id);
+    } catch (err) {
+      console.warn('Failed to delete income from cloud:', err);
+    }
+  };
+
   const resetAllData = async () => {
     await storage.remove('products');
     await storage.remove('parties');
@@ -2203,6 +2390,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await storage.remove('pay_in');
     await storage.remove('pay_out');
     await storage.remove('staff_list');
+    await storage.remove('expenses');
+    await storage.remove('incomes');
 
     setProducts([]);
     setParties([]);
@@ -2218,6 +2407,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setPaymentInRecords([]);
     setPaymentOutRecords([]);
     setStaffList([]);
+    setExpenses([]);
+    setIncomes([]);
     setCart([]);
   };
 
@@ -2297,6 +2488,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addStaffMember,
         updateStaffMember,
         deleteStaffMember,
+        expenses,
+        addExpense,
+        deleteExpense,
+        incomes,
+        addIncome,
+        deleteIncome,
         resetAllData,
       }}
     >

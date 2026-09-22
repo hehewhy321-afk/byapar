@@ -224,6 +224,28 @@ export interface StaffMember {
   createdAt?: string;
 }
 
+export interface ExpenseRecord {
+  id: string;
+  category: string;
+  amount: number;
+  paymentMode: string;
+  date: string;
+  note?: string;
+  recipientName?: string;
+  createdAt?: string;
+}
+
+export interface IncomeRecord {
+  id: string;
+  category: string;
+  amount: number;
+  paymentMode: string;
+  date: string;
+  note?: string;
+  payerName?: string;
+  createdAt?: string;
+}
+
 export type ActiveTab =
   | 'dashboard'
   | 'pos'
@@ -233,6 +255,7 @@ export type ActiveTab =
   | 'ledger'
   | 'accounts'
   | 'bills'
+  | 'expenses'
   | 'reports'
   | 'staff'
   | 'more'

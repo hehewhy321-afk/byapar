@@ -12,6 +12,7 @@ import {
 import { Feather } from '@expo/vector-icons';
 import { useApp } from '../context/AppContext';
 import { PaymentMode } from '../types';
+import { formatNepaliCurrency } from '@byapar/core';
 import { AnimatedPressable } from '../components/common/AnimatedPressable';
 
 export const SalesHubScreen: React.FC = () => {
@@ -26,6 +27,7 @@ export const SalesHubScreen: React.FC = () => {
     createQuotation,
     createSalesReturn,
     setActiveTab,
+    setActiveInvoice,
     theme,
     themeMode,
   } = useApp();
@@ -102,6 +104,27 @@ export const SalesHubScreen: React.FC = () => {
     );
   }, [salesReturns, searchQuery]);
 
+  // Executive KPI Metrics
+  const totalSalesGTV = useMemo(() => {
+    return invoices.reduce((sum, inv) => sum + (Number(inv.total) || 0), 0);
+  }, [invoices]);
+
+  const totalPaymentsCollected = useMemo(() => {
+    const inRecords = paymentInRecords.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+    const cashSales = invoices
+      .filter((inv) => inv.paymentMode !== 'credit')
+      .reduce((sum, inv) => sum + (Number(inv.total) || 0), 0);
+    return inRecords + cashSales;
+  }, [paymentInRecords, invoices]);
+
+  const totalEstimatesValue = useMemo(() => {
+    return quotations.reduce((sum, q) => sum + (Number(q.totalAmount) || 0), 0);
+  }, [quotations]);
+
+  const totalReturnsValue = useMemo(() => {
+    return salesReturns.reduce((sum, r) => sum + (Number(r.totalAmount) || 0), 0);
+  }, [salesReturns]);
+
   // Actions
   const handleRecordPaymentIn = async () => {
     const amt = parseFloat(payAmount);
@@ -148,8 +171,8 @@ export const SalesHubScreen: React.FC = () => {
       partyPhone: quotePartyPhone.trim() || undefined,
       date: new Date().toISOString().split('T')[0],
       totalAmount: total,
-      status: 'draft',
       notes: quoteNotes || undefined,
+      status: 'draft',
       items: [
         {
           id: Math.random().toString(),
@@ -169,12 +192,13 @@ export const SalesHubScreen: React.FC = () => {
     setQuoteNotes('');
   };
 
-  const handleCreateReturn = async () => {
+  const handleCreateSalesReturn = async () => {
     const qty = parseFloat(returnQty) || 1;
     const rate = parseFloat(returnRate) || 0;
     const refund = parseFloat(returnRefund) || 0;
+
     if (!returnPartyName.trim() || !returnItemName.trim() || rate <= 0) {
-      Alert.alert('Validation Error', 'Please enter customer name, item name, and price.');
+      Alert.alert('Validation Error', 'Please enter customer name, returned item name, and rate.');
       return;
     }
 
@@ -207,11 +231,9 @@ export const SalesHubScreen: React.FC = () => {
     setReturnReason('');
   };
 
-  const totalSales = invoices.reduce((sum, inv) => sum + (Number(inv.total) || 0), 0);
-
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.bg }]}>
-      {/* Search & Header Action Row */}
+      {/* Search & Action Row */}
       <View
         style={[
           styles.headerBar,
@@ -233,7 +255,7 @@ export const SalesHubScreen: React.FC = () => {
           <Feather name="search" size={15} color={theme.colors.textMuted} />
           <TextInput
             style={[styles.searchInput, { color: theme.colors.textPrimary }]}
-            placeholder="Search voucher or customer..."
+            placeholder="Search invoice # or customer..."
             placeholderTextColor={theme.colors.textMuted}
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -252,7 +274,7 @@ export const SalesHubScreen: React.FC = () => {
             activeOpacity={0.88}
           >
             <Feather name="plus" size={15} color="#FFFFFF" />
-            <Text style={styles.headerBtnText}>POS Sale</Text>
+            <Text style={styles.headerBtnText}>POS Billing</Text>
           </TouchableOpacity>
         )}
 
@@ -274,7 +296,7 @@ export const SalesHubScreen: React.FC = () => {
             activeOpacity={0.88}
           >
             <Feather name="plus" size={15} color="#FFFFFF" />
-            <Text style={styles.headerBtnText}>Estimate</Text>
+            <Text style={styles.headerBtnText}>New Quote</Text>
           </TouchableOpacity>
         )}
 
@@ -285,112 +307,207 @@ export const SalesHubScreen: React.FC = () => {
             activeOpacity={0.88}
           >
             <Feather name="plus" size={15} color="#FFFFFF" />
-            <Text style={styles.headerBtnText}>Sales Return</Text>
+            <Text style={styles.headerBtnText}>New Return</Text>
           </TouchableOpacity>
         )}
       </View>
 
-      {/* Sub-Tabs Selector */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.tabsRow}
-      >
-        <TouchableOpacity
-          style={[
-            styles.tab,
-            {
-              backgroundColor:
-                activeSubTab === 'invoices' ? 'rgba(16, 185, 129, 0.14)' : theme.colors.card,
-              borderColor:
-                activeSubTab === 'invoices' ? '#10B981' : theme.colors.borderGlass,
-            },
-          ]}
-          onPress={() => setActiveSubTab('invoices')}
+      {/* Modern Pill Rounded Filter Tabs */}
+      <View style={styles.pillFilterWrapper}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.pillFilterRow}
         >
-          <Text
+          {/* 1. Invoices */}
+          <TouchableOpacity
             style={[
-              styles.tabText,
-              { color: activeSubTab === 'invoices' ? '#10B981' : theme.colors.textSecondary },
-              activeSubTab === 'invoices' && styles.tabTextActive,
+              styles.pillBtn,
+              activeSubTab === 'invoices'
+                ? styles.pillBtnActive
+                : {
+                    backgroundColor: theme.colors.card,
+                    borderColor: theme.colors.borderGlass,
+                  },
             ]}
+            onPress={() => setActiveSubTab('invoices')}
+            activeOpacity={0.85}
           >
-            Invoices ({invoices.length})
-          </Text>
-        </TouchableOpacity>
+            <Feather
+              name="file-text"
+              size={13}
+              color={activeSubTab === 'invoices' ? '#FFFFFF' : theme.colors.textMuted}
+            />
+            <Text
+              style={[
+                styles.pillBtnText,
+                { color: activeSubTab === 'invoices' ? '#FFFFFF' : theme.colors.textPrimary },
+                activeSubTab === 'invoices' && styles.pillBtnTextActive,
+              ]}
+            >
+              Invoices
+            </Text>
+            <View
+              style={[
+                styles.pillBadge,
+                activeSubTab === 'invoices'
+                  ? styles.pillBadgeActive
+                  : { backgroundColor: theme.colors.surface },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.pillBadgeText,
+                  { color: activeSubTab === 'invoices' ? theme.colors.primary : theme.colors.textSecondary },
+                ]}
+              >
+                {invoices.length}
+              </Text>
+            </View>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[
-            styles.tab,
-            {
-              backgroundColor:
-                activeSubTab === 'payment_in' ? 'rgba(16, 185, 129, 0.14)' : theme.colors.card,
-              borderColor:
-                activeSubTab === 'payment_in' ? '#10B981' : theme.colors.borderGlass,
-            },
-          ]}
-          onPress={() => setActiveSubTab('payment_in')}
-        >
-          <Text
+          {/* 2. Payment In */}
+          <TouchableOpacity
             style={[
-              styles.tabText,
-              { color: activeSubTab === 'payment_in' ? '#10B981' : theme.colors.textSecondary },
-              activeSubTab === 'payment_in' && styles.tabTextActive,
+              styles.pillBtn,
+              activeSubTab === 'payment_in'
+                ? [styles.pillBtnActive, { backgroundColor: '#10B981', borderColor: '#10B981' }]
+                : {
+                    backgroundColor: theme.colors.card,
+                    borderColor: theme.colors.borderGlass,
+                  },
             ]}
+            onPress={() => setActiveSubTab('payment_in')}
+            activeOpacity={0.85}
           >
-            Payments In ({paymentInRecords.length})
-          </Text>
-        </TouchableOpacity>
+            <Feather
+              name="arrow-down-left"
+              size={13}
+              color={activeSubTab === 'payment_in' ? '#FFFFFF' : theme.colors.textMuted}
+            />
+            <Text
+              style={[
+                styles.pillBtnText,
+                { color: activeSubTab === 'payment_in' ? '#FFFFFF' : theme.colors.textPrimary },
+                activeSubTab === 'payment_in' && styles.pillBtnTextActive,
+              ]}
+            >
+              Payments In
+            </Text>
+            <View
+              style={[
+                styles.pillBadge,
+                activeSubTab === 'payment_in'
+                  ? styles.pillBadgeActive
+                  : { backgroundColor: theme.colors.surface },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.pillBadgeText,
+                  { color: activeSubTab === 'payment_in' ? '#10B981' : theme.colors.textSecondary },
+                ]}
+              >
+                {paymentInRecords.length}
+              </Text>
+            </View>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[
-            styles.tab,
-            {
-              backgroundColor:
-                activeSubTab === 'quotations' ? 'rgba(99, 102, 241, 0.14)' : theme.colors.card,
-              borderColor:
-                activeSubTab === 'quotations' ? theme.colors.primary : theme.colors.borderGlass,
-            },
-          ]}
-          onPress={() => setActiveSubTab('quotations')}
-        >
-          <Text
+          {/* 3. Quotations */}
+          <TouchableOpacity
             style={[
-              styles.tabText,
-              {
-                color:
-                  activeSubTab === 'quotations' ? theme.colors.primary : theme.colors.textSecondary,
-              },
-              activeSubTab === 'quotations' && styles.tabTextActive,
+              styles.pillBtn,
+              activeSubTab === 'quotations'
+                ? [styles.pillBtnActive, { backgroundColor: '#F59E0B', borderColor: '#F59E0B' }]
+                : {
+                    backgroundColor: theme.colors.card,
+                    borderColor: theme.colors.borderGlass,
+                  },
             ]}
+            onPress={() => setActiveSubTab('quotations')}
+            activeOpacity={0.85}
           >
-            Estimates ({quotations.length})
-          </Text>
-        </TouchableOpacity>
+            <Feather
+              name="clipboard"
+              size={13}
+              color={activeSubTab === 'quotations' ? '#FFFFFF' : theme.colors.textMuted}
+            />
+            <Text
+              style={[
+                styles.pillBtnText,
+                { color: activeSubTab === 'quotations' ? '#FFFFFF' : theme.colors.textPrimary },
+                activeSubTab === 'quotations' && styles.pillBtnTextActive,
+              ]}
+            >
+              Quotations
+            </Text>
+            <View
+              style={[
+                styles.pillBadge,
+                activeSubTab === 'quotations'
+                  ? styles.pillBadgeActive
+                  : { backgroundColor: theme.colors.surface },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.pillBadgeText,
+                  { color: activeSubTab === 'quotations' ? '#F59E0B' : theme.colors.textSecondary },
+                ]}
+              >
+                {quotations.length}
+              </Text>
+            </View>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[
-            styles.tab,
-            {
-              backgroundColor:
-                activeSubTab === 'returns' ? 'rgba(239, 68, 68, 0.14)' : theme.colors.card,
-              borderColor:
-                activeSubTab === 'returns' ? '#EF4444' : theme.colors.borderGlass,
-            },
-          ]}
-          onPress={() => setActiveSubTab('returns')}
-        >
-          <Text
+          {/* 4. Returns */}
+          <TouchableOpacity
             style={[
-              styles.tabText,
-              { color: activeSubTab === 'returns' ? '#EF4444' : theme.colors.textSecondary },
-              activeSubTab === 'returns' && styles.tabTextActive,
+              styles.pillBtn,
+              activeSubTab === 'returns'
+                ? [styles.pillBtnActive, { backgroundColor: '#EF4444', borderColor: '#EF4444' }]
+                : {
+                    backgroundColor: theme.colors.card,
+                    borderColor: theme.colors.borderGlass,
+                  },
             ]}
+            onPress={() => setActiveSubTab('returns')}
+            activeOpacity={0.85}
           >
-            Returns ({salesReturns.length})
-          </Text>
-        </TouchableOpacity>
-      </ScrollView>
+            <Feather
+              name="rotate-ccw"
+              size={13}
+              color={activeSubTab === 'returns' ? '#FFFFFF' : theme.colors.textMuted}
+            />
+            <Text
+              style={[
+                styles.pillBtnText,
+                { color: activeSubTab === 'returns' ? '#FFFFFF' : theme.colors.textPrimary },
+                activeSubTab === 'returns' && styles.pillBtnTextActive,
+              ]}
+            >
+              Sales Returns
+            </Text>
+            <View
+              style={[
+                styles.pillBadge,
+                activeSubTab === 'returns'
+                  ? styles.pillBadgeActive
+                  : { backgroundColor: theme.colors.surface },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.pillBadgeText,
+                  { color: activeSubTab === 'returns' ? '#EF4444' : theme.colors.textSecondary },
+                ]}
+              >
+                {salesReturns.length}
+              </Text>
+            </View>
+          </TouchableOpacity>
+        </ScrollView>
+      </View>
 
       {/* Main Content List */}
       <ScrollView
@@ -400,63 +517,106 @@ export const SalesHubScreen: React.FC = () => {
         {/* 1. INVOICES */}
         {activeSubTab === 'invoices' && (
           <>
-            {filteredInvoices.map((inv) => (
-              <View
-                key={inv.id}
-                style={[
-                  styles.card,
-                  {
-                    backgroundColor: theme.colors.card,
-                    borderColor: theme.colors.borderGlass,
-                  },
-                ]}
-              >
-                <View style={styles.cardTop}>
-                  <View>
-                    <Text style={[styles.cardTitle, { color: theme.colors.textPrimary }]}>
-                      {inv.invoiceNumber}
-                    </Text>
-                    <Text style={[styles.cardSub, { color: theme.colors.textMuted }]}>
-                      {inv.partyName || 'Cash Customer'} • {new Date(inv.date).toLocaleDateString()}
-                    </Text>
-                  </View>
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={[styles.cardAmount, { color: '#10B981' }]}>
-                      Rs. {Number(inv.total).toLocaleString()}
-                    </Text>
-                    <View
-                      style={[
-                        styles.badge,
-                        {
-                          backgroundColor:
-                            inv.paymentMode === 'cash'
-                              ? 'rgba(16, 185, 129, 0.15)'
-                              : 'rgba(99, 102, 241, 0.15)',
-                        },
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.badgeText,
-                          {
-                            color: inv.paymentMode === 'cash' ? '#10B981' : theme.colors.primary,
-                          },
-                        ]}
-                      >
-                        {inv.paymentMode.toUpperCase()}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-              </View>
-            ))}
-            {filteredInvoices.length === 0 && (
+            {filteredInvoices.length === 0 ? (
               <View style={styles.emptyState}>
                 <Feather name="file-text" size={36} color={theme.colors.textMuted} />
                 <Text style={[styles.emptyText, { color: theme.colors.textMuted }]}>
-                  No sales invoices recorded.
+                  No sales invoices found
                 </Text>
               </View>
+            ) : (
+              filteredInvoices.map((inv) => (
+                <View
+                  key={inv.id}
+                  style={[
+                    styles.card,
+                    {
+                      backgroundColor: theme.colors.card,
+                      borderColor: theme.colors.borderGlass,
+                    },
+                  ]}
+                >
+                  <View style={styles.cardTop}>
+                    <View style={styles.cardHeaderLeft}>
+                      <View style={[styles.avatarBox, { backgroundColor: theme.colors.surface }]}>
+                        <Text style={[styles.avatarText, { color: theme.colors.primary }]}>
+                          {(inv.partyName || 'C')[0].toUpperCase()}
+                        </Text>
+                      </View>
+                      <View>
+                        <Text style={[styles.cardTitle, { color: theme.colors.textPrimary }]}>
+                          {inv.invoiceNumber}
+                        </Text>
+                        <Text style={[styles.cardSub, { color: theme.colors.textMuted }]}>
+                          {inv.partyName || 'Cash Customer'} • {new Date(inv.date).toLocaleDateString()}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={[styles.cardAmount, { color: '#10B981' }]}>
+                        Rs. {Number(inv.total).toLocaleString()}
+                      </Text>
+                      <View
+                        style={[
+                          styles.badge,
+                          {
+                            backgroundColor:
+                              inv.paymentMode === 'cash'
+                                ? 'rgba(16, 185, 129, 0.15)'
+                                : inv.paymentMode === 'credit'
+                                ? 'rgba(239, 68, 68, 0.15)'
+                                : 'rgba(255, 69, 0, 0.15)',
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.badgeText,
+                            {
+                              color:
+                                inv.paymentMode === 'cash'
+                                  ? '#10B981'
+                                  : inv.paymentMode === 'credit'
+                                  ? '#EF4444'
+                                  : theme.colors.primary,
+                            },
+                          ]}
+                        >
+                          {inv.paymentMode.toUpperCase()}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* Items Summary Preview */}
+                  {inv.items && inv.items.length > 0 && (
+                    <View
+                      style={[
+                        styles.itemsPreviewBox,
+                        { backgroundColor: theme.colors.surface, borderColor: theme.colors.borderGlass },
+                      ]}
+                    >
+                      <Text style={[styles.itemsSummaryText, { color: theme.colors.textMuted }]}>
+                        {inv.items.map((it) => `${it.qty}x ${it.name}`).join(', ')}
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* Card Bottom Actions */}
+                  <View style={styles.cardActionsRow}>
+                    <TouchableOpacity
+                      style={[styles.cardActionBtn, { borderColor: theme.colors.borderGlass }]}
+                      onPress={() => setActiveInvoice(inv)}
+                    >
+                      <Feather name="printer" size={13} color={theme.colors.textSecondary} />
+                      <Text style={[styles.cardActionText, { color: theme.colors.textSecondary }]}>
+                        View Receipt
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))
             )}
           </>
         )}
@@ -464,89 +624,136 @@ export const SalesHubScreen: React.FC = () => {
         {/* 2. PAYMENTS IN */}
         {activeSubTab === 'payment_in' && (
           <>
-            {filteredPaymentsIn.map((pay) => (
-              <View
-                key={pay.id}
-                style={[
-                  styles.card,
-                  {
-                    backgroundColor: theme.colors.card,
-                    borderColor: theme.colors.borderGlass,
-                  },
-                ]}
-              >
-                <View style={styles.cardTop}>
-                  <View>
-                    <Text style={[styles.cardTitle, { color: theme.colors.textPrimary }]}>
-                      {pay.partyName}
-                    </Text>
-                    <Text style={[styles.cardSub, { color: theme.colors.textMuted }]}>
-                      {pay.date} • Mode: {pay.paymentMode.toUpperCase()}
-                    </Text>
-                  </View>
-                  <Text style={[styles.cardAmount, { color: '#10B981' }]}>
-                    + Rs. {Number(pay.amount).toLocaleString()}
-                  </Text>
-                </View>
-                {pay.notes && (
-                  <Text style={[styles.cardNote, { color: theme.colors.textSecondary }]}>
-                    Note: {pay.notes}
-                  </Text>
-                )}
-              </View>
-            ))}
-            {filteredPaymentsIn.length === 0 && (
+            {filteredPaymentsIn.length === 0 ? (
               <View style={styles.emptyState}>
-                <Feather name="download" size={36} color={theme.colors.textMuted} />
+                <Feather name="arrow-down-left" size={36} color={theme.colors.textMuted} />
                 <Text style={[styles.emptyText, { color: theme.colors.textMuted }]}>
-                  No payment-in receipts found.
+                  No payment-in vouchers recorded
                 </Text>
               </View>
+            ) : (
+              filteredPaymentsIn.map((pay) => (
+                <View
+                  key={pay.id}
+                  style={[
+                    styles.card,
+                    {
+                      backgroundColor: theme.colors.card,
+                      borderColor: theme.colors.borderGlass,
+                    },
+                  ]}
+                >
+                  <View style={styles.cardTop}>
+                    <View style={styles.cardHeaderLeft}>
+                      <View style={[styles.iconCircleSmall, { backgroundColor: 'rgba(16, 185, 129, 0.15)' }]}>
+                        <Feather name="arrow-down-left" size={16} color="#10B981" />
+                      </View>
+                      <View>
+                        <Text style={[styles.cardTitle, { color: theme.colors.textPrimary }]}>
+                          {pay.partyName}
+                        </Text>
+                        <Text style={[styles.cardSub, { color: theme.colors.textMuted }]}>
+                          Received • {new Date(pay.date).toLocaleDateString()}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={[styles.cardAmount, { color: '#10B981' }]}>
+                        +Rs. {Number(pay.amount).toLocaleString()}
+                      </Text>
+                      <View
+                        style={[
+                          styles.badge,
+                          { backgroundColor: 'rgba(16, 185, 129, 0.12)' },
+                        ]}
+                      >
+                        <Text style={[styles.badgeText, { color: '#10B981' }]}>
+                          {pay.paymentMode.toUpperCase()}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  {pay.notes ? (
+                    <Text style={[styles.cardNote, { color: theme.colors.textMuted }]}>
+                      Note: {pay.notes}
+                    </Text>
+                  ) : null}
+                </View>
+              ))
             )}
           </>
         )}
 
-        {/* 3. ESTIMATES / QUOTATIONS */}
+        {/* 3. QUOTATIONS */}
         {activeSubTab === 'quotations' && (
           <>
-            {filteredQuotations.map((qt) => (
-              <View
-                key={qt.id}
-                style={[
-                  styles.card,
-                  {
-                    backgroundColor: theme.colors.card,
-                    borderColor: theme.colors.borderGlass,
-                  },
-                ]}
-              >
-                <View style={styles.cardTop}>
-                  <View>
-                    <Text style={[styles.cardTitle, { color: theme.colors.textPrimary }]}>
-                      {qt.quotationNumber}
-                    </Text>
-                    <Text style={[styles.cardSub, { color: theme.colors.textMuted }]}>
-                      {qt.partyName} • {qt.date}
-                    </Text>
-                  </View>
-                  <Text style={[styles.cardAmount, { color: theme.colors.primary }]}>
-                    Rs. {Number(qt.totalAmount).toLocaleString()}
-                  </Text>
-                </View>
-                {qt.notes && (
-                  <Text style={[styles.cardNote, { color: theme.colors.textSecondary }]}>
-                    {qt.notes}
-                  </Text>
-                )}
-              </View>
-            ))}
-            {filteredQuotations.length === 0 && (
+            {filteredQuotations.length === 0 ? (
               <View style={styles.emptyState}>
                 <Feather name="clipboard" size={36} color={theme.colors.textMuted} />
                 <Text style={[styles.emptyText, { color: theme.colors.textMuted }]}>
-                  No quotations created.
+                  No quotation estimates created
                 </Text>
               </View>
+            ) : (
+              filteredQuotations.map((qt) => (
+                <View
+                  key={qt.id}
+                  style={[
+                    styles.card,
+                    {
+                      backgroundColor: theme.colors.card,
+                      borderColor: theme.colors.borderGlass,
+                    },
+                  ]}
+                >
+                  <View style={styles.cardTop}>
+                    <View style={styles.cardHeaderLeft}>
+                      <View style={[styles.iconCircleSmall, { backgroundColor: 'rgba(245, 158, 11, 0.15)' }]}>
+                        <Feather name="clipboard" size={16} color="#F59E0B" />
+                      </View>
+                      <View>
+                        <Text style={[styles.cardTitle, { color: theme.colors.textPrimary }]}>
+                          {qt.quotationNumber}
+                        </Text>
+                        <Text style={[styles.cardSub, { color: theme.colors.textMuted }]}>
+                          {qt.partyName} • {new Date(qt.date).toLocaleDateString()}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={[styles.cardAmount, { color: '#F59E0B' }]}>
+                        Rs. {Number(qt.totalAmount).toLocaleString()}
+                      </Text>
+                      <View
+                        style={[
+                          styles.badge,
+                          { backgroundColor: 'rgba(245, 158, 11, 0.15)' },
+                        ]}
+                      >
+                        <Text style={[styles.badgeText, { color: '#F59E0B' }]}>
+                          ESTIMATE
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  {qt.items && qt.items.length > 0 && (
+                    <View
+                      style={[
+                        styles.itemsPreviewBox,
+                        { backgroundColor: theme.colors.surface, borderColor: theme.colors.borderGlass },
+                      ]}
+                    >
+                      <Text style={[styles.itemsSummaryText, { color: theme.colors.textMuted }]}>
+                        {qt.items.map((it) => `${it.quantity}x ${it.itemName} @ Rs. ${it.unitPrice}`).join(', ')}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              ))
             )}
           </>
         )}
@@ -554,50 +761,70 @@ export const SalesHubScreen: React.FC = () => {
         {/* 4. SALES RETURNS */}
         {activeSubTab === 'returns' && (
           <>
-            {filteredReturns.map((sr) => (
-              <View
-                key={sr.id}
-                style={[
-                  styles.card,
-                  {
-                    backgroundColor: theme.colors.card,
-                    borderColor: theme.colors.borderGlass,
-                  },
-                ]}
-              >
-                <View style={styles.cardTop}>
-                  <View>
-                    <Text style={[styles.cardTitle, { color: theme.colors.textPrimary }]}>
-                      {sr.returnNumber}
-                    </Text>
-                    <Text style={[styles.cardSub, { color: theme.colors.textMuted }]}>
-                      {sr.partyName} • {sr.date}
-                    </Text>
-                  </View>
-                  <Text style={[styles.cardAmount, { color: '#EF4444' }]}>
-                    - Rs. {Number(sr.totalAmount).toLocaleString()}
-                  </Text>
-                </View>
-                {sr.reason && (
-                  <Text style={[styles.cardNote, { color: theme.colors.textSecondary }]}>
-                    Reason: {sr.reason}
-                  </Text>
-                )}
-              </View>
-            ))}
-            {filteredReturns.length === 0 && (
+            {filteredReturns.length === 0 ? (
               <View style={styles.emptyState}>
-                <Feather name="corner-up-left" size={36} color={theme.colors.textMuted} />
+                <Feather name="rotate-ccw" size={36} color={theme.colors.textMuted} />
                 <Text style={[styles.emptyText, { color: theme.colors.textMuted }]}>
-                  No sales returns registered.
+                  No sales returns registered
                 </Text>
               </View>
+            ) : (
+              filteredReturns.map((sr) => (
+                <View
+                  key={sr.id}
+                  style={[
+                    styles.card,
+                    {
+                      backgroundColor: theme.colors.card,
+                      borderColor: theme.colors.borderGlass,
+                    },
+                  ]}
+                >
+                  <View style={styles.cardTop}>
+                    <View style={styles.cardHeaderLeft}>
+                      <View style={[styles.iconCircleSmall, { backgroundColor: 'rgba(239, 68, 68, 0.15)' }]}>
+                        <Feather name="rotate-ccw" size={16} color="#EF4444" />
+                      </View>
+                      <View>
+                        <Text style={[styles.cardTitle, { color: theme.colors.textPrimary }]}>
+                          {sr.returnNumber}
+                        </Text>
+                        <Text style={[styles.cardSub, { color: theme.colors.textMuted }]}>
+                          {sr.partyName} • {new Date(sr.date).toLocaleDateString()}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={[styles.cardAmount, { color: '#EF4444' }]}>
+                        -Rs. {Number(sr.totalAmount).toLocaleString()}
+                      </Text>
+                      <View
+                        style={[
+                          styles.badge,
+                          { backgroundColor: 'rgba(239, 68, 68, 0.15)' },
+                        ]}
+                      >
+                        <Text style={[styles.badgeText, { color: '#EF4444' }]}>
+                          RETURN
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  {sr.reason ? (
+                    <Text style={[styles.cardNote, { color: theme.colors.textMuted }]}>
+                      Reason: {sr.reason}
+                    </Text>
+                  ) : null}
+                </View>
+              ))
             )}
           </>
         )}
       </ScrollView>
 
-      {/* PAYMENT IN MODAL */}
+      {/* Modal: Payment In */}
       <Modal
         visible={showPaymentInModal}
         transparent
@@ -608,10 +835,7 @@ export const SalesHubScreen: React.FC = () => {
           <View
             style={[
               styles.modalCard,
-              {
-                backgroundColor: isDark ? '#0B0F19' : '#FFFFFF',
-                borderColor: isDark ? '#1E293B' : '#CBD5E1',
-              },
+              { backgroundColor: theme.colors.surface, borderColor: theme.colors.borderGlass },
             ]}
           >
             <View style={styles.modalHeader}>
@@ -619,13 +843,13 @@ export const SalesHubScreen: React.FC = () => {
                 Record Payment Received
               </Text>
               <TouchableOpacity onPress={() => setShowPaymentInModal(false)}>
-                <Feather name="x" size={20} color={theme.colors.textSecondary} />
+                <Feather name="x" size={20} color={theme.colors.textMuted} />
               </TouchableOpacity>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
               <Text style={[styles.modalLabel, { color: theme.colors.textSecondary }]}>
-                Customer *
+                Select Customer (ग्राहक) *
               </Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
                 {parties.map((p) => (
@@ -635,9 +859,9 @@ export const SalesHubScreen: React.FC = () => {
                       styles.partyChip,
                       {
                         backgroundColor:
-                          payPartyId === p.id ? theme.colors.primary : theme.colors.surface,
+                          payPartyId === p.id ? '#10B981' : theme.colors.card,
                         borderColor:
-                          payPartyId === p.id ? theme.colors.primary : theme.colors.borderGlass,
+                          payPartyId === p.id ? '#10B981' : theme.colors.borderGlass,
                       },
                     ]}
                     onPress={() => setPayPartyId(p.id)}
@@ -645,7 +869,9 @@ export const SalesHubScreen: React.FC = () => {
                     <Text
                       style={[
                         styles.partyChipText,
-                        { color: payPartyId === p.id ? '#FFFFFF' : theme.colors.textPrimary },
+                        {
+                          color: payPartyId === p.id ? '#FFFFFF' : theme.colors.textPrimary,
+                        },
                       ]}
                     >
                       {p.name}
@@ -655,20 +881,20 @@ export const SalesHubScreen: React.FC = () => {
               </ScrollView>
 
               <Text style={[styles.modalLabel, { color: theme.colors.textSecondary, marginTop: 12 }]}>
-                Amount (Rs.) *
+                Amount Received (प्राप्त रकम NPR) *
               </Text>
               <TextInput
                 style={[
                   styles.modalInput,
                   {
-                    backgroundColor: theme.colors.surface,
-                    color: theme.colors.textPrimary,
+                    backgroundColor: theme.colors.card,
                     borderColor: theme.colors.borderGlass,
+                    color: theme.colors.textPrimary,
                   },
                 ]}
+                keyboardType="numeric"
                 placeholder="0.00"
                 placeholderTextColor={theme.colors.textMuted}
-                keyboardType="numeric"
                 value={payAmount}
                 onChangeText={setPayAmount}
               />
@@ -677,16 +903,16 @@ export const SalesHubScreen: React.FC = () => {
                 Payment Mode
               </Text>
               <View style={styles.modeRow}>
-                {(['cash', 'fonepay', 'bank', 'credit'] as const).map((m) => (
+                {(['cash', 'fonepay', 'bank'] as PaymentMode[]).map((m) => (
                   <TouchableOpacity
                     key={m}
                     style={[
                       styles.modeBtn,
                       {
                         backgroundColor:
-                          payMode === m ? theme.colors.primary : theme.colors.surface,
+                          payMode === m ? '#10B981' : theme.colors.card,
                         borderColor:
-                          payMode === m ? theme.colors.primary : theme.colors.borderGlass,
+                          payMode === m ? '#10B981' : theme.colors.borderGlass,
                       },
                     ]}
                     onPress={() => setPayMode(m)}
@@ -694,7 +920,7 @@ export const SalesHubScreen: React.FC = () => {
                     <Text
                       style={[
                         styles.modeBtnText,
-                        { color: payMode === m ? '#FFFFFF' : theme.colors.textSecondary },
+                        { color: payMode === m ? '#FFFFFF' : theme.colors.textPrimary },
                       ]}
                     >
                       {m.toUpperCase()}
@@ -704,36 +930,35 @@ export const SalesHubScreen: React.FC = () => {
               </View>
 
               <Text style={[styles.modalLabel, { color: theme.colors.textSecondary, marginTop: 12 }]}>
-                Notes
+                Remarks / Reference
               </Text>
               <TextInput
                 style={[
                   styles.modalInput,
                   {
-                    backgroundColor: theme.colors.surface,
-                    color: theme.colors.textPrimary,
+                    backgroundColor: theme.colors.card,
                     borderColor: theme.colors.borderGlass,
+                    color: theme.colors.textPrimary,
                   },
                 ]}
-                placeholder="Optional notes..."
+                placeholder="Bill number, cheque or transaction ID..."
                 placeholderTextColor={theme.colors.textMuted}
                 value={payNotes}
                 onChangeText={setPayNotes}
               />
 
-              <AnimatedPressable
-                style={[styles.modalSubmitBtn, { backgroundColor: '#10B981', marginTop: 16 }]}
+              <TouchableOpacity
+                style={[styles.modalSubmitBtn, { backgroundColor: '#10B981', marginTop: 18 }]}
                 onPress={handleRecordPaymentIn}
-                activeScale={0.96}
               >
-                <Text style={styles.modalSubmitText}>Save Payment</Text>
-              </AnimatedPressable>
+                <Text style={styles.modalSubmitText}>Save Payment Received</Text>
+              </TouchableOpacity>
             </ScrollView>
           </View>
         </View>
       </Modal>
 
-      {/* QUOTATION MODAL */}
+      {/* Modal: Quotation */}
       <Modal
         visible={showQuotationModal}
         transparent
@@ -744,10 +969,7 @@ export const SalesHubScreen: React.FC = () => {
           <View
             style={[
               styles.modalCard,
-              {
-                backgroundColor: isDark ? '#0B0F19' : '#FFFFFF',
-                borderColor: isDark ? '#1E293B' : '#CBD5E1',
-              },
+              { backgroundColor: theme.colors.surface, borderColor: theme.colors.borderGlass },
             ]}
           >
             <View style={styles.modalHeader}>
@@ -755,7 +977,7 @@ export const SalesHubScreen: React.FC = () => {
                 Create Estimate / Quotation
               </Text>
               <TouchableOpacity onPress={() => setShowQuotationModal(false)}>
-                <Feather name="x" size={20} color={theme.colors.textSecondary} />
+                <Feather name="x" size={20} color={theme.colors.textMuted} />
               </TouchableOpacity>
             </View>
 
@@ -767,89 +989,127 @@ export const SalesHubScreen: React.FC = () => {
                 style={[
                   styles.modalInput,
                   {
-                    backgroundColor: theme.colors.surface,
-                    color: theme.colors.textPrimary,
+                    backgroundColor: theme.colors.card,
                     borderColor: theme.colors.borderGlass,
+                    color: theme.colors.textPrimary,
                   },
                 ]}
-                placeholder="e.g. Ramesh Giri"
+                placeholder="Enter customer name"
                 placeholderTextColor={theme.colors.textMuted}
                 value={quotePartyName}
                 onChangeText={setQuotePartyName}
               />
 
               <Text style={[styles.modalLabel, { color: theme.colors.textSecondary, marginTop: 10 }]}>
-                Item Name *
+                Phone (Optional)
               </Text>
               <TextInput
                 style={[
                   styles.modalInput,
                   {
-                    backgroundColor: theme.colors.surface,
-                    color: theme.colors.textPrimary,
+                    backgroundColor: theme.colors.card,
                     borderColor: theme.colors.borderGlass,
+                    color: theme.colors.textPrimary,
                   },
                 ]}
-                placeholder="e.g. Rice 25kg"
+                keyboardType="phone-pad"
+                placeholder="98XXXXXXXX"
+                placeholderTextColor={theme.colors.textMuted}
+                value={quotePartyPhone}
+                onChangeText={setQuotePartyPhone}
+              />
+
+              <Text style={[styles.modalLabel, { color: theme.colors.textSecondary, marginTop: 10 }]}>
+                Item / Service Name *
+              </Text>
+              <TextInput
+                style={[
+                  styles.modalInput,
+                  {
+                    backgroundColor: theme.colors.card,
+                    borderColor: theme.colors.borderGlass,
+                    color: theme.colors.textPrimary,
+                  },
+                ]}
+                placeholder="e.g. Basmati Rice 25kg"
                 placeholderTextColor={theme.colors.textMuted}
                 value={quoteItemName}
                 onChangeText={setQuoteItemName}
               />
 
-              <View style={styles.inputSplitRow}>
+              <View style={[styles.inputSplitRow, { marginTop: 10, gap: 10 }]}>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.modalLabel, { color: theme.colors.textSecondary, marginTop: 10 }]}>
+                  <Text style={[styles.modalLabel, { color: theme.colors.textSecondary }]}>
                     Qty
                   </Text>
                   <TextInput
                     style={[
                       styles.modalInput,
                       {
-                        backgroundColor: theme.colors.surface,
-                        color: theme.colors.textPrimary,
+                        backgroundColor: theme.colors.card,
                         borderColor: theme.colors.borderGlass,
+                        color: theme.colors.textPrimary,
                       },
                     ]}
                     keyboardType="numeric"
+                    placeholder="1"
+                    placeholderTextColor={theme.colors.textMuted}
                     value={quoteQty}
                     onChangeText={setQuoteQty}
                   />
                 </View>
-                <View style={{ flex: 1, marginLeft: 10 }}>
-                  <Text style={[styles.modalLabel, { color: theme.colors.textSecondary, marginTop: 10 }]}>
-                    Rate (Rs.) *
+                <View style={{ flex: 2 }}>
+                  <Text style={[styles.modalLabel, { color: theme.colors.textSecondary }]}>
+                    Rate (NPR) *
                   </Text>
                   <TextInput
                     style={[
                       styles.modalInput,
                       {
-                        backgroundColor: theme.colors.surface,
-                        color: theme.colors.textPrimary,
+                        backgroundColor: theme.colors.card,
                         borderColor: theme.colors.borderGlass,
+                        color: theme.colors.textPrimary,
                       },
                     ]}
+                    keyboardType="numeric"
                     placeholder="0.00"
                     placeholderTextColor={theme.colors.textMuted}
-                    keyboardType="numeric"
                     value={quoteRate}
                     onChangeText={setQuoteRate}
                   />
                 </View>
               </View>
 
-              <AnimatedPressable
+              <Text style={[styles.modalLabel, { color: theme.colors.textSecondary, marginTop: 10 }]}>
+                Terms / Notes
+              </Text>
+              <TextInput
+                style={[
+                  styles.modalInput,
+                  {
+                    backgroundColor: theme.colors.card,
+                    borderColor: theme.colors.borderGlass,
+                    color: theme.colors.textPrimary,
+                  },
+                ]}
+                placeholder="Valid for 7 days..."
+                placeholderTextColor={theme.colors.textMuted}
+                value={quoteNotes}
+                onChangeText={setQuoteNotes}
+              />
+
+              <TouchableOpacity
                 style={[styles.modalSubmitBtn, { backgroundColor: theme.colors.primary, marginTop: 18 }]}
                 onPress={handleCreateQuotation}
-                activeScale={0.96}
               >
-                <Text style={styles.modalSubmitText}>Generate Estimate</Text>
-              </AnimatedPressable>
+                <Text style={styles.modalSubmitText}>Save & Create Quotation</Text>
+              </TouchableOpacity>
             </ScrollView>
           </View>
         </View>
       </Modal>
 
-      {/* SALES RETURN MODAL */}
+      {/* Modal: Sales Return */}
       <Modal
         visible={showReturnModal}
         transparent
@@ -860,18 +1120,15 @@ export const SalesHubScreen: React.FC = () => {
           <View
             style={[
               styles.modalCard,
-              {
-                backgroundColor: isDark ? '#0B0F19' : '#FFFFFF',
-                borderColor: isDark ? '#1E293B' : '#CBD5E1',
-              },
+              { backgroundColor: theme.colors.surface, borderColor: theme.colors.borderGlass },
             ]}
           >
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { color: theme.colors.textPrimary }]}>
-                Record Sales Return
+                Record Customer Return
               </Text>
               <TouchableOpacity onPress={() => setShowReturnModal(false)}>
-                <Feather name="x" size={20} color={theme.colors.textSecondary} />
+                <Feather name="x" size={20} color={theme.colors.textMuted} />
               </TouchableOpacity>
             </View>
 
@@ -883,12 +1140,12 @@ export const SalesHubScreen: React.FC = () => {
                 style={[
                   styles.modalInput,
                   {
-                    backgroundColor: theme.colors.surface,
-                    color: theme.colors.textPrimary,
+                    backgroundColor: theme.colors.card,
                     borderColor: theme.colors.borderGlass,
+                    color: theme.colors.textPrimary,
                   },
                 ]}
-                placeholder="e.g. Sita Thapa"
+                placeholder="Customer Name"
                 placeholderTextColor={theme.colors.textMuted}
                 value={returnPartyName}
                 onChangeText={setReturnPartyName}
@@ -901,52 +1158,54 @@ export const SalesHubScreen: React.FC = () => {
                 style={[
                   styles.modalInput,
                   {
-                    backgroundColor: theme.colors.surface,
-                    color: theme.colors.textPrimary,
+                    backgroundColor: theme.colors.card,
                     borderColor: theme.colors.borderGlass,
+                    color: theme.colors.textPrimary,
                   },
                 ]}
-                placeholder="e.g. Broken packaging item"
+                placeholder="Item Name"
                 placeholderTextColor={theme.colors.textMuted}
                 value={returnItemName}
                 onChangeText={setReturnItemName}
               />
 
-              <View style={styles.inputSplitRow}>
+              <View style={[styles.inputSplitRow, { marginTop: 10, gap: 10 }]}>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.modalLabel, { color: theme.colors.textSecondary, marginTop: 10 }]}>
+                  <Text style={[styles.modalLabel, { color: theme.colors.textSecondary }]}>
                     Qty
                   </Text>
                   <TextInput
                     style={[
                       styles.modalInput,
                       {
-                        backgroundColor: theme.colors.surface,
-                        color: theme.colors.textPrimary,
+                        backgroundColor: theme.colors.card,
                         borderColor: theme.colors.borderGlass,
+                        color: theme.colors.textPrimary,
                       },
                     ]}
                     keyboardType="numeric"
+                    placeholder="1"
+                    placeholderTextColor={theme.colors.textMuted}
                     value={returnQty}
                     onChangeText={setReturnQty}
                   />
                 </View>
-                <View style={{ flex: 1, marginLeft: 10 }}>
-                  <Text style={[styles.modalLabel, { color: theme.colors.textSecondary, marginTop: 10 }]}>
-                    Rate (Rs.) *
+                <View style={{ flex: 2 }}>
+                  <Text style={[styles.modalLabel, { color: theme.colors.textSecondary }]}>
+                    Rate (NPR) *
                   </Text>
                   <TextInput
                     style={[
                       styles.modalInput,
                       {
-                        backgroundColor: theme.colors.surface,
-                        color: theme.colors.textPrimary,
+                        backgroundColor: theme.colors.card,
                         borderColor: theme.colors.borderGlass,
+                        color: theme.colors.textPrimary,
                       },
                     ]}
+                    keyboardType="numeric"
                     placeholder="0.00"
                     placeholderTextColor={theme.colors.textMuted}
-                    keyboardType="numeric"
                     value={returnRate}
                     onChangeText={setReturnRate}
                   />
@@ -954,30 +1213,48 @@ export const SalesHubScreen: React.FC = () => {
               </View>
 
               <Text style={[styles.modalLabel, { color: theme.colors.textSecondary, marginTop: 10 }]}>
-                Reason
+                Cash Refund Amount (NPR)
               </Text>
               <TextInput
                 style={[
                   styles.modalInput,
                   {
-                    backgroundColor: theme.colors.surface,
-                    color: theme.colors.textPrimary,
+                    backgroundColor: theme.colors.card,
                     borderColor: theme.colors.borderGlass,
+                    color: theme.colors.textPrimary,
                   },
                 ]}
-                placeholder="Reason for return..."
+                keyboardType="numeric"
+                placeholder="0.00 (leave 0 if credited to account)"
+                placeholderTextColor={theme.colors.textMuted}
+                value={returnRefund}
+                onChangeText={setReturnRefund}
+              />
+
+              <Text style={[styles.modalLabel, { color: theme.colors.textSecondary, marginTop: 10 }]}>
+                Reason for Return
+              </Text>
+              <TextInput
+                style={[
+                  styles.modalInput,
+                  {
+                    backgroundColor: theme.colors.card,
+                    borderColor: theme.colors.borderGlass,
+                    color: theme.colors.textPrimary,
+                  },
+                ]}
+                placeholder="Damaged, expired, incorrect size..."
                 placeholderTextColor={theme.colors.textMuted}
                 value={returnReason}
                 onChangeText={setReturnReason}
               />
 
-              <AnimatedPressable
+              <TouchableOpacity
                 style={[styles.modalSubmitBtn, { backgroundColor: '#EF4444', marginTop: 18 }]}
-                onPress={handleCreateReturn}
-                activeScale={0.96}
+                onPress={handleCreateSalesReturn}
               >
-                <Text style={styles.modalSubmitText}>Save Sales Return</Text>
-              </AnimatedPressable>
+                <Text style={styles.modalSubmitText}>Save Sales Return Voucher</Text>
+              </TouchableOpacity>
             </ScrollView>
           </View>
         </View>
@@ -993,20 +1270,21 @@ const styles = StyleSheet.create({
   headerBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
     paddingVertical: 10,
-    gap: 10,
     borderBottomWidth: 1,
+    gap: 8,
   },
   searchBox: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    borderWidth: 1,
-    borderRadius: 8,
     paddingHorizontal: 12,
-    height: 40,
+    height: 38,
+    borderRadius: 10,
+    borderWidth: 1,
+    gap: 8,
   },
   searchInput: {
     flex: 1,
@@ -1016,75 +1294,156 @@ const styles = StyleSheet.create({
   headerBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
     paddingHorizontal: 12,
-    height: 40,
-    borderRadius: 8,
+    height: 38,
+    borderRadius: 10,
+    gap: 5,
   },
   headerBtnText: {
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '800',
   },
-  tabsRow: {
-    paddingHorizontal: 16,
+  pillFilterWrapper: {
     paddingVertical: 10,
-    gap: 8,
   },
-  tab: {
+  pillFilterRow: {
+    paddingHorizontal: 14,
+    gap: 8,
+    alignItems: 'center',
+  },
+  pillBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 14,
     paddingVertical: 7,
-    borderRadius: 20,
+    borderRadius: 9999,
     borderWidth: 1,
+    gap: 6,
   },
-  tabText: {
+  pillBtnActive: {
+    backgroundColor: '#FF4500',
+    borderColor: '#FF4500',
+    shadowColor: '#FF4500',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  pillBtnText: {
     fontSize: 12,
     fontWeight: '600',
   },
-  tabTextActive: {
+  pillBtnTextActive: {
+    fontWeight: '800',
+  },
+  pillBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 9999,
+  },
+  pillBadgeActive: {
+    backgroundColor: '#FFFFFF',
+  },
+  pillBadgeText: {
+    fontSize: 10,
     fontWeight: '800',
   },
   listContainer: {
-    padding: 16,
-    paddingBottom: 40,
-    gap: 10,
+    paddingHorizontal: 14,
+    paddingBottom: 25,
+    gap: 8,
   },
   card: {
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1,
-    padding: 14,
+    padding: 12,
+    gap: 8,
   },
   cardTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  cardHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  avatarBox: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: {
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  iconCircleSmall: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   cardTitle: {
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: '800',
   },
   cardSub: {
-    fontSize: 12,
-    marginTop: 2,
+    fontSize: 11,
+    marginTop: 1,
   },
   cardAmount: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '800',
-  },
-  cardNote: {
-    fontSize: 12,
-    marginTop: 8,
-    fontStyle: 'italic',
+    fontFamily: 'monospace',
   },
   badge: {
-    paddingHorizontal: 8,
+    paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 6,
-    marginTop: 4,
+    borderRadius: 4,
+    marginTop: 3,
   },
   badgeText: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '800',
+  },
+  itemsPreviewBox: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  itemsSummaryText: {
+    fontSize: 11,
+  },
+  cardActionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.05)',
+    paddingTop: 6,
+  },
+  cardActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  cardActionText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  cardNote: {
+    fontSize: 11,
+    fontStyle: 'italic',
   },
   emptyState: {
     alignItems: 'center',
@@ -1096,17 +1455,16 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '500',
   },
+
+  // Modal Styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.65)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 16,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'flex-end',
   },
   modalCard: {
-    width: '100%',
-    maxWidth: 440,
-    borderRadius: 16,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     borderWidth: 1,
     padding: 18,
     maxHeight: '85%',
@@ -1128,19 +1486,18 @@ const styles = StyleSheet.create({
   },
   modalInput: {
     height: 42,
-    borderRadius: 8,
+    borderRadius: 10,
     borderWidth: 1,
     paddingHorizontal: 12,
     fontSize: 13,
   },
   chipRow: {
     flexDirection: 'row',
-    gap: 8,
     paddingBottom: 4,
   },
   partyChip: {
     paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingVertical: 7,
     borderRadius: 16,
     borderWidth: 1,
     marginRight: 8,
@@ -1157,8 +1514,8 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 8,
-    borderRadius: 8,
+    paddingVertical: 9,
+    borderRadius: 10,
     borderWidth: 1,
   },
   modeBtnText: {
@@ -1170,7 +1527,7 @@ const styles = StyleSheet.create({
   },
   modalSubmitBtn: {
     height: 44,
-    borderRadius: 8,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },

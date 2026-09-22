@@ -49,11 +49,12 @@ interface NavItemProps {
 }
 
 const NavItem: Component<NavItemProps> = (props) => {
+  const isActive = () => activeTab() === props.tab;
   return (
     <button
-      class={`nav-item w-full ${activeTab() === props.tab ? 'active' : ''} ${
-        props.isCollapsed ? 'justify-center !px-0' : ''
-      }`}
+      class={`nav-item w-full ${
+        isActive() ? 'active !bg-[#FF4500] !text-white shadow-md shadow-[#FF4500]/25' : ''
+      } ${props.isCollapsed ? 'justify-center !px-0' : ''}`}
       title={props.isCollapsed ? props.label : undefined}
       onClick={() => {
         setActiveTab(props.tab);
@@ -111,7 +112,7 @@ export const Sidebar: Component = () => {
         <div class="px-3.5 py-4 border-b border-gray-100 dark:border-neutral-800 shrink-0">
           <div class="flex items-center justify-between gap-2">
             <div class="flex items-center gap-2.5 overflow-hidden">
-              <div class="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center shadow-sm shrink-0">
+              <div class="w-8 h-8 rounded-lg !bg-[#FF4500] flex items-center justify-center shadow-sm shrink-0">
                 <span class="text-white font-bold text-xs tracking-wider">BY</span>
               </div>
               <Show when={!isSidebarCollapsed() || isMobileSidebarOpen()}>
@@ -147,7 +148,7 @@ export const Sidebar: Component = () => {
             }`}
             title={currentBusiness.nameEn || currentBusiness.name}
           >
-            <div class="w-8 h-8 rounded-full bg-emerald-500 text-white flex items-center justify-center text-xs font-bold shadow-sm shrink-0">
+            <div class="w-8 h-8 rounded-full !bg-[#FF4500] text-white flex items-center justify-center text-xs font-bold shadow-sm shrink-0">
               {storeInitials()}
             </div>
             <Show when={!isSidebarCollapsed() || isMobileSidebarOpen()}>
@@ -285,7 +286,7 @@ export const Sidebar: Component = () => {
                         <button
                           class={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs transition-colors ${
                             activeTab() === tool.tab
-                              ? 'bg-emerald-600 text-white font-bold'
+                              ? '!bg-[#FF4500] !text-white font-bold'
                               : 'text-gray-700 dark:text-neutral-300 hover:bg-gray-100 dark:hover:bg-neutral-900'
                           }`}
                           onClick={() => {
@@ -306,7 +307,7 @@ export const Sidebar: Component = () => {
             <button
               class={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 cursor-pointer w-full ${
                 usefulTools.some((t) => t.tab === activeTab())
-                  ? 'bg-emerald-600 text-white shadow-sm'
+                  ? '!bg-[#FF4500] !text-white shadow-sm'
                   : 'text-gray-600 dark:text-neutral-300 hover:bg-gray-50 dark:hover:bg-neutral-900 hover:text-gray-900 dark:hover:text-white'
               }`}
               onClick={() => setToolsOpen(!toolsOpen())}
@@ -325,7 +326,7 @@ export const Sidebar: Component = () => {
                     <button
                       class={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs transition-colors flex items-center gap-2 ${
                         activeTab() === tool.tab
-                          ? 'text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-50/50 dark:bg-emerald-950/40'
+                          ? '!text-[#FF4500] font-bold bg-orange-50/50 dark:bg-orange-950/40'
                           : 'text-gray-600 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-neutral-900'
                       }`}
                       onClick={() => {

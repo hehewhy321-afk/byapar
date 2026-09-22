@@ -262,9 +262,53 @@ export type ActiveTab =
   | 'business-cards'
   | 'greeting-cards';
 
+// Valid tabs list
+export const VALID_TABS: ActiveTab[] = [
+  'dashboard',
+  'sales',
+  'pos',
+  'purchase',
+  'khata',
+  'inventory',
+  'accounts',
+  'expense',
+  'income',
+  'staff',
+  'reports',
+  'reminders',
+  'settings',
+  'bill-gallery',
+  'notebook',
+  'business-cards',
+  'greeting-cards',
+];
+
+function getInitialTab(): ActiveTab {
+  if (typeof window === 'undefined') return 'dashboard';
+  const rawHash = window.location.hash.replace(/^#\/?/, '').trim();
+  if (VALID_TABS.includes(rawHash as ActiveTab)) {
+    return rawHash as ActiveTab;
+  }
+  const stored = localStorage.getItem('byapar_active_tab') as ActiveTab;
+  if (stored && VALID_TABS.includes(stored)) {
+    return stored;
+  }
+  return 'dashboard';
+}
+
 // Global App Signals
 export const [isOnline, setIsOnline] = createSignal<boolean>(true);
-export const [activeTab, setActiveTab] = createSignal<ActiveTab>('dashboard');
+const [_activeTab, _setActiveTab] = createSignal<ActiveTab>(getInitialTab());
+export const activeTab = _activeTab;
+export function setActiveTab(tab: ActiveTab) {
+  _setActiveTab(tab);
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('byapar_active_tab', tab);
+    if (window.location.hash !== `#${tab}`) {
+      window.history.replaceState(null, '', `#${tab}`);
+    }
+  }
+}
 export const [pricingTier, setPricingTier] = createSignal<'retail' | 'wholesale'>('retail');
 
 // Dark mode state - default to dark theme
@@ -365,7 +409,52 @@ export const [notes, setNotes] = createStore<NoteItem[]>(loadStored('notes', [])
 
 // Page routing for unauthenticated users
 export type AppPage = 'landing' | 'auth' | 'about' | 'faq' | 'privacy' | 'terms';
-export const [currentPage, setCurrentPage] = createSignal<AppPage>('landing');
+export const VALID_PAGES: AppPage[] = ['landing', 'auth', 'about', 'faq', 'privacy', 'terms'];
+
+function getInitialPage(): AppPage {
+  if (typeof window === 'undefined') return 'landing';
+  const rawHash = window.location.hash.replace(/^#\/?/, '').trim();
+  if (VALID_PAGES.includes(rawHash as AppPage)) {
+    return rawHash as AppPage;
+  }
+  const stored = localStorage.getItem('byapar_current_page') as AppPage;
+  if (stored && VALID_PAGES.includes(stored)) {
+    return stored;
+  }
+  return 'landing';
+}
+
+const [_currentPage, _setCurrentPage] = createSignal<AppPage>(getInitialPage());
+export const currentPage = _currentPage;
+export function setCurrentPage(page: AppPage) {
+  _setCurrentPage(page);
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('byapar_current_page', page);
+    if (window.location.hash !== `#${page}`) {
+      window.history.replaceState(null, '', `#${page}`);
+    }
+  }
+}
+
+// Window hashchange listener to keep activeTab and currentPage in sync with URL
+if (typeof window !== 'undefined') {
+  window.addEventListener('hashchange', () => {
+    const rawHash = window.location.hash.replace(/^#\/?/, '').trim();
+    if (VALID_TABS.includes(rawHash as ActiveTab)) {
+      _setActiveTab(rawHash as ActiveTab);
+      localStorage.setItem('byapar_active_tab', rawHash);
+    } else if (VALID_PAGES.includes(rawHash as AppPage)) {
+      _setCurrentPage(rawHash as AppPage);
+      localStorage.setItem('byapar_current_page', rawHash);
+    }
+  });
+
+  // Ensure current active tab is set in hash on load if not present
+  const initTab = getInitialTab();
+  if (!window.location.hash && initTab && initTab !== 'dashboard') {
+    window.history.replaceState(null, '', `#${initTab}`);
+  }
+}
 
 // Modals Global Signals
 export const [showAuthModal, setShowAuthModal] = createSignal(false);
