@@ -38,7 +38,9 @@ import {
   IconSales,
   IconPurchase,
   IconStaff,
+  IconBell,
 } from '../icons';
+import { unreadNotificationCount } from '../../services/notificationService';
 
 interface NavItemProps {
   icon: Component<{ class?: string }>;
@@ -46,6 +48,7 @@ interface NavItemProps {
   tab: ActiveTab;
   isCollapsed?: boolean;
   onNavigate?: () => void;
+  badge?: number;
 }
 
 const NavItem: Component<NavItemProps> = (props) => {
@@ -63,7 +66,12 @@ const NavItem: Component<NavItemProps> = (props) => {
     >
       <props.icon class="w-[18px] h-[18px] shrink-0" />
       <Show when={!props.isCollapsed}>
-        <span class="truncate">{props.label}</span>
+        <span class="truncate flex-1 text-left">{props.label}</span>
+        <Show when={props.badge && props.badge > 0}>
+          <span class="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-rose-500 text-white shrink-0">
+            {props.badge}
+          </span>
+        </Show>
       </Show>
     </button>
   );
@@ -82,9 +90,10 @@ export const Sidebar: Component = () => {
       .toUpperCase();
 
   const usefulTools = [
+    { label: 'Notifications', tab: 'notifications' as ActiveTab, icon: IconBell, badge: unreadNotificationCount },
+    { label: 'Reminders', tab: 'reminders' as ActiveTab, icon: IconReminders },
     { label: 'Business Cards', tab: 'business-cards' as ActiveTab, icon: IconBusinessCard },
     { label: 'Greeting Cards', tab: 'greeting-cards' as ActiveTab, icon: IconGreetingCards },
-    { label: 'Reminders', tab: 'reminders' as ActiveTab, icon: IconReminders },
     { label: 'Notebook', tab: 'notebook' as ActiveTab, icon: IconNotebook },
   ];
 

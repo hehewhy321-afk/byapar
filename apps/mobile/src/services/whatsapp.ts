@@ -1,4 +1,5 @@
 import { Linking } from 'react-native';
+import { analytics } from './analyticsService';
 
 export function normalizeNepalPhone(phone: string): string {
   const digits = phone.replace(/\D/g, '');
@@ -49,6 +50,8 @@ export async function sendWhatsAppReminder(
   const normalized = normalizeNepalPhone(phone);
   const text = buildWhatsAppReminderMessage(customerName, storeName, amount, customTemplate);
   const encoded = encodeURIComponent(text);
+
+  analytics.logReminderSent(customerName, amount, 'whatsapp');
 
   const nativeUrl = `whatsapp://send?phone=${normalized}&text=${encoded}`;
   const webUrl = `https://wa.me/${normalized}?text=${encoded}`;

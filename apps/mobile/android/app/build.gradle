@@ -125,6 +125,10 @@ dependencies {
     } else {
         implementation jscFlavor
     }
+
+    // Firebase BoM & Google Analytics (connected to byapar-nepal via google-services.json)
+    implementation platform('com.google.firebase:firebase-bom:33.7.0')
+    implementation 'com.google.firebase:firebase-analytics'
 }
 
 // Auto-patch 16 KB ELF page alignment for all 64-bit native libraries (.so)
@@ -192,5 +196,7 @@ tasks.matching { task ->
         }
     }
 }
+
+apply plugin: "com.google.gms.google-services"
 
 

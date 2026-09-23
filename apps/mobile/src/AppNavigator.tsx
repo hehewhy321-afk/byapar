@@ -25,9 +25,11 @@ import { BillArchiveScreen } from './screens/BillArchiveScreen';
 import { ReportsScreen } from './screens/ReportsScreen';
 import { StaffScreen } from './screens/StaffScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
+import { NotificationScreen } from './screens/NotificationScreen';
 import { AuthScreen } from './screens/AuthScreen';
 import { DashboardScreen } from './screens/DashboardScreen';
 import { ExpenseIncomeScreen } from './screens/ExpenseIncomeScreen';
+import { analytics } from './services/analyticsService';
 import { ActiveTab } from './types';
 
 const MAIN_TABS: ActiveTab[] = [
@@ -43,6 +45,7 @@ const MAIN_TABS: ActiveTab[] = [
   'reports',
   'staff',
   'settings',
+  'notifications',
 ];
 
 export const AppNavigator: React.FC = () => {
@@ -59,6 +62,11 @@ export const AppNavigator: React.FC = () => {
   } = useApp();
   const [onboardingStep, setOnboardingStep] = useState<'intro' | 'setup'>('intro');
   const lastBackPressRef = useRef<number>(0);
+
+  // Track screen navigation in Firebase Analytics
+  useEffect(() => {
+    analytics.logScreenView(activeTab);
+  }, [activeTab]);
 
   // Hardware back button navigation: navigate back through screen history or double tap to exit from home
   useEffect(() => {
@@ -164,6 +172,7 @@ export const AppNavigator: React.FC = () => {
         {activeTab === 'reports' && <ReportsScreen />}
         {activeTab === 'staff' && <StaffScreen />}
         {activeTab === 'settings' && <SettingsScreen />}
+        {activeTab === 'notifications' && <NotificationScreen />}
       </View>
 
       {/* Bottom Navigation Bar */}

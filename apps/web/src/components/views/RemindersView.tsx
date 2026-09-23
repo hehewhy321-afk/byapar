@@ -6,8 +6,10 @@ import {
   updateReminder,
   deleteReminder,
   setActiveTab,
+  currentBusiness,
   type Reminder,
 } from '../../db/localDb';
+import { createDebtorReminder, createSupplierPayableReminder } from '../../services/notificationService';
 import { formatNepaliCurrency } from '@byapar/core';
 import { IconPlus, IconCalendar, IconCheck, IconTrash, IconX } from '../icons';
 
@@ -21,6 +23,8 @@ export const RemindersView: Component = () => {
   const [formAmount, setFormAmount] = createSignal(0);
   const [formDueDate, setFormDueDate] = createSignal(new Date().toISOString().split('T')[0]);
   const [formNote, setFormNote] = createSignal('');
+  const [formReminderType, setFormReminderType] = createSignal<'customer_due' | 'supplier_payment' | 'custom'>('customer_due');
+  const [formFrequency, setFormFrequency] = createSignal<'once' | 'daily' | 'weekly' | 'monthly'>('once');
 
   const upcoming = createMemo(() => reminders.filter((r) => r.status === 'upcoming'));
   const completed = createMemo(() => reminders.filter((r) => r.status === 'completed'));
@@ -42,6 +46,28 @@ export const RemindersView: Component = () => {
       note: formNote() || undefined,
       status: 'upcoming',
     });
+
+    // Synchronize to cloud notifications and dispatch cross-device alerts
+    if (formReminderType() === 'customer_due' && formPartyId() && party) {
+      await createDebtorReminder({
+        businessId: currentBusiness.id,
+        partyId: party.id,
+        partyName: party.name,
+        partyPhone: party.phone,
+        amount: formAmount() || party.currentBalance || 0,
+        dueDate: formDueDate(),
+        frequency: formFrequency(),
+        notes: formNote(),
+      });
+    } else if (formReminderType() === 'supplier_payment') {
+      await createSupplierPayableReminder({
+        businessId: currentBusiness.id,
+        supplierId: party?.id,
+        supplierName: party?.name || formTitle(),
+        amount: formAmount() || 0,
+        dueDate: formDueDate(),
+      });
+    }
 
     resetForm();
     setShowModal(false);
@@ -216,6 +242,34 @@ export const RemindersView: Component = () => {
               </button>
             </div>
             <div class="p-6 space-y-4">
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-xs font-medium text-gray-600 dark:text-neutral-300 mb-1.5">Reminder Type</label>
+                  <select
+                    class="input-field"
+                    value={formReminderType()}
+                    onChange={(e) => setFormReminderType(e.currentTarget.value as any)}
+                  >
+                    <option value="customer_due">Customer Udhar Due</option>
+                    <option value="supplier_payment">Supplier Purchase Due</option>
+                    <option value="custom">General Task / Custom</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-gray-600 dark:text-neutral-300 mb-1.5">Repeat Frequency</label>
+                  <select
+                    class="input-field"
+                    value={formFrequency()}
+                    onChange={(e) => setFormFrequency(e.currentTarget.value as any)}
+                  >
+                    <option value="once">One-time Alert</option>
+                    <option value="daily">Daily Reminder</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly</option>
+                  </select>
+                </div>
+              </div>
+
               <div>
                 <label class="block text-xs font-medium text-gray-600 dark:text-neutral-300 mb-1.5">Title *</label>
                 <input

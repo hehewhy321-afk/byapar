@@ -259,6 +259,38 @@ export type ActiveTab =
   | 'reports'
   | 'staff'
   | 'more'
-  | 'settings';
+  | 'settings'
+  | 'notifications';
+
+export type NotificationType =
+  | 'debtor_reminder'
+  | 'supplier_payable'
+  | 'low_stock'
+  | 'daily_summary'
+  | 'subscription_alert'
+  | 'admin_broadcast'
+  | 'system';
+
+export interface NotificationItem {
+  id: string;
+  businessId: string;
+  userId?: string | null;
+  title: string;
+  message: string;
+  type: NotificationType;
+  priority: 'low' | 'normal' | 'high' | 'urgent';
+  data?: {
+    partyId?: string;
+    partyName?: string;
+    partyPhone?: string;
+    invoiceId?: string;
+    amount?: number;
+    linkScreen?: string;
+    [key: string]: any;
+  };
+  isRead: boolean;
+  createdAt: string;
+}
+
 
 

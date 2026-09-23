@@ -2,7 +2,9 @@ import { Component, Switch, Match, onSettled, createSignal, Show, For } from 'so
 import { Sidebar } from './components/layout/Sidebar';
 import { TopBar } from './components/layout/TopBar';
 import { DashboardView } from './components/views/DashboardView';
+import { NotificationsView } from './components/views/NotificationsView';
 import { RemindersView } from './components/views/RemindersView';
+import { initNotificationSync } from './services/notificationService';
 import { ExpenseIncomeView } from './components/views/ExpenseIncomeView';
 import { AccountsView } from './components/views/AccountsView';
 import { SettingsView } from './components/views/SettingsView';
@@ -56,6 +58,7 @@ import {
   IconSparkles,
   IconParty,
   IconHeart,
+  IconBell,
 } from './components/icons';
 
 export const App: Component = () => {
@@ -75,6 +78,7 @@ export const App: Component = () => {
     { label: 'Product Inventory & Stock', icon: IconInventory, tab: 'inventory', category: 'Inventory' },
     { label: 'Reports & CBMS Invoices', icon: IconReports, tab: 'reports', category: 'Reports' },
     { label: 'Payment Reminders', icon: IconReminders, tab: 'reminders', category: 'Tools' },
+    { label: 'Notifications & Alerts Center', icon: IconBell, tab: 'notifications', category: 'Tools' },
     { label: 'Bill Gallery & Uploads', icon: IconBillGallery, tab: 'bill-gallery', category: 'Tools' },
     { label: 'Notebook & Business Scratchpad', icon: IconNotebook, tab: 'notebook', category: 'Tools' },
     { label: 'Business Digital Cards', icon: IconBusinessCard, tab: 'business-cards', category: 'Tools' },
@@ -117,6 +121,12 @@ export const App: Component = () => {
 
   onSettled(() => {
     window.addEventListener('keydown', handleKeyDown);
+
+    // Initialize Synced Realtime Notifications
+    if (currentBusiness.id) {
+      initNotificationSync(currentBusiness.id);
+    }
+
     return () => window.removeEventListener('keydown', handleKeyDown);
   });
 
@@ -191,6 +201,9 @@ export const App: Component = () => {
             </Match>
             <Match when={activeTab() === 'reminders'}>
               <RemindersView />
+            </Match>
+            <Match when={activeTab() === 'notifications'}>
+              <NotificationsView />
             </Match>
             <Match when={activeTab() === 'bill-gallery'}>
               <BillGalleryView />

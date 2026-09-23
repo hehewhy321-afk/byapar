@@ -17,6 +17,11 @@ import {
 } from '../../db/localDb';
 import { currentUser, signOut } from '../../db/auth';
 import {
+  syncedNotifications,
+  unreadNotificationCount,
+  markNotificationAsRead,
+} from '../../services/notificationService';
+import {
   IconSearch,
   IconBell,
   IconSun,
@@ -116,8 +121,10 @@ export const TopBar: Component = () => {
               onClick={() => setNotificationsOpen(!notificationsOpen())}
             >
               <IconBell class="w-[18px] h-[18px]" />
-              <Show when={notifications().length > 0}>
-                <span class="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <Show when={unreadNotificationCount() > 0}>
+                <span class="absolute top-1.5 right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-[9px] font-black text-white flex items-center justify-center animate-pulse">
+                  {unreadNotificationCount() > 9 ? '9+' : unreadNotificationCount()}
+                </span>
               </Show>
             </button>
 
@@ -127,56 +134,93 @@ export const TopBar: Component = () => {
                 class="fixed inset-0 z-40"
                 onClick={() => setNotificationsOpen(false)}
               />
-              <div class="absolute right-0 top-full mt-1.5 w-80 bg-white dark:bg-black rounded-2xl shadow-2xl border border-gray-100 dark:border-neutral-800 py-2 animate-fade-in z-50">
+              <div class="absolute right-0 top-full mt-1.5 w-84 bg-white dark:bg-black rounded-2xl shadow-2xl border border-gray-100 dark:border-neutral-800 py-2 animate-fade-in z-50">
                 <div class="px-4 py-2 border-b border-gray-100 dark:border-neutral-800 flex items-center justify-between">
-                  <h4 class="text-xs font-bold uppercase tracking-wider text-gray-800 dark:text-white">
-                    Notifications ({notifications().length})
-                  </h4>
+                  <div class="flex items-center gap-1.5">
+                    <h4 class="text-xs font-bold uppercase tracking-wider text-gray-800 dark:text-white">
+                      Alerts
+                    </h4>
+                    <Show when={unreadNotificationCount() > 0}>
+                      <span class="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-rose-100 text-rose-600 dark:bg-rose-950 dark:text-rose-400">
+                        {unreadNotificationCount()} unread
+                      </span>
+                    </Show>
+                  </div>
                   <button
-                    class="text-[10px] text-brand-600 dark:text-brand-400 font-semibold hover:underline"
-                    onClick={() => setNotificationsOpen(false)}
+                    class="text-[11px] text-brand-600 dark:text-brand-400 font-bold hover:underline"
+                    onClick={() => {
+                      setNotificationsOpen(false);
+                      setActiveTab('notifications');
+                    }}
                   >
-                    Close
+                    View All
                   </button>
                 </div>
 
                 <div class="max-h-72 overflow-y-auto divide-y divide-gray-50 dark:divide-neutral-900">
                   <For
-                    each={notifications()}
+                    each={syncedNotifications().slice(0, 5)}
                     fallback={
                       <div class="py-8 text-center text-xs text-gray-400 dark:text-neutral-500">
-                        No unread alerts
+                        No notifications yet
                       </div>
                     }
                   >
                     {(n) => (
                       <div
-                        class="p-3 hover:bg-gray-50 dark:hover:bg-neutral-900/60 transition cursor-pointer"
+                        class={`p-3 hover:bg-gray-50 dark:hover:bg-neutral-900/60 transition cursor-pointer ${
+                          !n.isRead ? 'bg-brand-50/20 dark:bg-neutral-950' : ''
+                        }`}
                         onClick={() => {
                           setNotificationsOpen(false);
-                          if (n.type === 'stock') setActiveTab('inventory');
-                          if (n.type === 'khata') setActiveTab('khata');
-                          if (n.type === 'cbms') setActiveTab('reports');
+                          markNotificationAsRead(n.id);
+                          if (n.data?.linkScreen) {
+                            setActiveTab(n.data.linkScreen as any);
+                          } else if (n.type === 'debtor_reminder') {
+                            setActiveTab('khata');
+                          } else if (n.type === 'supplier_payable') {
+                            setActiveTab('purchase');
+                          } else if (n.type === 'low_stock') {
+                            setActiveTab('inventory');
+                          } else {
+                            setActiveTab('notifications');
+                          }
                         }}
                       >
                         <div class="flex items-center justify-between gap-1 mb-0.5">
                           <span
                             class={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                              n.type === 'stock'
-                                ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-400 dark:border dark:border-amber-800/40'
-                                : n.type === 'khata'
-                                ? 'bg-red-100 text-red-800 dark:bg-rose-950/60 dark:text-rose-400 dark:border dark:border-rose-800/40'
-                                : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-400 dark:border dark:border-emerald-800/40'
+                              n.type === 'low_stock'
+                                ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-400'
+                                : n.type === 'debtor_reminder'
+                                ? 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-400'
+                                : n.type === 'supplier_payable'
+                                ? 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-400'
+                                : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-400'
                             }`}
                           >
                             {n.title}
                           </span>
-                          <span class="text-[10px] text-gray-400 dark:text-neutral-500">{n.time}</span>
+                          <Show when={!n.isRead}>
+                            <span class="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                          </Show>
                         </div>
-                        <p class="text-xs text-gray-700 dark:text-neutral-300 mt-1">{n.desc}</p>
+                        <p class="text-xs text-gray-700 dark:text-neutral-300 mt-1 line-clamp-2">{n.message}</p>
                       </div>
                     )}
                   </For>
+                </div>
+
+                <div class="px-3 pt-2 border-t border-gray-100 dark:border-neutral-800">
+                  <button
+                    onClick={() => {
+                      setNotificationsOpen(false);
+                      setActiveTab('notifications');
+                    }}
+                    class="w-full py-1.5 rounded-xl bg-gray-50 dark:bg-neutral-900 hover:bg-gray-100 dark:hover:bg-neutral-800 text-xs font-bold text-gray-700 dark:text-neutral-200 transition text-center"
+                  >
+                    Open Notification Center →
+                  </button>
                 </div>
               </div>
             </Show>

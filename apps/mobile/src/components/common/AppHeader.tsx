@@ -1,11 +1,26 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Image } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useApp } from '../../context/AppContext';
 import { AnimatedPressable } from './AnimatedPressable';
+import {
+  initMobileNotifications,
+  subscribeNotificationUpdates,
+} from '../../services/notificationService';
 
 export const AppHeader: React.FC = () => {
-  const { store, setActiveTab, activeTab, navigateBack, theme } = useApp();
+  const { store, activeBizId, setActiveTab, activeTab, navigateBack, theme } = useApp();
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    const bizId = activeBizId || store.id;
+    initMobileNotifications(bizId);
+    const unsubscribe = subscribeNotificationUpdates((list) => {
+      const unread = list.filter((n) => !n.isRead).length;
+      setUnreadCount(unread);
+    });
+    return () => unsubscribe();
+  }, [activeBizId, store.id]);
 
   return (
     <View
@@ -52,6 +67,30 @@ export const AppHeader: React.FC = () => {
       </View>
 
       <View style={styles.headerRightActions}>
+        <AnimatedPressable
+          style={[
+            styles.settingsBtn,
+            {
+              backgroundColor: theme.colors.card,
+              borderColor: activeTab === 'notifications' ? theme.colors.primary : theme.colors.borderGlass,
+            },
+            activeTab === 'notifications' && styles.settingsBtnActive,
+          ]}
+          onPress={() => setActiveTab('notifications')}
+          activeScale={0.9}
+        >
+          <Feather
+            name="bell"
+            size={18}
+            color={activeTab === 'notifications' ? theme.colors.primary : theme.colors.textSecondary}
+          />
+          {unreadCount > 0 && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
+            </View>
+          )}
+        </AnimatedPressable>
+
         <AnimatedPressable
           style={[
             styles.settingsBtn,
@@ -138,6 +177,26 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    position: 'relative',
   },
   settingsBtnActive: {},
+  badge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#EF4444',
+    borderRadius: 9,
+    minWidth: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 1.5,
+    borderColor: '#0F172A',
+  },
+  badgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '800',
+  },
 });

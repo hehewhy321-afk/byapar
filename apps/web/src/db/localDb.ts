@@ -260,7 +260,8 @@ export type ActiveTab =
   | 'bill-gallery'
   | 'notebook'
   | 'business-cards'
-  | 'greeting-cards';
+  | 'greeting-cards'
+  | 'notifications';
 
 // Valid tabs list
 export const VALID_TABS: ActiveTab[] = [
@@ -276,6 +277,7 @@ export const VALID_TABS: ActiveTab[] = [
   'staff',
   'reports',
   'reminders',
+  'notifications',
   'settings',
   'bill-gallery',
   'notebook',

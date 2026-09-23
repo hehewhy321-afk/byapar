@@ -163,3 +163,112 @@ export interface CartItem extends Item {
   customDiscount: number;
   lineTotal: number;
 }
+
+export type NotificationType =
+  | 'debtor_reminder'
+  | 'supplier_payable'
+  | 'low_stock'
+  | 'daily_summary'
+  | 'subscription_alert'
+  | 'admin_broadcast'
+  | 'system';
+
+export type NotificationPriority = 'low' | 'normal' | 'high' | 'urgent';
+
+export interface AppNotification {
+  id: string;
+  businessId: string;
+  userId?: string | null;
+  title: string;
+  message: string;
+  type: NotificationType;
+  priority: NotificationPriority;
+  data?: {
+    partyId?: string;
+    partyName?: string;
+    partyPhone?: string;
+    invoiceId?: string;
+    billId?: string;
+    itemId?: string;
+    amount?: number;
+    actionUrl?: string;
+    linkScreen?: string;
+    [key: string]: any;
+  };
+  isRead: boolean;
+  readAt?: string | null;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export type ReminderType = 'customer_due' | 'supplier_payment' | 'custom' | 'recurring_daily';
+export type ReminderFrequency = 'once' | 'daily' | 'weekly' | 'monthly';
+
+export interface ReminderWithConfig {
+  id: string;
+  businessId: string;
+  partyId?: string;
+  partyName?: string;
+  title: string;
+  amount?: number;
+  dueDateAd: string;
+  dueDateBs?: string;
+  reminderType: ReminderType;
+  frequency: ReminderFrequency;
+  notifyWeb: boolean;
+  notifyMobile: boolean;
+  isActive: boolean;
+  status: 'upcoming' | 'completed' | 'cancelled';
+  lastNotifiedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type SubscriptionPlanTier = 'free' | 'starter' | 'pro' | 'enterprise';
+export type SubscriptionStatus = 'trial' | 'active' | 'expiring_soon' | 'past_due' | 'expired' | 'cancelled';
+
+export interface BusinessSubscription {
+  id: string;
+  businessId: string;
+  planTier: SubscriptionPlanTier;
+  billingCycle: 'monthly' | 'yearly';
+  status: SubscriptionStatus;
+  startsAt: string;
+  expiresAt: string;
+  price: number;
+  currency: string;
+  features: {
+    multiDevice?: boolean;
+    soundbox?: boolean;
+    unlimitedInvoices?: boolean;
+    cbmsSync?: boolean;
+    [key: string]: any;
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdminBroadcast {
+  id: string;
+  title: string;
+  message: string;
+  category: 'announcement' | 'offer' | 'maintenance' | 'feature_update';
+  targetAudience: 'all' | 'free' | 'pro' | 'expiring_soon' | 'specific_business';
+  targetBusinessId?: string | null;
+  actionUrl?: string | null;
+  sentBy?: string | null;
+  recipientCount: number;
+  createdAt: string;
+}
+
+export interface UserDevice {
+  id: string;
+  userId: string;
+  businessId: string;
+  playerId: string;
+  platform: 'web' | 'android' | 'ios';
+  deviceInfo?: Record<string, any>;
+  lastActiveAt: string;
+  createdAt: string;
+}
+

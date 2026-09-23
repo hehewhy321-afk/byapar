@@ -15,6 +15,17 @@ import { Feather } from '@expo/vector-icons';
 import { useApp } from '../context/AppContext';
 import { updateService, CURRENT_APP_VERSION } from '../services/updateService';
 import { buildWhatsAppReminderMessage } from '../services/whatsapp';
+import {
+  checkNotificationPermission,
+  requestNotificationPermission,
+  openAppNotificationSettings,
+  getNotificationPreferences,
+  saveNotificationPreferences,
+  triggerSampleNotification,
+  NotificationPreferences,
+  DEFAULT_PREFERENCES,
+} from '../services/notificationService';
+import { analytics } from '../services/analyticsService';
 
 interface TemplatePreset {
   id: string;
@@ -71,6 +82,7 @@ const TEMPLATE_VARIABLES = [
 export const SettingsScreen: React.FC = () => {
   const {
     store,
+    activeBizId,
     updateStoreProfile,
     theme,
     themeMode,
@@ -80,6 +92,62 @@ export const SettingsScreen: React.FC = () => {
     changePassword,
     setShowAuthModal,
   } = useApp();
+
+  // Notification Permission & Preferences state
+  const [hasPermission, setHasPermission] = useState<boolean>(true);
+  const [notifPrefs, setNotifPrefs] = useState<NotificationPreferences>(DEFAULT_PREFERENCES);
+  const [testingNotif, setTestingNotif] = useState(false);
+
+  useEffect(() => {
+    checkNotificationPermission().then(setHasPermission);
+    getNotificationPreferences().then(setNotifPrefs);
+  }, []);
+
+  const handleTogglePref = async (key: keyof NotificationPreferences, value: boolean) => {
+    const updated = { ...notifPrefs, [key]: value };
+    setNotifPrefs(updated);
+    await saveNotificationPreferences(updated);
+    analytics.logEvent('notification_pref_changed', { setting: key, value });
+  };
+
+  const handleRequestPermission = async () => {
+    const granted = await requestNotificationPermission();
+    setHasPermission(granted);
+    if (!granted) {
+      Alert.alert(
+        'Permission Required',
+        'Notification permission was not granted. Would you like to open Settings to enable it?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Open Settings', onPress: openAppNotificationSettings },
+        ]
+      );
+    } else {
+      Alert.alert('Permission Granted', 'System notifications are now enabled for Byapar.');
+    }
+  };
+
+  const handleSendTestNotif = async () => {
+    if (!notifPrefs.enabled) {
+      Alert.alert(
+        'Notifications Disabled',
+        'In-app notifications are currently disabled. Please enable "Allow In-App Notifications" above first.'
+      );
+      return;
+    }
+    setTestingNotif(true);
+    const bizId = activeBizId || store.id || 'a0000000-0000-0000-0000-000000000001';
+    const res = await triggerSampleNotification(bizId);
+    setTestingNotif(false);
+    if (res.success) {
+      Alert.alert(
+        'Test Dispatched',
+        'A test notification has been sent! Check the bell icon at the top of the screen to view it.'
+      );
+    } else {
+      Alert.alert('Notice', res.reason || 'Could not dispatch test notification.');
+    }
+  };
 
   // Store profile modal & fields (REAL: updates store profile across app & Supabase)
   const [showStoreModal, setShowStoreModal] = useState(false);
@@ -528,6 +596,215 @@ export const SettingsScreen: React.FC = () => {
                 Customize
               </Text>
               <Feather name="chevron-right" size={17} color={theme.colors.textMuted} />
+            </View>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* 6.5 NOTIFICATIONS & ALERTS */}
+      <View style={styles.categoryBlock}>
+        <Text style={[styles.categoryTitle, { color: theme.colors.textMuted }]}>
+          NOTIFICATIONS & ALERTS
+        </Text>
+        <View
+          style={[
+            styles.cardGroup,
+            { backgroundColor: theme.colors.card, borderColor: theme.colors.borderGlass },
+          ]}
+        >
+          {/* Permission Status */}
+          <View style={styles.settingRow}>
+            <View style={styles.rowLeft}>
+              <View
+                style={[
+                  styles.iconContainer,
+                  {
+                    backgroundColor: hasPermission
+                      ? 'rgba(16, 185, 129, 0.15)'
+                      : 'rgba(239, 68, 68, 0.15)',
+                  },
+                ]}
+              >
+                <Feather
+                  name={hasPermission ? 'bell' : 'bell-off'}
+                  size={18}
+                  color={hasPermission ? '#10B981' : '#EF4444'}
+                />
+              </View>
+              <View>
+                <Text style={[styles.rowLabel, { color: theme.colors.textPrimary }]}>
+                  System Push Permission
+                </Text>
+                <Text style={[styles.rowSubLabel, { color: theme.colors.textMuted }]}>
+                  {hasPermission
+                    ? 'Device allows lock-screen notifications'
+                    : 'System permission required for background alerts'}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.rowRight}>
+              {!hasPermission ? (
+                <TouchableOpacity
+                  style={{
+                    backgroundColor: theme.colors.primary,
+                    paddingHorizontal: 12,
+                    paddingVertical: 6,
+                    borderRadius: 8,
+                  }}
+                  onPress={handleRequestPermission}
+                >
+                  <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '700' }}>
+                    Enable
+                  </Text>
+                </TouchableOpacity>
+              ) : (
+                <Text style={[styles.rowValueText, { color: '#10B981', fontWeight: '700' }]}>
+                  Active
+                </Text>
+              )}
+            </View>
+          </View>
+
+          {/* Master Notifications Toggle */}
+          <View
+            style={[
+              styles.settingRow,
+              { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.colors.borderGlass },
+            ]}
+          >
+            <View style={styles.rowLeft}>
+              <View style={styles.iconContainer}>
+                <Feather name="bell" size={18} color={theme.colors.textPrimary} />
+              </View>
+              <View>
+                <Text style={[styles.rowLabel, { color: theme.colors.textPrimary }]}>
+                  Allow In-App Notifications
+                </Text>
+                <Text style={[styles.rowSubLabel, { color: theme.colors.textMuted }]}>
+                  Sync notifications in real-time across devices
+                </Text>
+              </View>
+            </View>
+            <Switch
+              value={notifPrefs.enabled}
+              onValueChange={(val) => handleTogglePref('enabled', val)}
+              trackColor={{ false: theme.colors.borderGlass, true: theme.colors.primary }}
+              thumbColor="#FFFFFF"
+            />
+          </View>
+
+          {/* Debtor / Udhar Due Alerts */}
+          <View
+            style={[
+              styles.settingRow,
+              { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.colors.borderGlass },
+            ]}
+          >
+            <View style={styles.rowLeft}>
+              <View style={styles.iconContainer}>
+                <Feather name="users" size={18} color={theme.colors.textPrimary} />
+              </View>
+              <View>
+                <Text style={[styles.rowLabel, { color: theme.colors.textPrimary }]}>
+                  Customer Udhar Due Alerts
+                </Text>
+                <Text style={[styles.rowSubLabel, { color: theme.colors.textMuted }]}>
+                  Notify when customer credit reaches scheduled due date
+                </Text>
+              </View>
+            </View>
+            <Switch
+              value={notifPrefs.debtorReminders}
+              disabled={!notifPrefs.enabled}
+              onValueChange={(val) => handleTogglePref('debtorReminders', val)}
+              trackColor={{ false: theme.colors.borderGlass, true: theme.colors.primary }}
+              thumbColor="#FFFFFF"
+            />
+          </View>
+
+          {/* Low Stock Alerts */}
+          <View
+            style={[
+              styles.settingRow,
+              { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.colors.borderGlass },
+            ]}
+          >
+            <View style={styles.rowLeft}>
+              <View style={styles.iconContainer}>
+                <Feather name="alert-triangle" size={18} color={theme.colors.textPrimary} />
+              </View>
+              <View>
+                <Text style={[styles.rowLabel, { color: theme.colors.textPrimary }]}>
+                  Low Stock Warnings
+                </Text>
+                <Text style={[styles.rowSubLabel, { color: theme.colors.textMuted }]}>
+                  Instant alert when item stock falls below threshold
+                </Text>
+              </View>
+            </View>
+            <Switch
+              value={notifPrefs.stockAlerts}
+              disabled={!notifPrefs.enabled}
+              onValueChange={(val) => handleTogglePref('stockAlerts', val)}
+              trackColor={{ false: theme.colors.borderGlass, true: theme.colors.primary }}
+              thumbColor="#FFFFFF"
+            />
+          </View>
+
+          {/* Supplier Payables Alerts */}
+          <View
+            style={[
+              styles.settingRow,
+              { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.colors.borderGlass },
+            ]}
+          >
+            <View style={styles.rowLeft}>
+              <View style={styles.iconContainer}>
+                <Feather name="truck" size={18} color={theme.colors.textPrimary} />
+              </View>
+              <View>
+                <Text style={[styles.rowLabel, { color: theme.colors.textPrimary }]}>
+                  Supplier Payable Reminders
+                </Text>
+                <Text style={[styles.rowSubLabel, { color: theme.colors.textMuted }]}>
+                  Remind when purchase bills are due for payment
+                </Text>
+              </View>
+            </View>
+            <Switch
+              value={notifPrefs.supplierPayables}
+              disabled={!notifPrefs.enabled}
+              onValueChange={(val) => handleTogglePref('supplierPayables', val)}
+              trackColor={{ false: theme.colors.borderGlass, true: theme.colors.primary }}
+              thumbColor="#FFFFFF"
+            />
+          </View>
+
+          {/* Test Notification Button */}
+          <TouchableOpacity
+            style={[
+              styles.settingRow,
+              { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.colors.borderGlass },
+            ]}
+            onPress={handleSendTestNotif}
+            disabled={testingNotif}
+            activeOpacity={0.7}
+          >
+            <View style={styles.rowLeft}>
+              <View style={styles.iconContainer}>
+                <Feather name="send" size={18} color={theme.colors.primary} />
+              </View>
+              <View>
+                <Text style={[styles.rowLabel, { color: theme.colors.primary, fontWeight: '700' }]}>
+                  Send Test Notification
+                </Text>
+                <Text style={[styles.rowSubLabel, { color: theme.colors.textMuted }]}>
+                  Dispatches a sample notification to your device
+                </Text>
+              </View>
+            </View>
+            <View style={styles.rowRight}>
+              <Feather name="chevron-right" size={17} color={theme.colors.primary} />
             </View>
           </TouchableOpacity>
         </View>

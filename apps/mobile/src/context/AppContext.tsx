@@ -29,6 +29,7 @@ import { ThemeMode, Theme, getTheme } from '../theme';
 import { supabase } from '../config/supabase';
 import { User } from '@supabase/supabase-js';
 import { updateService } from '../services/updateService';
+import { requestNotificationPermission } from '../services/notificationService';
 import { adToBs, getNepaliFiscalYear } from '@byapar/core';
 
 const DEFAULT_BIZ_ID = 'a0000000-0000-0000-0000-000000000001';
@@ -997,6 +998,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       // Auto-check for updates silently on launch
       updateService.checkForUpdates(true).catch(() => {});
+
+      // Prompt for Android 13+ Notification Permission if not yet determined
+      requestNotificationPermission().catch(() => {});
 
       // Listen for auth state changes
       const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {

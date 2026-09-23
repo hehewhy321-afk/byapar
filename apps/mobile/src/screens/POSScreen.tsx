@@ -15,6 +15,7 @@ import { ReceiptModal } from '../components/pos/ReceiptModal';
 import { AnimatedPressable } from '../components/common/AnimatedPressable';
 import { FadeInView } from '../components/common/FadeInView';
 import { EmptyState } from '../components/common/EmptyState';
+import { analytics } from '../services/analyticsService';
 
 export const POSScreen: React.FC = () => {
   const {
@@ -59,9 +60,11 @@ export const POSScreen: React.FC = () => {
   const totalCartQty = cart.reduce((sum, item) => sum + item.qty, 0);
 
   const handleCheckout = async (mode: PaymentMode, partyId?: string) => {
+    const totalAmount = cartTotal;
     setCheckoutVisible(false);
     setCartExpanded(false);
     await completeCheckout(mode, partyId);
+    analytics.logInvoiceCreated('INV-' + Date.now(), totalAmount, mode);
   };
 
   return (
