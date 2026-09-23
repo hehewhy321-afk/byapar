@@ -69,7 +69,11 @@ android {
     }
     packagingOptions {
         jniLibs {
-            useLegacyPackaging true
+            useLegacyPackaging false
+            excludes += [
+                "**/libbarhopper_v3.so",
+                "**/libandroidx.graphics.path.so"
+            ]
         }
     }
     androidResources {
@@ -122,3 +126,71 @@ dependencies {
         implementation jscFlavor
     }
 }
+
+// Auto-patch 16 KB ELF page alignment for all 64-bit native libraries (.so)
+def patchElfAlignment(File soFile) {
+    if (!soFile.name.endsWith(".so")) return
+    try {
+        RandomAccessFile raf = new RandomAccessFile(soFile, "rw")
+        try {
+            byte[] magic = new byte[4]
+            raf.readFully(magic)
+            if (magic[0] != 0x7F || magic[1] != 0x45 || magic[2] != 0x4C || magic[3] != 0x46) {
+                return
+            }
+            int eiClass = raf.readByte()
+            if (eiClass != 2) {
+                // Only 64-bit ELF (arm64-v8a / x86_64) requires 16 KB alignment
+                return
+            }
+            raf.seek(32)
+            long phoff = Long.reverseBytes(raf.readLong())
+            raf.seek(54)
+            int phentsize = Short.reverseBytes(raf.readShort()) & 0xFFFF
+            int phnum = Short.reverseBytes(raf.readShort()) & 0xFFFF
+
+            for (int i = 0; i < phnum; i++) {
+                long entryOffset = phoff + (i * phentsize)
+                raf.seek(entryOffset)
+                int p_type = Integer.reverseBytes(raf.readInt())
+                if (p_type == 1) { // PT_LOAD
+                    long alignOffset = entryOffset + 48
+                    raf.seek(alignOffset)
+                    long currentAlign = Long.reverseBytes(raf.readLong())
+                    if (currentAlign < 16384L) {
+                        raf.seek(alignOffset)
+                        raf.writeLong(Long.reverseBytes(16384L))
+                    }
+                }
+            }
+        } finally {
+            raf.close()
+        }
+    } catch (Exception e) {
+        logger.warn("Could not patch ELF alignment for ${soFile.name}: ${e.message}")
+    }
+}
+
+// Hook into native libs merge and strip tasks to ensure 16 KB ELF load segment alignment
+tasks.matching { task ->
+    (task.name.startsWith("merge") && task.name.endsWith("NativeLibs")) ||
+    (task.name.startsWith("strip") && task.name.endsWith("DebugSymbols"))
+}.configureEach { task ->
+    task.doLast {
+        def nativeDirs = [
+            file("${project.buildDir}/intermediates/merged_native_libs"),
+            file("${project.buildDir}/intermediates/stripped_native_libs")
+        ]
+        nativeDirs.each { dir ->
+            if (dir.exists()) {
+                dir.eachFileRecurse { f ->
+                    if (f.isFile() && f.name.endsWith(".so") && (f.path.contains("arm64-v8a") || f.path.contains("x86_64"))) {
+                        patchElfAlignment(f)
+                    }
+                }
+            }
+        }
+    }
+}
+
+

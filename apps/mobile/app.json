@@ -20,8 +20,23 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#020617"
       },
-      "package": "com.byapar"
+      "package": "com.byapar",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_IMAGES"
+      ]
     },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "The app accesses your photos to let you archive bills.",
+          "cameraPermission": "The app accesses your camera to let you photograph bills."
+        }
+      ]
+    ],
     "web": {
       "favicon": "./assets/favicon.png"
     }

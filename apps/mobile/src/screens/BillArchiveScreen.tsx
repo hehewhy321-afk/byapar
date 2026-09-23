@@ -8,6 +8,7 @@ import {
   Image,
   Alert,
   Modal,
+  Linking,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -32,16 +33,27 @@ export const BillArchiveScreen: React.FC = () => {
 
   const handleDirectCapture = async () => {
     try {
-      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      const { status, canAskAgain } = await ImagePicker.requestCameraPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission Denied', 'Camera permission is required to capture bill photos.');
+        if (!canAskAgain) {
+          Alert.alert(
+            'Camera Permission Required',
+            'Camera permission has been disabled. Please enable it in Settings to capture bills.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Open Settings', onPress: () => Linking.openSettings() }
+            ]
+          );
+        } else {
+          Alert.alert('Permission Denied', 'Camera permission is required to capture bill photos.');
+        }
         return;
       }
       const result = await ImagePicker.launchCameraAsync({
-        allowsEditing: true,
+        allowsEditing: false,
         quality: 0.85,
       });
-      if (!result.canceled && result.assets && result.assets[0]?.uri) {
+      if (!result.canceled && result.assets && result.assets.length > 0 && result.assets[0]?.uri) {
         setCollectorInitialImage(result.assets[0].uri);
         setIsCollectorOpen(true);
       }
@@ -52,17 +64,28 @@ export const BillArchiveScreen: React.FC = () => {
 
   const handlePickFromGallery = async () => {
     try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      const { status, canAskAgain } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission Denied', 'Media library access is needed to select bills.');
+        if (!canAskAgain) {
+          Alert.alert(
+            'Media Permission Required',
+            'Photo access has been disabled. Please enable photo access in Settings to select bills.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Open Settings', onPress: () => Linking.openSettings() }
+            ]
+          );
+        } else {
+          Alert.alert('Permission Denied', 'Media library access is needed to select bills.');
+        }
         return;
       }
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
-        allowsEditing: true,
+        allowsEditing: false,
         quality: 0.85,
       });
-      if (!result.canceled && result.assets && result.assets[0]?.uri) {
+      if (!result.canceled && result.assets && result.assets.length > 0 && result.assets[0]?.uri) {
         setCollectorInitialImage(result.assets[0].uri);
         setIsCollectorOpen(true);
       }
