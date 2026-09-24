@@ -1,6 +1,7 @@
 import { Component, createSignal, createMemo, For, Show } from 'solid-js';
 import { invoices, expenses, items, khataEntries, currentBusiness, settings } from '../db/localDb';
 import { formatNepaliCurrency, Invoice } from '@byapar/core';
+import { currentLang } from '../services/i18n';
 import { ReceiptModal } from './ReceiptModal';
 import { IconPrinter, IconSearch, IconTrendingUp, IconDownload } from './icons';
 
@@ -202,7 +203,7 @@ export const ReportsView: Component = () => {
                   : 'text-gray-500 hover:text-gray-900 dark:hover:text-white'
               }`}
             >
-              7 Days
+              {currentLang() === 'ne' ? '७ दिन' : '7 Days'}
             </button>
             <button
               onClick={() => setTimeFilter('30d')}
@@ -212,7 +213,7 @@ export const ReportsView: Component = () => {
                   : 'text-gray-500 hover:text-gray-900 dark:hover:text-white'
               }`}
             >
-              30 Days
+              {currentLang() === 'ne' ? '३० दिन' : '30 Days'}
             </button>
             <button
               onClick={() => setTimeFilter('all')}
@@ -222,7 +223,7 @@ export const ReportsView: Component = () => {
                   : 'text-gray-500 hover:text-gray-900 dark:hover:text-white'
               }`}
             >
-              All Time
+              {currentLang() === 'ne' ? 'सम्पूर्ण' : 'All Time'}
             </button>
           </div>
 
@@ -232,7 +233,7 @@ export const ReportsView: Component = () => {
             class="btn-outline text-xs !py-2 !px-3 flex items-center gap-1.5 font-bold"
           >
             <IconDownload size={14} />
-            <span>Export CSV</span>
+            <span>{currentLang() === 'ne' ? 'सीएसभी निर्यात' : 'Export CSV'}</span>
           </button>
         </div>
       </div>
@@ -242,13 +243,13 @@ export const ReportsView: Component = () => {
         {/* Total Invoiced GTV */}
         <div class="stat-card border-l-4 border-l-[#FF4500]">
           <span class="text-xs text-gray-500 dark:text-neutral-400 font-semibold block uppercase">
-            Gross Sales (GTV)
+            {currentLang() === 'ne' ? 'कुल बिक्री' : 'Gross Sales (GTV)'}
           </span>
           <span class="text-2xl font-black text-gray-900 dark:text-white mt-1 block font-mono">
             {formatNepaliCurrency(totalSalesRevenue())}
           </span>
           <div class="flex items-center justify-between text-[11px] text-gray-400 dark:text-neutral-500 mt-1">
-            <span>{filteredInvoices().length} total invoices</span>
+            <span>{filteredInvoices().length} {currentLang() === 'ne' ? 'बिल' : 'total invoices'}</span>
             <span class="text-emerald-500 font-semibold">100% CBMS Logged</span>
           </div>
         </div>
@@ -256,7 +257,7 @@ export const ReportsView: Component = () => {
         {/* Realized Cash Inflow */}
         <div class="stat-card border-l-4 border-l-emerald-500">
           <span class="text-xs text-gray-500 dark:text-neutral-400 font-semibold block uppercase">
-            Collected Cash
+            {currentLang() === 'ne' ? 'उठाइएको नगद' : 'Collected Cash'}
           </span>
           <span class="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1 block font-mono">
             {formatNepaliCurrency(totalPaidRevenue())}
@@ -289,13 +290,13 @@ export const ReportsView: Component = () => {
         {/* Credit / Khata Outflow */}
         <div class="stat-card border-l-4 border-l-amber-500">
           <span class="text-xs text-gray-500 dark:text-neutral-400 font-semibold block uppercase">
-            Outstanding Credit
+            {currentLang() === 'ne' ? 'बाँकी उधारो' : 'Outstanding Credit'}
           </span>
           <span class="text-2xl font-black text-amber-500 mt-1 block font-mono">
             {formatNepaliCurrency(totalCreditIssued())}
           </span>
           <div class="text-[11px] text-amber-500/80 mt-1">
-            Active khata receivables
+            {currentLang() === 'ne' ? 'उधारो लिन बाँकी' : 'Active khata receivables'}
           </div>
         </div>
       </div>
@@ -307,7 +308,7 @@ export const ReportsView: Component = () => {
           <div class="flex items-center justify-between mb-4">
             <div>
               <h3 class="text-sm font-bold text-gray-900 dark:text-white">
-                Daily Sales Trend (Last 7 Days)
+                {currentLang() === 'ne' ? 'दैनिक बिक्री (अन्तिम ७ दिन)' : 'Daily Sales Trend (Last 7 Days)'}
               </h3>
               <p class="text-xs text-gray-400 dark:text-neutral-500">
                 Revenue patterns and counter transaction volume
@@ -416,7 +417,7 @@ export const ReportsView: Component = () => {
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-2">
                 <span class="w-3 h-3 rounded-full bg-emerald-500" />
-                <span class="text-gray-700 dark:text-neutral-300">Cash Settlement</span>
+                <span class="text-gray-700 dark:text-neutral-300">{currentLang() === 'ne' ? 'नगद' : 'Cash Settlement'}</span>
               </div>
               <span class="font-mono font-bold">{paymentBreakdown().cash.pct}%</span>
             </div>
@@ -432,7 +433,7 @@ export const ReportsView: Component = () => {
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-2">
                 <span class="w-3 h-3 rounded-full bg-amber-500" />
-                <span class="text-gray-700 dark:text-neutral-300">Credit (Khata)</span>
+                <span class="text-gray-700 dark:text-neutral-300">{currentLang() === 'ne' ? 'उधारो (खाता)' : 'Credit (Khata)'}</span>
               </div>
               <span class="font-mono font-bold text-amber-500">{paymentBreakdown().credit.pct}%</span>
             </div>
@@ -455,28 +456,28 @@ export const ReportsView: Component = () => {
 
           <div class="space-y-3 text-xs">
             <div class="flex justify-between items-center text-gray-600 dark:text-neutral-400">
-              <span>Gross Sales (Invoiced)</span>
+              <span>{currentLang() === 'ne' ? 'कुल बिक्री (बिलगत)' : 'Gross Sales (Invoiced)'}</span>
               <span class="font-mono font-bold text-gray-900 dark:text-white">
                 {formatNepaliCurrency(totalSalesRevenue())}
               </span>
             </div>
 
             <div class="flex justify-between items-center text-gray-600 dark:text-neutral-400">
-              <span>Estimated Cost of Goods (COGS)</span>
+              <span>{currentLang() === 'ne' ? 'अनुमानित लागत (COGS)' : 'Estimated Cost of Goods (COGS)'}</span>
               <span class="font-mono font-semibold text-rose-500">
                 - {formatNepaliCurrency(estimatedCost())}
               </span>
             </div>
 
             <div class="flex justify-between items-center border-t border-gray-200 dark:border-neutral-800 pt-2 font-bold text-gray-900 dark:text-white">
-              <span>Gross Profit Margin</span>
+              <span>{currentLang() === 'ne' ? 'कुल नाफा' : 'Gross Profit Margin'}</span>
               <span class="font-mono text-emerald-600 dark:text-emerald-400">
                 {formatNepaliCurrency(estimatedGrossProfit())}
               </span>
             </div>
 
             <div class="flex justify-between items-center text-gray-600 dark:text-neutral-400">
-              <span>Operating Expenses (Rent, Bills)</span>
+              <span>{currentLang() === 'ne' ? 'संचालन खर्च' : 'Operating Expenses (Rent, Bills)'}</span>
               <span class="font-mono font-semibold text-rose-500">
                 - {formatNepaliCurrency(totalExpenses())}
               </span>
@@ -485,7 +486,7 @@ export const ReportsView: Component = () => {
             <div class="flex justify-between items-center border-t-2 border-emerald-500/30 pt-3">
               <div>
                 <span class="text-sm font-black text-gray-900 dark:text-white block">
-                  Net Merchant Earnings
+                  {currentLang() === 'ne' ? 'निखालस कमाई' : 'Net Merchant Earnings'}
                 </span>
                 <span class="text-[10px] text-gray-400">Calculated after COGS & recorded expenses</span>
               </div>
@@ -501,7 +502,7 @@ export const ReportsView: Component = () => {
           <div class="flex items-center justify-between mb-4">
             <div>
               <h3 class="text-sm font-bold text-gray-900 dark:text-white">
-                Top Performing Products Leaderboard
+                {currentLang() === 'ne' ? 'शीर्ष बिक्री सामान' : 'Top Performing Products Leaderboard'}
               </h3>
               <p class="text-xs text-gray-400 dark:text-neutral-500">
                 Highest revenue-generating inventory items
@@ -515,7 +516,7 @@ export const ReportsView: Component = () => {
               each={topProducts()}
               fallback={
                 <div class="text-center py-8 text-xs text-gray-400">
-                  No sales data available for this timeframe yet.
+                  {currentLang() === 'ne' ? 'यस समयमा कुनै बिक्री दर्ता छैन।' : 'No sales data available for this timeframe yet.'}
                 </div>
               }
             >
@@ -584,10 +585,10 @@ export const ReportsView: Component = () => {
         <div class="p-4 border-b border-gray-100 dark:border-neutral-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h3 class="font-bold text-sm text-gray-900 dark:text-white">
-              Sales Invoices Register
+              {currentLang() === 'ne' ? 'बिक्री बिल दर्ता' : 'Sales Invoices Register'}
             </h3>
             <span class="text-xs text-gray-400 dark:text-neutral-500">
-              Showing {filteredInvoices().length} records
+              {currentLang() === 'ne' ? `${filteredInvoices().length} दर्ता देखाइदै` : `Showing ${filteredInvoices().length} records`}
             </span>
           </div>
 
@@ -597,7 +598,7 @@ export const ReportsView: Component = () => {
               <IconSearch size={14} class="absolute left-3 top-2.5 text-gray-400" />
               <input
                 type="text"
-                placeholder="Search invoice or customer..."
+                placeholder={currentLang() === 'ne' ? 'बिल वा ग्राहक खोज्नुहोस्...' : 'Search invoice or customer...'}
                 value={searchQuery()}
                 onInput={(e) => setSearchQuery(e.currentTarget.value)}
                 class="input-field !py-1.5 !pl-8 text-xs font-mono w-48 sm:w-64"
@@ -610,10 +611,10 @@ export const ReportsView: Component = () => {
               onChange={(e) => setPaymentFilter(e.currentTarget.value)}
               class="input-field !py-1.5 text-xs font-semibold"
             >
-              <option value="all">All Modes</option>
-              <option value="cash">Cash</option>
+              <option value="all">{currentLang() === 'ne' ? 'सबै माध्यम' : 'All Modes'}</option>
+              <option value="cash">{currentLang() === 'ne' ? 'नगद' : 'Cash'}</option>
               <option value="fonepay_qr">Fonepay QR</option>
-              <option value="credit">Credit (Khata)</option>
+              <option value="credit">{currentLang() === 'ne' ? 'उधारो (खाता)' : 'Credit (Khata)'}</option>
             </select>
           </div>
         </div>
@@ -622,14 +623,14 @@ export const ReportsView: Component = () => {
           <table class="w-full text-left text-xs">
             <thead class="bg-gray-50 dark:bg-neutral-900 text-gray-500 dark:text-neutral-400 uppercase font-semibold text-[10px] border-b border-gray-100 dark:border-neutral-800">
               <tr>
-                <th class="p-3">Invoice #</th>
-                <th class="p-3">Date</th>
-                <th class="p-3">Customer</th>
-                <th class="p-3">Payment</th>
-                <th class="p-3 text-right">Total</th>
-                <th class="p-3 text-right">Credit Due</th>
+                <th class="p-3">{currentLang() === 'ne' ? 'बिल नं.' : 'Invoice #'}</th>
+                <th class="p-3">{currentLang() === 'ne' ? 'मिति' : 'Date'}</th>
+                <th class="p-3">{currentLang() === 'ne' ? 'ग्राहक' : 'Customer'}</th>
+                <th class="p-3">{currentLang() === 'ne' ? 'भुक्तानी' : 'Payment'}</th>
+                <th class="p-3 text-right">{currentLang() === 'ne' ? 'रकम' : 'Total'}</th>
+                <th class="p-3 text-right">{currentLang() === 'ne' ? 'उधारो' : 'Credit Due'}</th>
                 <th class="p-3 text-center">CBMS</th>
-                <th class="p-3 text-center">Action</th>
+                <th class="p-3 text-center">{currentLang() === 'ne' ? 'कार्य' : 'Action'}</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-50 dark:divide-neutral-800/60 text-gray-600 dark:text-neutral-300">
@@ -638,7 +639,7 @@ export const ReportsView: Component = () => {
                 fallback={
                   <tr>
                     <td colspan="8" class="p-8 text-center text-xs text-gray-400">
-                      No invoices found matching criteria.
+                      {currentLang() === 'ne' ? 'खोज्नु भएको बिल फेला पर्न सकिएन।' : 'No invoices found matching criteria.'}
                     </td>
                   </tr>
                 }
@@ -652,7 +653,7 @@ export const ReportsView: Component = () => {
                       {settings.calendar === 'BS' ? inv.invoiceDateBs : inv.invoiceDateAd}
                     </td>
                     <td class="p-3 font-medium text-gray-700 dark:text-neutral-200">
-                      {inv.partyName || 'Counter Customer'}
+                      {inv.partyName || (currentLang() === 'ne' ? 'नगद ग्राहक' : 'Counter Customer')}
                     </td>
                     <td class="p-3">
                       <span
@@ -681,7 +682,7 @@ export const ReportsView: Component = () => {
                     </td>
                     <td class="p-3 text-center">
                       <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/50">
-                        Audited
+                        {currentLang() === 'ne' ? 'सत्यापित' : 'Audited'}
                       </span>
                     </td>
                     <td class="p-3 text-center">

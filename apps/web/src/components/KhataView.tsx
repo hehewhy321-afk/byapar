@@ -8,6 +8,7 @@ import {
   settings,
 } from '../db/localDb';
 import { formatNepaliCurrency, KhataEntry, Party } from '@byapar/core';
+import { currentLang } from '../services/i18n';
 import {
   IconArrowDown,
   IconArrowUp,
@@ -148,9 +149,9 @@ export const KhataView: Component = () => {
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div class="stat-card flex items-center justify-between">
           <div>
-            <span class="text-xs font-semibold text-gray-500 dark:text-neutral-400 block uppercase tracking-wider">Total Receivables</span>
+            <span class="text-xs font-semibold text-gray-500 dark:text-neutral-400 block uppercase tracking-wider">{currentLang() === 'ne' ? 'लिन बाँकी' : 'Total Receivables'}</span>
             <span class="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1 block">{formatNepaliCurrency(totalReceivable())}</span>
-            <span class="text-[11px] text-gray-400 dark:text-neutral-500">Customer credit outstanding</span>
+            <span class="text-[11px] text-gray-400 dark:text-neutral-500">{currentLang() === 'ne' ? 'ग्राहकले दिनुपर्ने' : 'Customer credit outstanding'}</span>
           </div>
           <div class="w-12 h-12 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold">
             <IconArrowDown class="w-6 h-6" />
@@ -159,9 +160,9 @@ export const KhataView: Component = () => {
 
         <div class="stat-card flex items-center justify-between">
           <div>
-            <span class="text-xs font-semibold text-gray-500 dark:text-neutral-400 block uppercase tracking-wider">Total Payables</span>
+            <span class="text-xs font-semibold text-gray-500 dark:text-neutral-400 block uppercase tracking-wider">{currentLang() === 'ne' ? 'दिन बाँकी' : 'Total Payables'}</span>
             <span class="text-2xl font-black text-red-500 dark:text-red-400 mt-1 block">{formatNepaliCurrency(totalPayable())}</span>
-            <span class="text-[11px] text-gray-400 dark:text-neutral-500">Owed to suppliers</span>
+            <span class="text-[11px] text-gray-400 dark:text-neutral-500">{currentLang() === 'ne' ? 'आपूर्तिकर्तालाई दिनुपर्ने' : 'Owed to suppliers'}</span>
           </div>
           <div class="w-12 h-12 rounded-xl bg-red-50 dark:bg-red-950/40 text-red-500 dark:text-red-400 flex items-center justify-center font-bold">
             <IconArrowUp class="w-6 h-6" />
@@ -185,13 +186,13 @@ export const KhataView: Component = () => {
         {/* Left: Parties List */}
         <div class="lg:col-span-4 stat-card flex flex-col gap-3 !p-4">
           <div class="flex items-center justify-between pb-1">
-            <h3 class="font-bold text-sm text-gray-900 dark:text-white">Parties ({filteredParties().length})</h3>
+            <h3 class="font-bold text-sm text-gray-900 dark:text-white">{currentLang() === 'ne' ? `सम्पर्क (${filteredParties().length})` : `Parties (${filteredParties().length})`}</h3>
             <button
               class="btn-primary text-xs !py-1 !px-2.5 flex items-center gap-1"
               onClick={() => setShowAddPartyModal(true)}
             >
               <IconPlus class="w-3.5 h-3.5" />
-              <span>Add Party</span>
+              <span>{currentLang() === 'ne' ? 'थप्नुहोस्' : 'Add Party'}</span>
             </button>
           </div>
 
@@ -200,20 +201,20 @@ export const KhataView: Component = () => {
             <button
               onClick={() => setPartyFilter('all')}
               class={`py-1.5 rounded-md transition ${partyFilter() === 'all' ? 'bg-brand-600 text-white shadow-sm' : 'text-gray-500 dark:text-neutral-400'}`}
-            >All</button>
+            >{currentLang() === 'ne' ? 'सबै' : 'All'}</button>
             <button
               onClick={() => setPartyFilter('customer')}
               class={`py-1.5 rounded-md transition ${partyFilter() === 'customer' ? 'bg-brand-600 text-white shadow-sm' : 'text-gray-500 dark:text-neutral-400'}`}
-            >Customers</button>
+            >{currentLang() === 'ne' ? 'ग्राहक' : 'Customers'}</button>
             <button
               onClick={() => setPartyFilter('supplier')}
               class={`py-1.5 rounded-md transition ${partyFilter() === 'supplier' ? 'bg-brand-600 text-white shadow-sm' : 'text-gray-500 dark:text-neutral-400'}`}
-            >Suppliers</button>
+            >{currentLang() === 'ne' ? 'आपूर्तिकर्ता' : 'Suppliers'}</button>
           </div>
 
           <input
             type="text"
-            placeholder="Search party by name or phone..."
+            placeholder={currentLang() === 'ne' ? 'नाम वा फोनले खोज्नुहोस्...' : 'Search party by name or phone...'}
             value={searchQuery()}
             onInput={(e) => setSearchQuery(e.currentTarget.value)}
             class="input-field text-xs"
@@ -247,7 +248,7 @@ export const KhataView: Component = () => {
                         {formatNepaliCurrency(Math.abs(party.currentBalance))}
                       </span>
                       <span class="text-[9px] text-gray-400 dark:text-neutral-500 font-semibold uppercase">
-                        {isReceivable() ? 'Receivable' : isPayable() ? 'Payable' : 'Settled'}
+                        {isReceivable() ? (currentLang() === 'ne' ? 'लिन बाँकी' : 'Receivable') : isPayable() ? (currentLang() === 'ne' ? 'दिन बाँकी' : 'Payable') : (currentLang() === 'ne' ? 'सर्मियो' : 'Settled')}
                       </span>
                     </div>
                   </div>
@@ -285,7 +286,7 @@ export const KhataView: Component = () => {
 
                   <div class="flex items-center gap-3">
                     <div class="text-right">
-                      <span class="text-[10px] text-gray-400 dark:text-neutral-500 block font-semibold uppercase">Current Balance</span>
+                      <span class="text-[10px] text-gray-400 dark:text-neutral-500 block font-semibold uppercase">{currentLang() === 'ne' ? 'अहिलेको मौज्दात' : 'Current Balance'}</span>
                       <span class={`text-xl font-black ${
                         current().currentBalance > 0 ? 'text-emerald-600 dark:text-emerald-400' :
                         current().currentBalance < 0 ? 'text-red-500 dark:text-red-400' : 'text-gray-400 dark:text-neutral-500'
@@ -313,21 +314,21 @@ export const KhataView: Component = () => {
                   class="py-3 px-4 bg-emerald-50 dark:bg-emerald-950/30 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 border border-emerald-200 dark:border-emerald-800/50 text-emerald-700 dark:text-emerald-300 font-bold rounded-xl text-sm flex items-center justify-center gap-2 transition"
                 >
                   <IconArrowDown class="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                  <span>Receive Payment (Inflow)</span>
+                  <span>{currentLang() === 'ne' ? 'भुक्तानी पाइयो' : 'Receive Payment (Inflow)'}</span>
                 </button>
                 <button
                   onClick={() => handleOpenEntry('diyo')}
                   class="py-3 px-4 bg-red-50 dark:bg-red-950/30 hover:bg-red-100 dark:hover:bg-red-900/40 border border-red-200 dark:border-red-800/50 text-red-600 dark:text-red-300 font-bold rounded-xl text-sm flex items-center justify-center gap-2 transition"
                 >
                   <IconArrowUp class="w-4 h-4 text-red-500 dark:text-red-400" />
-                  <span>Give Goods on Credit (Outflow)</span>
+                  <span>{currentLang() === 'ne' ? 'उधारोमा सामान दियो' : 'Give Goods on Credit (Outflow)'}</span>
                 </button>
               </div>
 
               {/* Transactions */}
               <div class="mt-4">
                 <h4 class="text-xs font-bold text-gray-500 dark:text-neutral-400 uppercase tracking-wider mb-2">
-                  Transaction Ledger
+                  {currentLang() === 'ne' ? 'लेनदेन विवरण' : 'Transaction Ledger'}
                 </h4>
                 <div class="divide-y divide-gray-50 dark:divide-neutral-800/60 border border-gray-100 dark:border-neutral-800 rounded-xl overflow-hidden max-h-[300px] overflow-y-auto">
                   <For each={partyTransactions()}>
@@ -338,7 +339,7 @@ export const KhataView: Component = () => {
                             <span class={`font-black text-xs px-2 py-0.5 rounded ${
                               entry.entryType === 'liyo' ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400' : 'bg-red-50 dark:bg-red-950/40 text-red-500 dark:text-red-400'
                             }`}>
-                              {entry.entryType === 'liyo' ? 'Payment Received' : 'Credit Given'}
+                              {entry.entryType === 'liyo' ? (currentLang() === 'ne' ? 'भुक्तानी आयो' : 'Payment Received') : (currentLang() === 'ne' ? 'उधारो दियो' : 'Credit Given')}
                             </span>
                             <span class="text-gray-400 dark:text-neutral-500 font-mono">
                               {settings.calendar === 'BS' ? entry.dateBs : entry.dateAd}
@@ -357,7 +358,7 @@ export const KhataView: Component = () => {
 
                   {partyTransactions().length === 0 && (
                     <div class="p-6 text-center text-gray-400 dark:text-neutral-500 text-xs bg-white dark:bg-black">
-                      No transaction statements recorded for this contact.
+                      {currentLang() === 'ne' ? 'यस सम्पर्कको कुनै लेनदेन दर्ता छैन।' : 'No transaction statements recorded for this contact.'}
                     </div>
                   )}
                 </div>
@@ -374,7 +375,9 @@ export const KhataView: Component = () => {
           <div class="modal-content max-w-sm bg-white dark:bg-black border border-gray-200 dark:border-neutral-800" onClick={(e) => e.stopPropagation()}>
             <div class="px-5 py-4 border-b border-gray-100 dark:border-neutral-800 flex justify-between items-center">
               <h3 class="font-bold text-gray-900 dark:text-white text-sm">
-                {entryType() === 'liyo' ? 'Record Payment Received' : 'Record Credit Given'}
+                {entryType() === 'liyo'
+                  ? (currentLang() === 'ne' ? 'भुक्तानी दर्ता गर्नुहोस्' : 'Record Payment Received')
+                  : (currentLang() === 'ne' ? 'उधारो दर्ता गर्नुहोस्' : 'Record Credit Given')}
               </h3>
               <button onClick={() => setShowEntryModal(false)} class="text-gray-400 hover:text-gray-600 dark:hover:text-white">
                 <IconX class="w-4 h-4" />
@@ -383,7 +386,7 @@ export const KhataView: Component = () => {
 
             <form onSubmit={handleSaveEntry} class="p-5 space-y-3">
               <div>
-                <label class="block text-[11px] font-semibold text-gray-500 dark:text-neutral-300 mb-1">Amount (in NPR):</label>
+                <label class="block text-[11px] font-semibold text-gray-500 dark:text-neutral-300 mb-1">{currentLang() === 'ne' ? 'रकम (रु.):' : 'Amount (in NPR):'}</label>
                 <input
                   type="number"
                   step="0.01"
@@ -397,7 +400,7 @@ export const KhataView: Component = () => {
               </div>
 
               <div>
-                <label class="block text-[11px] font-semibold text-gray-500 dark:text-neutral-300 mb-1">Notes / Description:</label>
+                <label class="block text-[11px] font-semibold text-gray-500 dark:text-neutral-300 mb-1">{currentLang() === 'ne' ? 'कैफियत:' : 'Notes / Description:'}</label>
                 <input
                   type="text"
                   value={entryNotes()}
@@ -412,13 +415,13 @@ export const KhataView: Component = () => {
                   type="button"
                   onClick={() => setShowEntryModal(false)}
                   class="btn-outline w-1/2"
-                >Cancel</button>
+                >{currentLang() === 'ne' ? 'रद्द गर्नुहोस्' : 'Cancel'}</button>
                 <button
                   type="submit"
                   class={`w-1/2 py-2.5 font-bold rounded-xl text-xs text-white shadow-sm ${
                     entryType() === 'liyo' ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-red-500 hover:bg-red-400'
                   }`}
-                >Save Record</button>
+                >{currentLang() === 'ne' ? 'सेभ गर्नुहोस्' : 'Save Record'}</button>
               </div>
             </form>
           </div>
@@ -451,7 +454,7 @@ export const KhataView: Component = () => {
                     onClick={() => setNewPartyType('customer')}
                   >
                     <IconUser class="w-3.5 h-3.5" />
-                    <span>Customer (ग्राहक)</span>
+                    <span>{currentLang() === 'ne' ? 'ग्राहक' : 'Customer'}</span>
                   </button>
                   <button
                     type="button"
@@ -463,7 +466,7 @@ export const KhataView: Component = () => {
                     onClick={() => setNewPartyType('supplier')}
                   >
                     <IconAccounts class="w-3.5 h-3.5" />
-                    <span>Supplier (साहुजी)</span>
+                    <span>{currentLang() === 'ne' ? 'आपूर्तिकर्ता' : 'Supplier'}</span>
                   </button>
                 </div>
               </div>
@@ -532,7 +535,11 @@ export const KhataView: Component = () => {
                     class="input-field font-mono"
                   />
                   <span class="text-[10px] text-gray-400 dark:text-neutral-500 mt-0.5 block">
-                    {newPartyOpeningBalance() > 0 ? 'Receivable (उनीहरूले तिर्नुपर्ने)' : newPartyOpeningBalance() < 0 ? 'Payable (हामीले तिर्नुपर्ने)' : 'No initial dues'}
+                    {newPartyOpeningBalance() > 0
+                      ? (currentLang() === 'ne' ? 'उनीहरूले तिर्नुपर्ने' : 'Receivable from them')
+                      : newPartyOpeningBalance() < 0
+                      ? (currentLang() === 'ne' ? 'हामीले तिर्नुपर्ने' : 'We owe them')
+                      : (currentLang() === 'ne' ? 'कुनै बाँकी छैन' : 'No initial dues')}
                   </span>
                 </div>
                 <div>

@@ -27,7 +27,7 @@ const TAB_TITLES: Record<string, string> = {
 };
 
 export const AppHeader: React.FC = () => {
-  const { store, activeBizId, setActiveTab, activeTab, theme, language, toggleLanguage, t } = useApp();
+  const { store, activeBizId, setActiveTab, activeTab, theme, t } = useApp();
   const [unreadCount, setUnreadCount] = useState(0);
   const [showBranchModal, setShowBranchModal] = useState(false);
   const [showSubModal, setShowSubModal] = useState(false);
@@ -163,23 +163,6 @@ export const AppHeader: React.FC = () => {
             <Text style={styles.upgradePillText}>{t('upgrade')}</Text>
           </AnimatedPressable>
         )}
-
-        {/* Quick Language Toggle */}
-        <AnimatedPressable
-          style={[
-            styles.langBtn,
-            {
-              backgroundColor: theme.colors.card,
-              borderColor: theme.colors.borderGlass,
-            },
-          ]}
-          onPress={toggleLanguage}
-          activeScale={0.9}
-        >
-          <Text style={[styles.langBtnText, { color: theme.colors.primary }]}>
-            {language === 'ne' ? 'नेपाली' : 'EN'}
-          </Text>
-        </AnimatedPressable>
 
         <AnimatedPressable
           style={[

@@ -11,6 +11,7 @@ import {
   type IncomeRecord,
 } from '../../db/localDb';
 import { formatNepaliCurrency } from '@byapar/core';
+import { currentLang } from '../../services/i18n';
 import { IconExpense, IconIncome, IconPlus, IconTrash, IconX } from '../icons';
 
 const EXPENSE_CATEGORIES = [
@@ -103,7 +104,7 @@ export const ExpenseIncomeView: Component<ExpenseIncomeViewProps> = (props) => {
             </svg>
           </button>
           <h1 class="text-xl font-heading font-bold text-gray-900 dark:text-white">
-            {isExpense() ? 'Expenses' : 'Incomes'}
+            {isExpense() ? (currentLang() === 'ne' ? 'खर्च' : 'Expenses') : (currentLang() === 'ne' ? 'आम्दानी' : 'Incomes')}
           </h1>
         </div>
         <button
@@ -111,7 +112,7 @@ export const ExpenseIncomeView: Component<ExpenseIncomeViewProps> = (props) => {
           onClick={() => setShowModal(true)}
         >
           <IconPlus class="w-4 h-4" />
-          <span>Add {isExpense() ? 'Expense' : 'Income'}</span>
+          <span>{isExpense() ? (currentLang() === 'ne' ? '+ खर्च थप्नुहोस्' : 'Add Expense') : (currentLang() === 'ne' ? '+ आम्दानी थप्नुहोस्' : 'Add Income')}</span>
         </button>
       </div>
 
@@ -119,7 +120,7 @@ export const ExpenseIncomeView: Component<ExpenseIncomeViewProps> = (props) => {
       <div class="stat-card mb-6">
         <div class="flex items-center justify-between">
           <div>
-            <p class="text-xs text-gray-500 dark:text-neutral-400 mb-0.5">Total {isExpense() ? 'Expenses' : 'Income'}</p>
+            <p class="text-xs text-gray-500 dark:text-neutral-400 mb-0.5">{isExpense() ? (currentLang() === 'ne' ? 'जम्मा खर्च' : 'Total Expenses') : (currentLang() === 'ne' ? 'जम्मा आम्दानी' : 'Total Income')}</p>
             <p class={`text-2xl font-bold ${isExpense() ? 'text-red-500 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
               {formatNepaliCurrency(totalAmount())}
             </p>
@@ -143,15 +144,15 @@ export const ExpenseIncomeView: Component<ExpenseIncomeViewProps> = (props) => {
               {isExpense() ? <IconExpense class="w-8 h-8" /> : <IconIncome class="w-8 h-8" />}
             </div>
             <p class="text-sm font-semibold text-gray-700 dark:text-white mb-1">
-              No {isExpense() ? 'expenses' : 'income'} recorded yet
+              {isExpense() ? (currentLang() === 'ne' ? 'कुनै खर्च दर्ता छैन' : 'No expenses recorded yet') : (currentLang() === 'ne' ? 'कुनै आम्दानी दर्ता छैन' : 'No income recorded yet')}
             </p>
-            <p class="text-xs text-gray-400 dark:text-neutral-500 mb-4">Start tracking your business {isExpense() ? 'expenses' : 'income'}.</p>
+            <p class="text-xs text-gray-400 dark:text-neutral-500 mb-4">{isExpense() ? (currentLang() === 'ne' ? 'आफ्नो पसलको खर्च ट्र्याक गर्नुहोस्।' : 'Start tracking your business expenses.') : (currentLang() === 'ne' ? 'आफ्नो आम्दानी ट्र्याक गर्नुहोस्।' : 'Start tracking your business income.')}</p>
             <button
               class={`flex items-center gap-1.5 text-xs ${isExpense() ? 'btn-danger' : 'btn-primary'}`}
               onClick={() => setShowModal(true)}
             >
               <IconPlus class="w-3.5 h-3.5" />
-              <span>Add {isExpense() ? 'Expense' : 'Income'}</span>
+              <span>{isExpense() ? (currentLang() === 'ne' ? 'खर्च थप्नुहोस्' : 'Add Expense') : (currentLang() === 'ne' ? 'आम्दानी थप्नुहोस्' : 'Add Income')}</span>
             </button>
           </div>
         }
@@ -205,7 +206,7 @@ export const ExpenseIncomeView: Component<ExpenseIncomeViewProps> = (props) => {
           <div class="modal-content bg-white dark:bg-black border border-gray-200 dark:border-neutral-800" onClick={(e) => e.stopPropagation()}>
             <div class="px-6 py-4 border-b border-gray-100 dark:border-neutral-800 flex items-center justify-between">
               <h2 class="text-lg font-heading font-bold text-gray-900 dark:text-white">
-                Add {isExpense() ? 'Expense' : 'Income'}
+                {isExpense() ? (currentLang() === 'ne' ? 'खर्च थप्नुहोस्' : 'Add Expense') : (currentLang() === 'ne' ? 'आम्दानी थप्नुहोस्' : 'Add Income')}
               </h2>
               <button onClick={() => setShowModal(false)} class="text-gray-400 hover:text-gray-600 dark:hover:text-white">
                 <IconX class="w-4 h-4" />
@@ -214,7 +215,7 @@ export const ExpenseIncomeView: Component<ExpenseIncomeViewProps> = (props) => {
             <div class="p-6 space-y-4">
               <div>
                 <label class="block text-xs font-medium text-gray-600 dark:text-neutral-300 mb-1.5">
-                  {isExpense() ? 'Category' : 'Source'} *
+                  {isExpense() ? (currentLang() === 'ne' ? 'शीर्षक *' : 'Category *') : (currentLang() === 'ne' ? 'स्रोत *' : 'Source *')}
                 </label>
                 <select class="input-field" value={formCategory()} onChange={(e) => setFormCategory(e.currentTarget.value)}>
                   <option value="">— Select —</option>
@@ -226,7 +227,7 @@ export const ExpenseIncomeView: Component<ExpenseIncomeViewProps> = (props) => {
 
               <div class="grid grid-cols-2 gap-4">
                 <div>
-                  <label class="block text-xs font-medium text-gray-600 dark:text-neutral-300 mb-1.5">Amount *</label>
+                  <label class="block text-xs font-medium text-gray-600 dark:text-neutral-300 mb-1.5">{currentLang() === 'ne' ? 'रकम *' : 'Amount *'}</label>
                   <input
                     type="number"
                     class="input-field"
@@ -236,7 +237,7 @@ export const ExpenseIncomeView: Component<ExpenseIncomeViewProps> = (props) => {
                   />
                 </div>
                 <div>
-                  <label class="block text-xs font-medium text-gray-600 dark:text-neutral-300 mb-1.5">Date *</label>
+                  <label class="block text-xs font-medium text-gray-600 dark:text-neutral-300 mb-1.5">{currentLang() === 'ne' ? 'मिति *' : 'Date *'}</label>
                   <input
                     type="date"
                     class="input-field"
@@ -247,7 +248,7 @@ export const ExpenseIncomeView: Component<ExpenseIncomeViewProps> = (props) => {
               </div>
 
               <div>
-                <label class="block text-xs font-medium text-gray-600 dark:text-neutral-300 mb-1.5">Payment Mode</label>
+                <label class="block text-xs font-medium text-gray-600 dark:text-neutral-300 mb-1.5">{currentLang() === 'ne' ? 'भुक्तानी माध्यम' : 'Payment Mode'}</label>
                 <select class="input-field" value={formPaymentMode()} onChange={(e) => setFormPaymentMode(e.currentTarget.value)}>
                   <For each={PAYMENT_MODES}>
                     {(m) => <option value={m}>{m}</option>}
@@ -256,7 +257,7 @@ export const ExpenseIncomeView: Component<ExpenseIncomeViewProps> = (props) => {
               </div>
 
               <div>
-                <label class="block text-xs font-medium text-gray-600 dark:text-neutral-300 mb-1.5">Note (Optional)</label>
+                <label class="block text-xs font-medium text-gray-600 dark:text-neutral-300 mb-1.5">{currentLang() === 'ne' ? 'कैफियत (वैकल्पिक)' : 'Note (Optional)'}</label>
                 <input
                   type="text"
                   class="input-field"
@@ -268,13 +269,13 @@ export const ExpenseIncomeView: Component<ExpenseIncomeViewProps> = (props) => {
             </div>
             <div class="px-6 py-4 border-t border-gray-100 dark:border-neutral-800 flex justify-end gap-3">
               <button class="btn-outline" onClick={() => { resetForm(); setShowModal(false); }}>
-                Cancel
+                {currentLang() === 'ne' ? 'रद्द गर्नुहोस्' : 'Cancel'}
               </button>
               <button
                 class={isExpense() ? 'btn-danger' : 'btn-primary'}
                 onClick={handleAdd}
               >
-                Save {isExpense() ? 'Expense' : 'Income'}
+                {isExpense() ? (currentLang() === 'ne' ? 'खर्च सेभ गर्नुहोस्' : 'Save Expense') : (currentLang() === 'ne' ? 'आम्दानी सेभ गर्नुहोस्' : 'Save Income')}
               </button>
             </div>
           </div>

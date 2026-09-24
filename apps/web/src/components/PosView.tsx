@@ -16,6 +16,7 @@ import {
   settings,
 } from '../db/localDb';
 import { formatNepaliCurrency, Item, Invoice } from '@byapar/core';
+import { currentLang } from '../services/i18n';
 import { FonepayModal } from './FonepayModal';
 import { ReceiptModal } from './ReceiptModal';
 import { IconSearch, IconX, IconPos, IconAccounts, IconQrCode, IconNotebook, IconPlus } from './icons';
@@ -109,7 +110,7 @@ export const PosView: Component = () => {
           <IconSearch class="w-4 h-4 text-gray-400 dark:text-neutral-500 shrink-0 ml-1" />
           <input
             type="text"
-            placeholder="Search product or scan barcode (Enter to add)..."
+            placeholder={currentLang() === 'ne' ? 'सामान खोज्नुहोस् वा बारकोड स्क्यान गर्नुहोस्...' : 'Search product or scan barcode (Enter to add)...'}
             value={searchQuery()}
             onInput={(e) => setSearchQuery(e.currentTarget.value)}
             onKeyDown={handleSearchKeyDown}
@@ -129,7 +130,7 @@ export const PosView: Component = () => {
         {/* Pricing Tier */}
         <div class="flex items-center justify-between bg-white dark:bg-black p-2.5 rounded-xl border border-gray-100 dark:border-neutral-800">
           <div class="flex items-center gap-2">
-            <span class="text-xs font-semibold text-gray-500 dark:text-neutral-400">Price Tier:</span>
+            <span class="text-xs font-semibold text-gray-500 dark:text-neutral-400">{currentLang() === 'ne' ? 'मूल्य दर:' : 'Price Tier:'}</span>
             <div class="flex bg-gray-100 dark:bg-neutral-900 p-0.5 rounded-lg">
               <button
                 onClick={() => setPricingTier('retail')}
@@ -154,7 +155,7 @@ export const PosView: Component = () => {
             </div>
           </div>
           <span class="text-xs text-gray-500 dark:text-neutral-400">
-            Total Items: <span class="font-bold text-gray-900 dark:text-white">{filteredItems().length}</span>
+            {currentLang() === 'ne' ? 'कुल सामान:' : 'Total Items:'} <span class="font-bold text-gray-900 dark:text-white">{filteredItems().length}</span>
           </span>
         </div>
 
@@ -185,7 +186,7 @@ export const PosView: Component = () => {
                             : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400'
                         }`}
                       >
-                        Stock: {item.currentStock}
+                        {currentLang() === 'ne' ? 'स्टक:' : 'Stock:'} {item.currentStock}
                       </span>
                     </div>
                     <h4 class="font-bold text-xs text-gray-800 dark:text-neutral-100 group-hover:text-brand-600 dark:group-hover:text-brand-400 line-clamp-2 leading-tight">
@@ -222,7 +223,7 @@ export const PosView: Component = () => {
             <div class="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-neutral-800 mb-3">
               <div class="flex items-center gap-2">
                 <IconPos class="w-4 h-4 text-brand-600 dark:text-brand-400" />
-                <h3 class="font-bold text-sm text-gray-900 dark:text-white">Current Cart</h3>
+                <h3 class="font-bold text-sm text-gray-900 dark:text-white">{currentLang() === 'ne' ? 'कार्ट' : 'Current Cart'}</h3>
                 <span class="text-xs bg-brand-600 text-white font-bold px-2 py-0.5 rounded-full">
                   {cart.length}
                 </span>
@@ -232,7 +233,7 @@ export const PosView: Component = () => {
                   onClick={clearCart}
                   class="text-xs text-red-500 hover:text-red-600 dark:hover:text-red-400 transition font-medium"
                 >
-                  Clear Cart
+                  {currentLang() === 'ne' ? 'खाली गर्नुहोस्' : 'Clear Cart'}
                 </button>
               )}
             </div>
@@ -240,14 +241,14 @@ export const PosView: Component = () => {
             {/* Customer Selector */}
             <div class="mb-3">
               <label class="block text-[11px] font-semibold text-gray-500 dark:text-neutral-400 mb-1">
-                Customer / Account:
+                {currentLang() === 'ne' ? 'ग्राहक / खाता:' : 'Customer / Account:'}
               </label>
               <select
                 value={selectedPartyId()}
                 onChange={(e) => setSelectedPartyId(e.currentTarget.value)}
                 class="input-field text-xs"
               >
-                <option value="">-- Walk-in Customer (Cash Sale) --</option>
+                <option value="">{currentLang() === 'ne' ? '-- नगद बिक्री (गल्ली ग्राहक) --' : '-- Walk-in Customer (Cash Sale) --'}</option>
                 <For each={parties.filter((p) => p.partyType !== 'supplier')}>
                   {(party) => (
                     <option value={party.id}>
@@ -305,17 +306,17 @@ export const PosView: Component = () => {
           <div class="border-t border-gray-100 dark:border-neutral-800 pt-3 space-y-3">
             <div class="space-y-1 text-xs">
               <div class="flex justify-between text-gray-500 dark:text-neutral-400">
-                <span>Subtotal:</span>
+                <span>{currentLang() === 'ne' ? 'जोडफल:' : 'Subtotal:'}</span>
                 <span class="text-gray-800 dark:text-neutral-200">{formatNepaliCurrency(cartSubtotal())}</span>
               </div>
               {cartTaxAmount() > 0 && (
                 <div class="flex justify-between text-gray-500 dark:text-neutral-400">
-                  <span>13% VAT Included:</span>
+                  <span>{currentLang() === 'ne' ? '१३% भ्याट:' : '13% VAT Included:'}</span>
                   <span class="text-gray-800 dark:text-neutral-200">{formatNepaliCurrency(cartTaxAmount())}</span>
                 </div>
               )}
               <div class="flex justify-between text-sm font-black text-gray-900 dark:text-white pt-1 border-t border-gray-100 dark:border-neutral-800">
-                <span>Total Payable:</span>
+                <span>{currentLang() === 'ne' ? 'जम्मा रकम:' : 'Total Payable:'}</span>
                 <span class="text-brand-600 dark:text-brand-400 text-base">{formatNepaliCurrency(cartTotal())}</span>
               </div>
             </div>
@@ -324,7 +325,7 @@ export const PosView: Component = () => {
             {cart.length > 0 && (
               <div class="bg-gray-50 dark:bg-neutral-900 p-2.5 rounded-xl border border-gray-100 dark:border-neutral-800 space-y-2">
                 <div class="flex items-center justify-between text-xs">
-                  <span class="text-gray-500 dark:text-neutral-400 font-semibold">Cash Tendered:</span>
+                  <span class="text-gray-500 dark:text-neutral-400 font-semibold">{currentLang() === 'ne' ? 'नगद पाइयो:' : 'Cash Tendered:'}</span>
                   <div class="flex items-center gap-1">
                     <span class="text-gray-400 dark:text-neutral-500">Rs.</span>
                     <input
@@ -341,12 +342,12 @@ export const PosView: Component = () => {
                   <button onClick={() => addTender(100)} class="bg-gray-100 dark:bg-neutral-800 hover:bg-gray-200 dark:hover:bg-neutral-700 text-gray-600 dark:text-neutral-200 py-1 rounded transition">+100</button>
                   <button onClick={() => addTender(500)} class="bg-gray-100 dark:bg-neutral-800 hover:bg-gray-200 dark:hover:bg-neutral-700 text-gray-600 dark:text-neutral-200 py-1 rounded transition">+500</button>
                   <button onClick={() => addTender(1000)} class="bg-gray-100 dark:bg-neutral-800 hover:bg-gray-200 dark:hover:bg-neutral-700 text-gray-600 dark:text-neutral-200 py-1 rounded transition">+1000</button>
-                  <button onClick={setExactTender} class="bg-brand-50 dark:bg-brand-950/50 hover:bg-brand-100 dark:hover:bg-brand-900/50 text-brand-600 dark:text-brand-400 py-1 rounded transition">Exact</button>
+                  <button onClick={setExactTender} class="bg-brand-50 dark:bg-brand-950/50 hover:bg-brand-100 dark:hover:bg-brand-900/50 text-brand-600 dark:text-brand-400 py-1 rounded transition">{currentLang() === 'ne' ? 'ठ्याक्कै' : 'Exact'}</button>
                 </div>
 
                 {changeDue() > 0 && (
                   <div class="flex justify-between items-center bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-800/40 px-2.5 py-1 rounded-lg text-xs font-bold text-emerald-600 dark:text-emerald-400">
-                    <span>Change Return:</span>
+                    <span>{currentLang() === 'ne' ? 'फिर्ता रकम:' : 'Change Return:'}</span>
                     <span>{formatNepaliCurrency(changeDue())}</span>
                   </div>
                 )}
@@ -362,9 +363,9 @@ export const PosView: Component = () => {
               >
                 <div class="flex items-center gap-1">
                   <IconAccounts class="w-3.5 h-3.5" />
-                  <span>Cash</span>
+                  <span>{currentLang() === 'ne' ? 'नगद' : 'Cash'}</span>
                 </div>
-                <span class="text-[10px] font-normal opacity-80">Instant Pay</span>
+                <span class="text-[10px] font-normal opacity-80">{currentLang() === 'ne' ? 'तुरुन्तै भुक्तानी' : 'Instant Pay'}</span>
               </button>
               <button
                 onClick={handleFonepayTrigger}
@@ -375,7 +376,7 @@ export const PosView: Component = () => {
                   <IconQrCode class="w-3.5 h-3.5" />
                   <span>Fonepay</span>
                 </div>
-                <span class="text-[10px] font-normal opacity-80">Dynamic QR</span>
+                <span class="text-[10px] font-normal opacity-80">{currentLang() === 'ne' ? 'QR भुक्तानी' : 'Dynamic QR'}</span>
               </button>
               <button
                 onClick={handleCreditCheckout}
@@ -384,9 +385,9 @@ export const PosView: Component = () => {
               >
                 <div class="flex items-center gap-1">
                   <IconNotebook class="w-3.5 h-3.5" />
-                  <span>Credit</span>
+                  <span>{currentLang() === 'ne' ? 'उधारो' : 'Credit'}</span>
                 </div>
-                <span class="text-[10px] font-normal opacity-80">Khata Due</span>
+                <span class="text-[10px] font-normal opacity-80">{currentLang() === 'ne' ? 'खाता बाँकी' : 'Khata Due'}</span>
               </button>
             </div>
           </div>

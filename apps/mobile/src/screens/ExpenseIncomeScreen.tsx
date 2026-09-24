@@ -48,7 +48,11 @@ export const ExpenseIncomeScreen: React.FC = () => {
     deleteIncome,
     theme,
     themeMode,
+    language,
+    t,
   } = useApp();
+
+  const ne = language === 'ne';
 
   const isDark = themeMode === 'dark';
 
@@ -204,7 +208,7 @@ export const ExpenseIncomeScreen: React.FC = () => {
                 { color: activeTab === 'expense' ? '#FFFFFF' : theme.colors.textMuted },
               ]}
             >
-              Expenses (खर्च)
+              {ne ? 'खर्च' : 'Expenses'}
             </Text>
           </TouchableOpacity>
 
@@ -234,7 +238,7 @@ export const ExpenseIncomeScreen: React.FC = () => {
                 { color: activeTab === 'income' ? '#FFFFFF' : theme.colors.textMuted },
               ]}
             >
-              Income (आम्दानी)
+              {ne ? 'आम्दानी' : 'Income'}
             </Text>
           </TouchableOpacity>
         </View>
@@ -249,7 +253,7 @@ export const ExpenseIncomeScreen: React.FC = () => {
           ]}
         >
           <Text style={[styles.kpiLabel, { color: theme.colors.textMuted }]}>
-            Total Expenses
+            {ne ? 'जम्मा खर्च' : 'Total Expenses'}
           </Text>
           <Text style={[styles.kpiValue, { color: '#EF4444' }]}>
             Rs. {totalExpenses.toLocaleString()}
@@ -263,7 +267,7 @@ export const ExpenseIncomeScreen: React.FC = () => {
           ]}
         >
           <Text style={[styles.kpiLabel, { color: theme.colors.textMuted }]}>
-            Total Income
+            {ne ? 'जम्मा आम्दानी' : 'Total Income'}
           </Text>
           <Text style={[styles.kpiValue, { color: '#10B981' }]}>
             Rs. {totalIncomes.toLocaleString()}
@@ -277,7 +281,7 @@ export const ExpenseIncomeScreen: React.FC = () => {
           ]}
         >
           <Text style={[styles.kpiLabel, { color: theme.colors.textMuted }]}>
-            Net Cash Flow
+            {ne ? 'कुल नगद' : 'Net Cash Flow'}
           </Text>
           <Text
             style={[
@@ -301,7 +305,7 @@ export const ExpenseIncomeScreen: React.FC = () => {
           <Feather name="search" size={15} color={theme.colors.textMuted} />
           <TextInput
             style={[styles.searchInput, { color: theme.colors.textPrimary }]}
-            placeholder={`Search ${isExpense ? 'expenses' : 'incomes'} or recipient...`}
+            placeholder={ne ? (isExpense ? 'खर्च खोज्नुहोस्...' : 'आम्दानी खोज्नुहोस्...') : `Search ${isExpense ? 'expenses' : 'incomes'} or recipient...`}
             placeholderTextColor={theme.colors.textMuted}
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -337,7 +341,7 @@ export const ExpenseIncomeScreen: React.FC = () => {
               selectedCategory === 'All' && styles.catChipTextActive,
             ]}
           >
-            All Categories
+            {ne ? 'सबै' : 'All Categories'}
           </Text>
         </TouchableOpacity>
 
@@ -389,10 +393,10 @@ export const ExpenseIncomeScreen: React.FC = () => {
               />
             </View>
             <Text style={[styles.emptyTitle, { color: theme.colors.textPrimary }]}>
-              No {isExpense ? 'expenses' : 'incomes'} recorded yet
+              {ne ? (isExpense ? 'कुनै खर्च दर्ता छैन' : 'कुनै आम्दानी दर्ता छैन') : (isExpense ? 'No expenses recorded yet' : 'No incomes recorded yet')}
             </Text>
             <Text style={[styles.emptySub, { color: theme.colors.textMuted }]}>
-              Tap the "+ {isExpense ? 'Expense' : 'Income'}" button above to record your store finances.
+              {ne ? `"+ ${isExpense ? 'खर्च' : 'आम्दानी'}" थिच्नुहोस्` : `Tap the "+ ${isExpense ? 'Expense' : 'Income'}" button above to record your store finances.`}
             </Text>
           </View>
         ) : (
@@ -435,7 +439,7 @@ export const ExpenseIncomeScreen: React.FC = () => {
                     </Text>
                     {party && (
                       <Text style={[styles.recordParty, { color: theme.colors.textSecondary }]}>
-                        {isExpense ? 'To: ' : 'From: '} {party}
+                        {ne ? (isExpense ? 'प्राप्तकर्ता: ' : 'प्रेषक: ') : (isExpense ? 'To: ' : 'From: ')}{party}
                       </Text>
                     )}
                     {item.note && (
@@ -494,7 +498,7 @@ export const ExpenseIncomeScreen: React.FC = () => {
           activeOpacity={0.88}
         >
           <Feather name="arrow-up-right" size={15} color="#FFFFFF" />
-          <Text style={styles.fabBtnText}>Expense</Text>
+          <Text style={styles.fabBtnText}>{ne ? 'खर्च' : 'Expense'}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -506,7 +510,7 @@ export const ExpenseIncomeScreen: React.FC = () => {
           activeOpacity={0.88}
         >
           <Feather name="arrow-down-left" size={15} color="#FFFFFF" />
-          <Text style={styles.fabBtnText}>Income</Text>
+          <Text style={styles.fabBtnText}>{ne ? 'आम्दानी' : 'Income'}</Text>
         </TouchableOpacity>
       </View>
 
@@ -549,7 +553,7 @@ export const ExpenseIncomeScreen: React.FC = () => {
                   />
                 </View>
                 <Text style={[styles.modalTitle, { color: theme.colors.textPrimary }]}>
-                  {isExpense ? 'Add Store Expense' : 'Add Other Income'}
+                  {ne ? (isExpense ? 'खर्च थप्नुहोस्' : 'आम्दानी थप्नुहोस्') : (isExpense ? 'Add Store Expense' : 'Add Other Income')}
                 </Text>
               </View>
               <TouchableOpacity onPress={() => setShowAddModal(false)}>
@@ -561,7 +565,7 @@ export const ExpenseIncomeScreen: React.FC = () => {
               {/* Amount Input */}
               <View style={styles.inputGroup}>
                 <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>
-                  Amount (रकम NPR) *
+                  {ne ? 'रकम (रु.) *' : 'Amount (NPR) *'}
                 </Text>
                 <View
                   style={[
@@ -585,7 +589,7 @@ export const ExpenseIncomeScreen: React.FC = () => {
               {/* Category Selector */}
               <View style={styles.inputGroup}>
                 <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>
-                  Category (शीर्षक) *
+                  {ne ? 'शीर्षक *' : 'Category *'}
                 </Text>
                 <View style={styles.chipGrid}>
                   {categoriesList.map((cat) => (
@@ -624,7 +628,7 @@ export const ExpenseIncomeScreen: React.FC = () => {
               {/* Recipient / Payer */}
               <View style={styles.inputGroup}>
                 <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>
-                  {isExpense ? 'Recipient / Paid To (भुक्तानी पाउने व्यक्ति)' : 'Payer / Received From (दिने व्यक्ति)'}
+                  {ne ? (isExpense ? 'भुक्तानी पाउने व्यक्ति' : 'दिने व्यक्ति') : (isExpense ? 'Recipient / Paid To' : 'Payer / Received From')}
                 </Text>
                 <TextInput
                   style={[
@@ -635,7 +639,7 @@ export const ExpenseIncomeScreen: React.FC = () => {
                       color: theme.colors.textPrimary,
                     },
                   ]}
-                  placeholder={isExpense ? 'e.g. Landlord, Staff, Delivery Rider' : 'e.g. Supplier Rebate, Cash Customer'}
+                  placeholder={ne ? (isExpense ? 'जस्तै: घरधनी, कर्मचारी' : 'जस्तै: आपूर्तिकर्ता') : (isExpense ? 'e.g. Landlord, Staff, Delivery Rider' : 'e.g. Supplier Rebate, Cash Customer')}
                   placeholderTextColor={theme.colors.textMuted}
                   value={formParty}
                   onChangeText={setFormParty}
@@ -645,7 +649,7 @@ export const ExpenseIncomeScreen: React.FC = () => {
               {/* Payment Mode */}
               <View style={styles.inputGroup}>
                 <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>
-                  Payment Mode (भुक्तानी माध्यम)
+                  {ne ? 'भुक्तानी माध्यम' : 'Payment Mode'}
                 </Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.modeRow}>
                   {PAYMENT_MODES.map((mode) => (
@@ -684,7 +688,7 @@ export const ExpenseIncomeScreen: React.FC = () => {
               {/* Date */}
               <View style={styles.inputGroup}>
                 <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>
-                  Date (मिति YYYY-MM-DD)
+                  {ne ? 'मिति (YYYY-MM-DD)' : 'Date (YYYY-MM-DD)'}
                 </Text>
                 <TextInput
                   style={[
@@ -703,7 +707,7 @@ export const ExpenseIncomeScreen: React.FC = () => {
               {/* Notes */}
               <View style={styles.inputGroup}>
                 <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>
-                  Notes / Description (कैफियत)
+                  {ne ? 'कैफियत' : 'Notes / Description'}
                 </Text>
                 <TextInput
                   style={[
@@ -732,7 +736,7 @@ export const ExpenseIncomeScreen: React.FC = () => {
                 onPress={() => setShowAddModal(false)}
               >
                 <Text style={[styles.cancelBtnText, { color: theme.colors.textSecondary }]}>
-                  Cancel
+                  {ne ? 'रद्द गर्नुहोस्' : 'Cancel'}
                 </Text>
               </TouchableOpacity>
 
@@ -743,7 +747,7 @@ export const ExpenseIncomeScreen: React.FC = () => {
                 ]}
                 onPress={handleSave}
               >
-                <Text style={styles.saveBtnText}>Save {isExpense ? 'Expense' : 'Income'}</Text>
+                <Text style={styles.saveBtnText}>{ne ? 'सेभ गर्नुहोस्' : `Save ${isExpense ? 'Expense' : 'Income'}`}</Text>
               </TouchableOpacity>
             </View>
           </View>

@@ -32,7 +32,11 @@ export const SalesHubScreen: React.FC = () => {
     setActiveInvoice,
     theme,
     themeMode,
+    language,
+    t,
   } = useApp();
+
+  const ne = language === 'ne';
 
   const isDark = themeMode === 'dark';
 
@@ -347,7 +351,7 @@ export const SalesHubScreen: React.FC = () => {
                 activeSubTab === 'invoices' && styles.pillBtnTextActive,
               ]}
             >
-              Invoices
+              {ne ? 'बिक्री बिल' : 'Invoices'}
             </Text>
             <View
               style={[
@@ -394,7 +398,7 @@ export const SalesHubScreen: React.FC = () => {
                 activeSubTab === 'payment_in' && styles.pillBtnTextActive,
               ]}
             >
-              Payments In
+              {ne ? 'भुक्तानी आयो' : 'Payments In'}
             </Text>
             <View
               style={[
@@ -441,7 +445,7 @@ export const SalesHubScreen: React.FC = () => {
                 activeSubTab === 'quotations' && styles.pillBtnTextActive,
               ]}
             >
-              Quotations
+              {ne ? 'कोटेशन' : 'Quotations'}
             </Text>
             <View
               style={[
@@ -488,7 +492,7 @@ export const SalesHubScreen: React.FC = () => {
                 activeSubTab === 'returns' && styles.pillBtnTextActive,
               ]}
             >
-              Sales Returns
+              {ne ? 'बिक्री फिर्ता' : 'Sales Returns'}
             </Text>
             <View
               style={[
@@ -849,7 +853,7 @@ export const SalesHubScreen: React.FC = () => {
           >
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { color: theme.colors.textPrimary }]}>
-                Record Payment Received
+                {ne ? 'भुक्तानी दर्ता गर्नुहोस्' : 'Record Payment Received'}
               </Text>
               <TouchableOpacity onPress={() => setShowPaymentInModal(false)}>
                 <Feather name="x" size={20} color={theme.colors.textMuted} />
@@ -857,8 +861,8 @@ export const SalesHubScreen: React.FC = () => {
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
-              <Text style={[styles.modalLabel, { color: theme.colors.textSecondary }]}>
-                Select Customer (ग्राहक) *
+                <Text style={[styles.modalLabel, { color: theme.colors.textSecondary }]}>
+                  {ne ? 'ग्राहक छान्नुहोस् *' : 'Select Customer *'}
               </Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
                 {parties.map((p) => (
@@ -890,7 +894,7 @@ export const SalesHubScreen: React.FC = () => {
               </ScrollView>
 
               <Text style={[styles.modalLabel, { color: theme.colors.textSecondary, marginTop: 12 }]}>
-                Amount Received (प्राप्त रकम NPR) *
+                {ne ? 'प्राप्त रकम (रु.) *' : 'Amount Received *'}
               </Text>
               <TextInput
                 style={[

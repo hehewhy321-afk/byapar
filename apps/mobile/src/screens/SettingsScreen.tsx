@@ -607,7 +607,7 @@ export const SettingsScreen: React.FC = () => {
                 />
               </View>
               <Text style={[styles.rowLabel, { color: theme.colors.textPrimary }]}>
-                {language === 'ne' ? 'डार्क मोड (Dark Mode)' : 'Dark Mode'}
+                {language === 'ne' ? 'डार्क मोड' : 'Dark Mode'}
               </Text>
             </View>
             <Switch
@@ -635,7 +635,7 @@ export const SettingsScreen: React.FC = () => {
                   {t('language')}
                 </Text>
                 <Text style={[styles.rowSubLabel, { color: theme.colors.textMuted }]}>
-                  {language === 'ne' ? 'अहिले: नेपाली (सजिलो भाषा)' : 'Currently: English'}
+                  {language === 'ne' ? 'अहिले: नेपाली' : 'Currently: English'}
                 </Text>
               </View>
             </View>
@@ -651,7 +651,7 @@ export const SettingsScreen: React.FC = () => {
                 }}
               >
                 <Text style={{ color: '#FF4500', fontSize: 12, fontWeight: '800' }}>
-                  {language === 'ne' ? 'नेपाली (ने)' : 'English (EN)'}
+                  {language === 'ne' ? 'नेपाली' : 'English'}
                 </Text>
               </View>
               <Feather name="chevron-right" size={17} color={theme.colors.textMuted} />

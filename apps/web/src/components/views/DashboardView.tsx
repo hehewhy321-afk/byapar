@@ -14,6 +14,7 @@ import {
   isDarkMode,
 } from '../../db/localDb';
 import { formatNepaliCurrency } from '@byapar/core';
+import { t, currentLang } from '../../services/i18n';
 import { OnboardingChecklistWidget } from './OnboardingChecklistWidget';
 import {
   IconCalendar,
@@ -139,10 +140,10 @@ export const DashboardView: Component = () => {
           .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
 
       return [
-        { label: 'Morning (बिहान)', moneyIn: Math.round(todayIn * 0.35), moneyOut: Math.round(todayOut * 0.2) },
-        { label: 'Afternoon (दिउँसो)', moneyIn: Math.round(todayIn * 0.3), moneyOut: Math.round(todayOut * 0.5) },
-        { label: 'Evening (साँझ)', moneyIn: Math.round(todayIn * 0.25), moneyOut: Math.round(todayOut * 0.2) },
-        { label: 'Night (राति)', moneyIn: Math.round(todayIn * 0.1), moneyOut: Math.round(todayOut * 0.1) },
+        { label: currentLang() === 'ne' ? 'बिहान' : 'Morning', moneyIn: Math.round(todayIn * 0.35), moneyOut: Math.round(todayOut * 0.2) },
+        { label: currentLang() === 'ne' ? 'दिउँसो' : 'Afternoon', moneyIn: Math.round(todayIn * 0.3), moneyOut: Math.round(todayOut * 0.5) },
+        { label: currentLang() === 'ne' ? 'साँझ' : 'Evening', moneyIn: Math.round(todayIn * 0.25), moneyOut: Math.round(todayOut * 0.2) },
+        { label: currentLang() === 'ne' ? 'राति' : 'Night', moneyIn: Math.round(todayIn * 0.1), moneyOut: Math.round(todayOut * 0.1) },
       ];
     }
 
@@ -348,7 +349,7 @@ export const DashboardView: Component = () => {
       <div class="bg-white dark:bg-neutral-950 border border-gray-200 dark:border-neutral-800 rounded-2xl p-4 shadow-sm">
         <div class="flex items-center justify-between mb-3">
           <span class="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-neutral-400">
-            Kirana Quick Actions & Operations (सजिलो सर्टकटहरू)
+            {currentLang() === 'ne' ? 'द्रुत कार्य तथा सर्टकटहरू' : 'Kirana Quick Actions & Operations'}
           </span>
           <span class="text-[11px] text-gray-400 dark:text-neutral-500 font-mono">
             Press F2 (POS) • F3 (Khata) • F4 (Stock)
@@ -363,8 +364,10 @@ export const DashboardView: Component = () => {
             <div class="w-8 h-8 rounded-lg bg-brand-500 text-white flex items-center justify-center shadow-sm mb-1.5 group-hover:scale-105 transition-transform">
               <IconPos class="w-4 h-4" />
             </div>
-            <span class="text-xs font-bold text-gray-900 dark:text-white">POS Cash Register</span>
-            <span class="text-[10px] text-brand-600 dark:text-brand-400 font-medium">बिक्री बिल (F2)</span>
+            <span class="text-xs font-bold text-gray-900 dark:text-white">{t('pos')}</span>
+            <span class="text-[10px] text-brand-600 dark:text-brand-400 font-medium">
+              {currentLang() === 'ne' ? 'छिटो बिल काट्ने (F2)' : 'Fast Billing (F2)'}
+            </span>
           </button>
 
           <button
@@ -374,8 +377,10 @@ export const DashboardView: Component = () => {
             <div class="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center shadow-sm mb-1.5 group-hover:scale-105 transition-transform">
               <IconKhata class="w-4 h-4" />
             </div>
-            <span class="text-xs font-bold text-gray-900 dark:text-white">Customer Khata</span>
-            <span class="text-[10px] text-blue-600 dark:text-blue-400 font-medium">उधारो खाता (F3)</span>
+            <span class="text-xs font-bold text-gray-900 dark:text-white">{t('ledger')}</span>
+            <span class="text-[10px] text-blue-600 dark:text-blue-400 font-medium">
+              {currentLang() === 'ne' ? 'उधारो खाता (F3)' : 'Credit Khata (F3)'}
+            </span>
           </button>
 
           <button
@@ -385,8 +390,10 @@ export const DashboardView: Component = () => {
             <div class="w-8 h-8 rounded-lg bg-amber-500 text-white flex items-center justify-center shadow-sm mb-1.5 group-hover:scale-105 transition-transform">
               <IconInventory class="w-4 h-4" />
             </div>
-            <span class="text-xs font-bold text-gray-900 dark:text-white">Stock & Inventory</span>
-            <span class="text-[10px] text-amber-600 dark:text-amber-400 font-medium">सामान स्टक (F4)</span>
+            <span class="text-xs font-bold text-gray-900 dark:text-white">{t('inventory')}</span>
+            <span class="text-[10px] text-amber-600 dark:text-amber-400 font-medium">
+              {currentLang() === 'ne' ? 'सामान तथा स्टक (F4)' : 'Stock & Items (F4)'}
+            </span>
           </button>
 
           <button
@@ -396,8 +403,10 @@ export const DashboardView: Component = () => {
             <div class="w-8 h-8 rounded-lg bg-[#FF4500] text-white flex items-center justify-center shadow-sm mb-1.5 group-hover:scale-105 transition-transform">
               <IconSales class="w-4 h-4" />
             </div>
-            <span class="text-xs font-bold text-gray-900 dark:text-white">Sales Invoices</span>
-            <span class="text-[10px] text-orange-600 dark:text-orange-400 font-medium">बिक्री हिसाब</span>
+            <span class="text-xs font-bold text-gray-900 dark:text-white">{t('sales')}</span>
+            <span class="text-[10px] text-orange-600 dark:text-orange-400 font-medium">
+              {currentLang() === 'ne' ? 'बिक्री हिसाब' : 'Sales Invoices'}
+            </span>
           </button>
 
           <button
@@ -407,8 +416,10 @@ export const DashboardView: Component = () => {
             <div class="w-8 h-8 rounded-lg bg-rose-500 text-white flex items-center justify-center shadow-sm mb-1.5 group-hover:scale-105 transition-transform">
               <IconExpense class="w-4 h-4" />
             </div>
-            <span class="text-xs font-bold text-gray-900 dark:text-white">Record Expense</span>
-            <span class="text-[10px] text-rose-600 dark:text-rose-400 font-medium">पसलको खर्च</span>
+            <span class="text-xs font-bold text-gray-900 dark:text-white">{t('expenses')}</span>
+            <span class="text-[10px] text-rose-600 dark:text-rose-400 font-medium">
+              {currentLang() === 'ne' ? 'पसलको खर्च' : 'Record Expense'}
+            </span>
           </button>
 
           <button
@@ -418,8 +429,10 @@ export const DashboardView: Component = () => {
             <div class="w-8 h-8 rounded-lg bg-purple-600 text-white flex items-center justify-center shadow-sm mb-1.5 group-hover:scale-105 transition-transform">
               <IconIncome class="w-4 h-4" />
             </div>
-            <span class="text-xs font-bold text-gray-900 dark:text-white">Other Income</span>
-            <span class="text-[10px] text-purple-600 dark:text-purple-400 font-medium">अन्य आम्दानी</span>
+            <span class="text-xs font-bold text-gray-900 dark:text-white">{t('income')}</span>
+            <span class="text-[10px] text-purple-600 dark:text-purple-400 font-medium">
+              {currentLang() === 'ne' ? 'अन्य आम्दानी' : 'Other Income'}
+            </span>
           </button>
         </div>
       </div>
@@ -438,9 +451,13 @@ export const DashboardView: Component = () => {
               <path d="M16 10a4 4 0 0 1-8 0" />
             </svg>
           </div>
-          <p class="text-xs text-gray-500 dark:text-neutral-400 mb-1 font-medium uppercase tracking-wide">Total Sales (कुल बिक्री)</p>
+          <p class="text-xs text-gray-500 dark:text-neutral-400 mb-1 font-medium uppercase tracking-wide">
+            {t('todaySales')}
+          </p>
           <p class="text-xl font-bold text-gray-900 dark:text-white">{formatNepaliCurrency(totalSales())}</p>
-          <p class="text-[11px] text-gray-400 dark:text-neutral-500 mt-1">{invoices.length} invoices generated</p>
+          <p class="text-[11px] text-gray-400 dark:text-neutral-500 mt-1">
+            {invoices.length} {t('invoicesGenerated')}
+          </p>
         </div>
 
         {/* Purchases & Expenses */}
@@ -454,9 +471,13 @@ export const DashboardView: Component = () => {
               <line x1="2" y1="10" x2="22" y2="10" />
             </svg>
           </div>
-          <p class="text-xs text-gray-500 dark:text-neutral-400 mb-1 font-medium uppercase tracking-wide">Purchases & Expenses (खर्च)</p>
+          <p class="text-xs text-gray-500 dark:text-neutral-400 mb-1 font-medium uppercase tracking-wide">
+            {t('purchasesAndExpenses')}
+          </p>
           <p class="text-xl font-bold text-gray-900 dark:text-white">{formatNepaliCurrency(totalPurchasesAndExpenses())}</p>
-          <p class="text-[11px] text-gray-400 dark:text-neutral-500 mt-1">{purchaseBills.length} bills • {expenses.length} expenses</p>
+          <p class="text-[11px] text-gray-400 dark:text-neutral-500 mt-1">
+            {purchaseBills.length} {t('billsRecorded')} • {expenses.length} {t('expenses')}
+          </p>
         </div>
 
         {/* To Receive */}
@@ -467,10 +488,14 @@ export const DashboardView: Component = () => {
           <div class="w-7 h-7 rounded-md bg-emerald-100/90 dark:bg-emerald-950/80 flex items-center justify-center mb-2.5 text-emerald-600 dark:text-emerald-400 font-bold text-sm">
             <IconArrowDown class="w-4 h-4" />
           </div>
-          <p class="text-xs text-gray-500 dark:text-neutral-400 mb-1 font-medium uppercase tracking-wide">To Receive (उठ्न बाँकी)</p>
+          <p class="text-xs text-gray-500 dark:text-neutral-400 mb-1 font-medium uppercase tracking-wide">
+            {t('totalReceivable')}
+          </p>
           <p class="text-xl font-bold text-emerald-600 dark:text-emerald-400">{formatNepaliCurrency(toReceive())}</p>
           <p class="text-[11px] text-gray-400 dark:text-neutral-500 mt-1">
-            From {parties.filter((p) => (Number(p.currentBalance) || 0) > 0).length} customer(s)
+            {currentLang() === 'ne'
+              ? `${parties.filter((p) => (Number(p.currentBalance) || 0) > 0).length} जना ग्राहकबाट`
+              : `From ${parties.filter((p) => (Number(p.currentBalance) || 0) > 0).length} customers`}
           </p>
         </div>
 
@@ -482,10 +507,14 @@ export const DashboardView: Component = () => {
           <div class="w-7 h-7 rounded-md bg-rose-100/90 dark:bg-rose-950/80 flex items-center justify-center mb-2.5 text-rose-500 dark:text-rose-400 font-bold text-sm">
             <IconArrowUp class="w-4 h-4" />
           </div>
-          <p class="text-xs text-gray-500 dark:text-neutral-400 mb-1 font-medium uppercase tracking-wide">To Pay (तिर्न बाँकी)</p>
+          <p class="text-xs text-gray-500 dark:text-neutral-400 mb-1 font-medium uppercase tracking-wide">
+            {t('totalPayable')}
+          </p>
           <p class="text-xl font-bold text-rose-500 dark:text-rose-400">{formatNepaliCurrency(toGive())}</p>
           <p class="text-[11px] text-gray-400 dark:text-neutral-500 mt-1">
-            To {parties.filter((p) => (Number(p.currentBalance) || 0) < 0).length} supplier(s)
+            {currentLang() === 'ne'
+              ? `${parties.filter((p) => (Number(p.currentBalance) || 0) < 0).length} जना साहुजीलाई`
+              : `To ${parties.filter((p) => (Number(p.currentBalance) || 0) < 0).length} suppliers`}
           </p>
         </div>
       </div>
@@ -624,14 +653,18 @@ export const DashboardView: Component = () => {
             <div class="flex items-center gap-6">
               <div class="flex items-center gap-2">
                 <span class="w-3 h-3 rounded-full bg-emerald-500" />
-                <span class="text-xs text-gray-500 dark:text-neutral-400">Total Inflow (आम्दानी):</span>
+                <span class="text-xs text-gray-500 dark:text-neutral-400">
+                  {currentLang() === 'ne' ? 'कुल आम्दानी:' : 'Total Inflow:'}
+                </span>
                 <span class="text-xs font-bold text-emerald-600 dark:text-emerald-400 font-mono">
                   {formatNepaliCurrency(totalMoneyIn())}
                 </span>
               </div>
               <div class="flex items-center gap-2">
                 <span class="w-3 h-3 rounded-full bg-red-500" />
-                <span class="text-xs text-gray-500 dark:text-neutral-400">Total Outflow (खर्च):</span>
+                <span class="text-xs text-gray-500 dark:text-neutral-400">
+                  {currentLang() === 'ne' ? 'कुल खर्च:' : 'Total Outflow:'}
+                </span>
                 <span class="text-xs font-bold text-red-500 dark:text-red-400 font-mono">
                   {formatNepaliCurrency(totalMoneyOut())}
                 </span>
@@ -639,7 +672,7 @@ export const DashboardView: Component = () => {
             </div>
 
             <div class="text-xs font-medium text-gray-500 dark:text-neutral-400">
-              Net Margin:{' '}
+              {currentLang() === 'ne' ? 'खुद बचत:' : 'Net Margin:'}{' '}
               <span
                 class={`font-bold font-mono ${
                   totalMoneyIn() >= totalMoneyOut()
@@ -659,21 +692,21 @@ export const DashboardView: Component = () => {
           <div class="stat-card">
             <div class="flex items-center justify-between mb-2">
               <p class="text-xs text-gray-500 dark:text-neutral-400 font-medium uppercase tracking-wide">
-                Total Balance (Cash & Bank)
+                {currentLang() === 'ne' ? 'कुल मौज्दात (नगद तथा बैंक)' : 'Total Balance (Cash & Bank)'}
               </p>
               <button
                 onClick={() => setActiveTab('accounts')}
                 class="text-xs text-brand-500 hover:underline font-semibold"
               >
-                Manage
+                {currentLang() === 'ne' ? 'व्यवस्थापन' : 'Manage'}
               </button>
             </div>
             <p class="text-2xl font-bold text-gray-900 dark:text-white">
               {formatNepaliCurrency(totalBalance())}
             </p>
             <div class="mt-3 pt-3 border-t border-gray-100 dark:border-neutral-800 flex items-center justify-between text-xs text-gray-500">
-              <span>Primary Counter Account</span>
-              <span class="font-bold text-gray-700 dark:text-neutral-300">Active</span>
+              <span>{currentLang() === 'ne' ? 'मुख्य काउन्टर खाता' : 'Primary Counter Account'}</span>
+              <span class="font-bold text-gray-700 dark:text-neutral-300">{t('active')}</span>
             </div>
           </div>
 
@@ -682,14 +715,14 @@ export const DashboardView: Component = () => {
             <div class="flex items-center justify-between mb-2.5">
               <div class="flex items-center gap-2">
                 <p class="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider">
-                  Low Stock Urgency (स्टक सतर्कता)
+                  {currentLang() === 'ne' ? 'कम स्टक सतर्कता' : 'Low Stock Urgency'}
                 </p>
               </div>
               <button
                 onClick={() => setActiveTab('inventory')}
                 class="text-xs text-brand-500 hover:underline font-semibold"
               >
-                View All
+                {t('viewAll')}
               </button>
             </div>
 
@@ -698,7 +731,7 @@ export const DashboardView: Component = () => {
               fallback={
                 <div class="py-3 text-center text-xs text-emerald-600 dark:text-emerald-400 flex items-center justify-center gap-1.5 font-medium">
                   <IconCheck class="w-4 h-4" />
-                  <span>All inventory healthy! No critical shortages.</span>
+                  <span>{currentLang() === 'ne' ? 'सबै सामान स्टकमा उपलब्ध छ!' : 'All inventory healthy! No critical shortages.'}</span>
                 </div>
               }
             >
@@ -794,17 +827,17 @@ export const DashboardView: Component = () => {
         <div class="flex items-center justify-between mb-4">
           <div>
             <h3 class="font-heading font-bold text-base text-gray-900 dark:text-white">
-              Recent Sales & Billing Activity (हालैको बिक्री)
+              {currentLang() === 'ne' ? 'हालैको बिक्री कारोबार' : 'Recent Sales & Billing Activity'}
             </h3>
             <p class="text-xs text-gray-400 dark:text-neutral-500">
-              Latest invoices and receipts issued at counter
+              {currentLang() === 'ne' ? 'काउन्टरबाट जारी गरिएका पछिल्ला बिल तथा रसिदहरू' : 'Latest invoices and receipts issued at counter'}
             </p>
           </div>
           <button
             onClick={() => setActiveTab('sales')}
             class="text-xs font-semibold text-brand-500 hover:underline flex items-center gap-1"
           >
-            <span>View All Sales</span>
+            <span>{currentLang() === 'ne' ? 'सबै बिक्री हेर्नुहोस्' : 'View All Sales'}</span>
             <IconChevronDown class="w-3.5 h-3.5 -rotate-90" />
           </button>
         </div>
@@ -813,7 +846,7 @@ export const DashboardView: Component = () => {
           when={recentInvoices().length > 0}
           fallback={
             <div class="py-8 text-center text-gray-400 dark:text-neutral-500 text-xs">
-              No sales invoices generated yet. Use POS Billing to create your first sale.
+              {currentLang() === 'ne' ? 'अहिलेसम्म कुनै बिक्री बिल काटिएको छैन।' : 'No sales invoices generated yet. Use POS Billing to create your first sale.'}
             </div>
           }
         >
@@ -821,12 +854,12 @@ export const DashboardView: Component = () => {
             <table class="w-full text-left text-xs">
               <thead>
                 <tr class="border-b border-gray-100 dark:border-neutral-800 text-gray-400 dark:text-neutral-500 uppercase tracking-wider font-semibold">
-                  <th class="py-2.5 px-3">Invoice #</th>
-                  <th class="py-2.5 px-3">Customer (ग्राहक)</th>
-                  <th class="py-2.5 px-3">Date (मिति)</th>
-                  <th class="py-2.5 px-3 text-right">Amount (रकम)</th>
-                  <th class="py-2.5 px-3 text-center">Status</th>
-                  <th class="py-2.5 px-3 text-right">Action</th>
+                  <th class="py-2.5 px-3">{t('invoiceNumber')}</th>
+                  <th class="py-2.5 px-3">{t('customer')}</th>
+                  <th class="py-2.5 px-3">{t('date')}</th>
+                  <th class="py-2.5 px-3 text-right">{t('total')}</th>
+                  <th class="py-2.5 px-3 text-center">{t('status')}</th>
+                  <th class="py-2.5 px-3 text-right">{t('actions')}</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-gray-50 dark:divide-neutral-800/60 font-medium">
@@ -840,7 +873,7 @@ export const DashboardView: Component = () => {
                           {inv.invoiceNumber}
                         </td>
                         <td class="py-2.5 px-3 text-gray-800 dark:text-neutral-200">
-                          {inv.partyName || 'Cash Customer (नगद)'}
+                          {inv.partyName || (currentLang() === 'ne' ? 'नगद ग्राहक' : 'Cash Customer')}
                         </td>
                         <td class="py-2.5 px-3 text-gray-400 dark:text-neutral-500 font-mono">
                           {inv.invoiceDateBs || inv.invoiceDateAd || inv.createdAt?.slice(0, 10) || '-'}
@@ -858,7 +891,7 @@ export const DashboardView: Component = () => {
                                 : 'bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400'
                             }`}
                           >
-                            {isFullyPaid ? 'PAID (चुक्ता)' : isCredit ? 'CREDIT (बाँकी)' : 'PARTIAL'}
+                            {isFullyPaid ? (currentLang() === 'ne' ? 'चुक्ता' : 'PAID') : isCredit ? (currentLang() === 'ne' ? 'बाँकी' : 'CREDIT') : (currentLang() === 'ne' ? 'आंशिक' : 'PARTIAL')}
                           </span>
                         </td>
                         <td class="py-2.5 px-3 text-right">
@@ -866,7 +899,7 @@ export const DashboardView: Component = () => {
                             onClick={() => setActiveTab('sales')}
                             class="px-2.5 py-1 rounded bg-gray-100 dark:bg-neutral-800 hover:bg-brand-500 hover:text-white text-[11px] font-semibold transition-colors"
                           >
-                            View
+                            {currentLang() === 'ne' ? 'हेर्नुहोस्' : 'View'}
                           </button>
                         </td>
                       </tr>

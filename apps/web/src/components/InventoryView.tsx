@@ -2,6 +2,7 @@ import { Component, createSignal, createMemo, For } from 'solid-js';
 import { items, setItems, persistState, currentBusiness, categories } from '../db/localDb';
 import { formatNepaliCurrency, Item, CATEGORY_PRESETS, BusinessType } from '@byapar/core';
 import { supabase } from '../db/auth';
+import { currentLang } from '../services/i18n';
 import { IconPlus, IconSearch, IconX } from './icons';
 
 export const InventoryView: Component = () => {
@@ -187,22 +188,22 @@ export const InventoryView: Component = () => {
       {/* Top Metrics */}
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div class="stat-card">
-          <span class="text-xs text-gray-500 dark:text-neutral-400 font-semibold block uppercase">Total Products</span>
+          <span class="text-xs text-gray-500 dark:text-neutral-400 font-semibold block uppercase">{currentLang() === 'ne' ? 'कुल सामान' : 'Total Products'}</span>
           <span class="text-2xl font-black text-gray-900 dark:text-white mt-1 block">{items.length} SKUs</span>
           <span class="text-[11px] text-gray-400 dark:text-neutral-500">Total units: {totalStockCount()}</span>
         </div>
         <div class="stat-card">
-          <span class="text-xs text-gray-500 dark:text-neutral-400 font-semibold block uppercase">Low Stock Alerts</span>
+          <span class="text-xs text-gray-500 dark:text-neutral-400 font-semibold block uppercase">{currentLang() === 'ne' ? 'कम स्टक सूचना' : 'Low Stock Alerts'}</span>
           <span class="text-2xl font-black text-amber-500 mt-1 block">{lowStockCount()} Items</span>
           <span class="text-[11px] text-amber-400/80">Reorder recommended</span>
         </div>
         <div class="stat-card">
-          <span class="text-xs text-gray-500 dark:text-neutral-400 font-semibold block uppercase">Inventory Cost Value</span>
+          <span class="text-xs text-gray-500 dark:text-neutral-400 font-semibold block uppercase">{currentLang() === 'ne' ? 'स्टक मूल्य (लागत)' : 'Inventory Cost Value'}</span>
           <span class="text-2xl font-black text-brand-600 dark:text-brand-400 mt-1 block">{formatNepaliCurrency(inventoryValueCost())}</span>
           <span class="text-[11px] text-gray-400 dark:text-neutral-500">Total capital invested</span>
         </div>
         <div class="stat-card">
-          <span class="text-xs text-gray-500 dark:text-neutral-400 font-semibold block uppercase">Retail Sales Value</span>
+          <span class="text-xs text-gray-500 dark:text-neutral-400 font-semibold block uppercase">{currentLang() === 'ne' ? 'बिक्री मूल्य' : 'Retail Sales Value'}</span>
           <span class="text-2xl font-black text-blue-600 dark:text-blue-400 mt-1 block">{formatNepaliCurrency(inventoryValueRetail())}</span>
           <span class="text-[11px] text-gray-400 dark:text-neutral-500">Projected gross value</span>
         </div>
@@ -213,7 +214,7 @@ export const InventoryView: Component = () => {
         <div class="w-full sm:w-80 relative">
           <input
             type="text"
-            placeholder="Search by product name or barcode..."
+            placeholder={currentLang() === 'ne' ? 'सामान खोज्नुहोस्...' : 'Search by product name or barcode...'}
             value={searchQuery()}
             onInput={(e) => setSearchQuery(e.currentTarget.value)}
             class="input-field text-xs pl-8"
@@ -222,7 +223,7 @@ export const InventoryView: Component = () => {
         </div>
         <button onClick={() => setShowAddModal(true)} class="btn-primary text-xs flex items-center gap-1.5">
           <IconPlus class="w-3.5 h-3.5" />
-          <span>Add New Product</span>
+          <span>{currentLang() === 'ne' ? 'नयाँ सामान थप्नुहोस्' : 'Add New Product'}</span>
         </button>
       </div>
 
@@ -232,14 +233,14 @@ export const InventoryView: Component = () => {
           <table class="w-full text-left text-xs">
             <thead class="bg-gray-50 dark:bg-neutral-900 text-gray-500 dark:text-neutral-400 uppercase font-semibold text-[10px] border-b border-gray-100 dark:border-neutral-800">
               <tr>
-                <th class="p-3">Product Name</th>
-                <th class="p-3">Barcode</th>
-                <th class="p-3 text-right">Cost Price</th>
-                <th class="p-3 text-right">Wholesale</th>
-                <th class="p-3 text-right">Selling Price</th>
-                <th class="p-3 text-center">Stock</th>
-                <th class="p-3 text-center">Adjust</th>
-                <th class="p-3 text-center">Action</th>
+                <th class="p-3">{currentLang() === 'ne' ? 'सामानको नाम' : 'Product Name'}</th>
+                <th class="p-3">{currentLang() === 'ne' ? 'बारकोड' : 'Barcode'}</th>
+                <th class="p-3 text-right">{currentLang() === 'ne' ? 'लागत मूल्य' : 'Cost Price'}</th>
+                <th class="p-3 text-right">{currentLang() === 'ne' ? 'थोक' : 'Wholesale'}</th>
+                <th class="p-3 text-right">{currentLang() === 'ne' ? 'बिक्री मूल्य' : 'Selling Price'}</th>
+                <th class="p-3 text-center">{currentLang() === 'ne' ? 'म्याद' : 'Stock'}</th>
+                <th class="p-3 text-center">{currentLang() === 'ne' ? 'घटबढ' : 'Adjust'}</th>
+                <th class="p-3 text-center">{currentLang() === 'ne' ? 'कार्य' : 'Action'}</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-50 dark:divide-neutral-800/60 text-gray-600 dark:text-neutral-300">
@@ -273,7 +274,7 @@ export const InventoryView: Component = () => {
                           class="px-2.5 py-1 bg-brand-50 hover:bg-brand-100 dark:bg-brand-950/60 dark:hover:bg-brand-900/60 text-brand-600 dark:text-brand-400 font-bold rounded-lg text-[11px] border border-brand-200 dark:border-brand-800 transition"
                           title="Edit Product"
                         >
-                          Edit
+                          {currentLang() === 'ne' ? 'सजाउ' : 'Edit'}
                         </button>
                       </td>
                     </tr>

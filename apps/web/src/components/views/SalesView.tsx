@@ -15,6 +15,7 @@ import {
   Quotation,
   SalesReturn,
 } from '../../db/localDb';
+import { t, currentLang } from '../../services/i18n';
 import {
   IconSales,
   IconSearch,
@@ -261,10 +262,14 @@ export function SalesView() {
             <div class="p-2 rounded-lg bg-brand-500/10 text-brand-600 dark:text-brand-400 border border-brand-500/20">
               <IconSales class="w-6 h-6" />
             </div>
-            <h1 class="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">Sales Management</h1>
+            <h1 class="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">
+              {t('salesHub')}
+            </h1>
           </div>
           <p class="text-sm text-gray-500 dark:text-neutral-400 mt-1">
-            Track sales invoices, customer payments, price quotations, and sales return vouchers.
+            {currentLang() === 'ne'
+              ? 'बिक्री बिल, भुक्तानी तथा फिर्ता हिसाब'
+              : 'Track sales invoices, customer payments, price quotations, and sales return vouchers.'}
           </p>
         </div>
 
@@ -275,7 +280,7 @@ export function SalesView() {
               class="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-lg font-medium text-sm transition-all shadow-md shadow-brand-500/20 flex items-center gap-2"
             >
               <IconPlus class="w-4 h-4" />
-              <span>Create Sale (POS)</span>
+              <span>{t('newSale')}</span>
             </button>
           </Show>
 
@@ -285,7 +290,7 @@ export function SalesView() {
               class="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-lg font-medium text-sm transition-all shadow-md shadow-brand-500/20 flex items-center gap-2"
             >
               <IconPlus class="w-4 h-4" />
-              <span>Record Payment In</span>
+              <span>{t('recordPaymentIn')}</span>
             </button>
           </Show>
 
@@ -295,7 +300,7 @@ export function SalesView() {
               class="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-lg font-medium text-sm transition-all shadow-md shadow-brand-500/20 flex items-center gap-2"
             >
               <IconPlus class="w-4 h-4" />
-              <span>New Quotation</span>
+              <span>{t('newQuotation')}</span>
             </button>
           </Show>
 
@@ -305,7 +310,7 @@ export function SalesView() {
               class="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-lg font-medium text-sm transition-all shadow-md shadow-rose-900/20 flex items-center gap-2"
             >
               <IconPlus class="w-4 h-4" />
-              <span>New Sales Return</span>
+              <span>{t('newSalesReturn')}</span>
             </button>
           </Show>
         </div>
@@ -322,7 +327,7 @@ export function SalesView() {
           }`}
         >
           <IconReceipt class="w-4 h-4" />
-          <span>Sales Invoices</span>
+          <span>{t('invoices')}</span>
           <span class="ml-1 text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-neutral-800 text-gray-600 dark:text-neutral-300">
             {invoices.length}
           </span>
@@ -337,7 +342,7 @@ export function SalesView() {
           }`}
         >
           <IconCustomer class="w-4 h-4" />
-          <span>Payment In</span>
+          <span>{t('paymentIn')}</span>
           <span class="ml-1 text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-neutral-800 text-gray-600 dark:text-neutral-300">
             {paymentRecords.filter((p) => p.type === 'in').length}
           </span>
@@ -352,7 +357,7 @@ export function SalesView() {
           }`}
         >
           <IconFilter class="w-4 h-4" />
-          <span>Quotations</span>
+          <span>{t('quotations')}</span>
           <span class="ml-1 text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-neutral-800 text-gray-600 dark:text-neutral-300">
             {quotations.length}
           </span>
@@ -367,7 +372,7 @@ export function SalesView() {
           }`}
         >
           <IconSales class="w-4 h-4 text-rose-500 dark:text-rose-400" />
-          <span>Sales Return</span>
+          <span>{t('salesReturns')}</span>
           <span class="ml-1 text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-neutral-800 text-gray-600 dark:text-neutral-300">
             {salesReturns.length}
           </span>
@@ -379,7 +384,7 @@ export function SalesView() {
         <IconSearch class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-neutral-500" />
         <input
           type="text"
-          placeholder="Search by invoice number, customer name, phone..."
+          placeholder={currentLang() === 'ne' ? 'बिल नं., ग्राहकको नाम वा फोन नम्बर खोज्नुहोस्...' : 'Search by invoice number, customer name, phone...'}
           value={searchTerm()}
           onInput={(e) => setSearchTerm(e.currentTarget.value)}
           class="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-neutral-950 border border-gray-200 dark:border-neutral-800 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-sm transition-all shadow-sm"
@@ -393,14 +398,14 @@ export function SalesView() {
             <table class="w-full text-left text-sm text-gray-700 dark:text-neutral-300">
               <thead class="bg-gray-50 dark:bg-neutral-900/60 border-b border-gray-200 dark:border-neutral-800 text-xs text-gray-500 dark:text-neutral-400 font-semibold uppercase tracking-wider">
                 <tr>
-                  <th class="px-5 py-3.5">Invoice #</th>
-                  <th class="px-5 py-3.5">Customer</th>
-                  <th class="px-5 py-3.5">Date (AD / BS)</th>
-                  <th class="px-5 py-3.5 text-right">Total</th>
-                  <th class="px-5 py-3.5 text-right">Paid</th>
-                  <th class="px-5 py-3.5 text-right">Due</th>
-                  <th class="px-5 py-3.5 text-center">Status</th>
-                  <th class="px-5 py-3.5 text-right">Actions</th>
+                  <th class="px-5 py-3.5">{t('invoiceNumber')}</th>
+                  <th class="px-5 py-3.5">{t('customer')}</th>
+                  <th class="px-5 py-3.5">{t('date')}</th>
+                  <th class="px-5 py-3.5 text-right">{t('total')}</th>
+                  <th class="px-5 py-3.5 text-right">{t('paid')}</th>
+                  <th class="px-5 py-3.5 text-right">{t('due')}</th>
+                  <th class="px-5 py-3.5 text-center">{t('status')}</th>
+                  <th class="px-5 py-3.5 text-right">{t('actions')}</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-gray-100 dark:divide-neutral-900">
@@ -409,7 +414,7 @@ export function SalesView() {
                   fallback={
                     <tr>
                       <td colspan="8" class="px-5 py-12 text-center text-gray-400 dark:text-neutral-500">
-                        No sales invoices recorded yet. Click "Create Sale (POS)" to make your first sale.
+                        {currentLang() === 'ne' ? 'कुनै बिक्री बिल भेटिएन।' : 'No sales invoices recorded yet. Click "Create Sale (POS)" to make your first sale.'}
                       </td>
                     </tr>
                   }
@@ -420,7 +425,7 @@ export function SalesView() {
                         {inv.invoiceNumber}
                       </td>
                       <td class="px-5 py-4">
-                        <div class="font-medium text-gray-900 dark:text-white">{inv.partyName || 'Cash Customer'}</div>
+                        <div class="font-medium text-gray-900 dark:text-white">{inv.partyName || (currentLang() === 'ne' ? 'नगद ग्राहक' : 'Cash Customer')}</div>
                         <Show when={inv.partyPhone}>
                           <div class="text-xs text-gray-400 dark:text-neutral-500">{inv.partyPhone}</div>
                         </Show>
@@ -450,14 +455,14 @@ export function SalesView() {
                               : 'bg-rose-50 dark:bg-rose-500/10 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-500/30'
                           }`}
                         >
-                          {inv.status === 'paid' ? 'PAID' : inv.status === 'partially_paid' ? 'PARTIAL' : 'DUE'}
+                          {inv.status === 'paid' ? (currentLang() === 'ne' ? 'चुक्ता' : 'PAID') : inv.status === 'partially_paid' ? (currentLang() === 'ne' ? 'आंशिक' : 'PARTIAL') : (currentLang() === 'ne' ? 'बाँकी' : 'DUE')}
                         </span>
                       </td>
                       <td class="px-5 py-4 text-right">
                         <button
                           onClick={() => setSelectedInvoice(inv)}
                           class="p-2 rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-neutral-900 dark:hover:bg-neutral-800 text-gray-600 hover:text-gray-900 dark:text-neutral-300 dark:hover:text-white transition-colors"
-                          title="View Details"
+                          title={t('viewReceipt')}
                         >
                           <IconEye class="w-4 h-4" />
                         </button>
@@ -478,11 +483,11 @@ export function SalesView() {
             <table class="w-full text-left text-sm text-gray-700 dark:text-neutral-300">
               <thead class="bg-gray-50 dark:bg-neutral-900/60 border-b border-gray-200 dark:border-neutral-800 text-xs text-gray-500 dark:text-neutral-400 font-semibold uppercase tracking-wider">
                 <tr>
-                  <th class="px-5 py-3.5">Customer Name</th>
-                  <th class="px-5 py-3.5">Date</th>
-                  <th class="px-5 py-3.5">Mode</th>
-                  <th class="px-5 py-3.5">Notes</th>
-                  <th class="px-5 py-3.5 text-right">Amount Received</th>
+                  <th class="px-5 py-3.5">{t('customerName')}</th>
+                  <th class="px-5 py-3.5">{t('date')}</th>
+                  <th class="px-5 py-3.5">{t('paymentMethod')}</th>
+                  <th class="px-5 py-3.5">{t('notes')}</th>
+                  <th class="px-5 py-3.5 text-right">{t('amountReceived')}</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-gray-100 dark:divide-neutral-900">
@@ -491,7 +496,7 @@ export function SalesView() {
                   fallback={
                     <tr>
                       <td colspan="5" class="px-5 py-12 text-center text-gray-400 dark:text-neutral-500">
-                        No customer payments recorded yet. Click "Record Payment In" to collect credit.
+                        {currentLang() === 'ne' ? 'कुनै भुक्तानी प्राप्त भेटिएन।' : 'No customer payments recorded yet.'}
                       </td>
                     </tr>
                   }
@@ -525,12 +530,12 @@ export function SalesView() {
             <table class="w-full text-left text-sm text-gray-700 dark:text-neutral-300">
               <thead class="bg-gray-50 dark:bg-neutral-900/60 border-b border-gray-200 dark:border-neutral-800 text-xs text-gray-500 dark:text-neutral-400 font-semibold uppercase tracking-wider">
                 <tr>
-                  <th class="px-5 py-3.5">Quotation #</th>
-                  <th class="px-5 py-3.5">Customer</th>
-                  <th class="px-5 py-3.5">Date</th>
-                  <th class="px-5 py-3.5">Valid Until</th>
-                  <th class="px-5 py-3.5 text-right">Total</th>
-                  <th class="px-5 py-3.5 text-center">Status</th>
+                  <th class="px-5 py-3.5">{currentLang() === 'ne' ? 'कोटेशन नं.' : 'Quotation #'}</th>
+                  <th class="px-5 py-3.5">{t('customer')}</th>
+                  <th class="px-5 py-3.5">{t('date')}</th>
+                  <th class="px-5 py-3.5">{currentLang() === 'ne' ? 'म्याद' : 'Valid Until'}</th>
+                  <th class="px-5 py-3.5 text-right">{t('total')}</th>
+                  <th class="px-5 py-3.5 text-center">{t('status')}</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-gray-100 dark:divide-neutral-900">
@@ -539,7 +544,7 @@ export function SalesView() {
                   fallback={
                     <tr>
                       <td colspan="6" class="px-5 py-12 text-center text-gray-400 dark:text-neutral-500">
-                        No quotations created yet. Click "New Quotation" to generate an estimate.
+                        {currentLang() === 'ne' ? 'कुनै कोटेशन बनाइएको छैन।' : 'No quotations created yet.'}
                       </td>
                     </tr>
                   }
@@ -579,13 +584,13 @@ export function SalesView() {
             <table class="w-full text-left text-sm text-gray-700 dark:text-neutral-300">
               <thead class="bg-gray-50 dark:bg-neutral-900/60 border-b border-gray-200 dark:border-neutral-800 text-xs text-gray-500 dark:text-neutral-400 font-semibold uppercase tracking-wider">
                 <tr>
-                  <th class="px-5 py-3.5">Return #</th>
-                  <th class="px-5 py-3.5">Customer</th>
-                  <th class="px-5 py-3.5">Date</th>
-                  <th class="px-5 py-3.5">Reason</th>
-                  <th class="px-5 py-3.5 text-right">Refund Amount</th>
-                  <th class="px-5 py-3.5 text-right">Credit Balance</th>
-                  <th class="px-5 py-3.5 text-right">Total</th>
+                  <th class="px-5 py-3.5">{currentLang() === 'ne' ? 'फिर्ता नं.' : 'Return #'}</th>
+                  <th class="px-5 py-3.5">{t('customer')}</th>
+                  <th class="px-5 py-3.5">{t('date')}</th>
+                  <th class="px-5 py-3.5">{currentLang() === 'ne' ? 'कारण' : 'Reason'}</th>
+                  <th class="px-5 py-3.5 text-right">{currentLang() === 'ne' ? 'फिर्ता रकम' : 'Refund Amount'}</th>
+                  <th class="px-5 py-3.5 text-right">{currentLang() === 'ne' ? 'उधारो समायोजन' : 'Credit Balance'}</th>
+                  <th class="px-5 py-3.5 text-right">{t('total')}</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-gray-100 dark:divide-neutral-900">
@@ -594,7 +599,7 @@ export function SalesView() {
                   fallback={
                     <tr>
                       <td colspan="7" class="px-5 py-12 text-center text-gray-400 dark:text-neutral-500">
-                        No sales return records. Click "New Sales Return" to issue a credit note.
+                        {currentLang() === 'ne' ? 'कुनै बिक्री फिर्ता रेकर्ड छैन।' : 'No sales return records.'}
                       </td>
                     </tr>
                   }
@@ -628,7 +633,7 @@ export function SalesView() {
         <div class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div class="bg-white dark:bg-neutral-950 border border-gray-200 dark:border-neutral-800 rounded-2xl w-full max-w-md p-6 space-y-5 shadow-2xl">
             <div class="flex items-center justify-between">
-              <h2 class="text-lg font-bold text-gray-900 dark:text-white">Record Customer Payment In</h2>
+              <h2 class="text-lg font-bold text-gray-900 dark:text-white">{t('recordPaymentIn')}</h2>
               <button
                 onClick={() => setShowPaymentInModal(false)}
                 class="text-gray-400 hover:text-gray-600 dark:text-neutral-400 dark:hover:text-white text-xl"
@@ -639,18 +644,18 @@ export function SalesView() {
 
             <form onSubmit={handleCreatePaymentIn} class="space-y-4">
               <div>
-                <label class="block text-xs text-gray-600 dark:text-neutral-400 mb-1">Select Customer *</label>
+                <label class="block text-xs text-gray-600 dark:text-neutral-400 mb-1">{t('customerSelect')} *</label>
                 <select
                   required
                   value={payPartyId()}
                   onChange={(e) => setPayPartyId(e.currentTarget.value)}
                   class="w-full px-3 py-2 bg-gray-50 dark:bg-neutral-900 border border-gray-300 dark:border-neutral-800 rounded-lg text-gray-900 dark:text-white text-sm focus:outline-none focus:border-emerald-500"
                 >
-                  <option value="">-- Select Customer --</option>
+                  <option value="">{currentLang() === 'ne' ? '-- ग्राहक छान्नुहोस् --' : '-- Select Customer --'}</option>
                   <For each={parties.filter((p) => p.partyType === 'customer')}>
                     {(p) => (
                       <option value={p.id}>
-                        {p.name} (Balance: Rs. {p.currentBalance.toLocaleString()})
+                        {p.name} ({currentLang() === 'ne' ? 'बाँकी' : 'Balance'}: Rs. {p.currentBalance.toLocaleString()})
                       </option>
                     )}
                   </For>
@@ -658,7 +663,7 @@ export function SalesView() {
               </div>
 
               <div>
-                <label class="block text-xs text-gray-600 dark:text-neutral-400 mb-1">Amount (Rs.) *</label>
+                <label class="block text-xs text-gray-600 dark:text-neutral-400 mb-1">{t('amountReceived')} (Rs.) *</label>
                 <input
                   type="number"
                   required
@@ -672,21 +677,21 @@ export function SalesView() {
 
               <div class="grid grid-cols-2 gap-3">
                 <div>
-                  <label class="block text-xs text-gray-600 dark:text-neutral-400 mb-1">Payment Mode</label>
+                  <label class="block text-xs text-gray-600 dark:text-neutral-400 mb-1">{t('paymentMethod')}</label>
                   <select
                     value={payMode()}
                     onChange={(e) => setPayMode(e.currentTarget.value as PaymentMode)}
                     class="w-full px-3 py-2 bg-gray-50 dark:bg-neutral-900 border border-gray-300 dark:border-neutral-800 rounded-lg text-gray-900 dark:text-white text-sm focus:outline-none focus:border-emerald-500"
                   >
-                    <option value="cash">Cash</option>
-                    <option value="fonepay">FonePay / QR</option>
-                    <option value="bank_transfer">Bank Transfer</option>
-                    <option value="cheque">Cheque</option>
+                    <option value="cash">{t('cash')}</option>
+                    <option value="fonepay">{t('fonepay')}</option>
+                    <option value="bank_transfer">{t('bank')}</option>
+                    <option value="cheque">{currentLang() === 'ne' ? 'चेक' : 'Cheque'}</option>
                   </select>
                 </div>
 
                 <div>
-                  <label class="block text-xs text-gray-600 dark:text-neutral-400 mb-1">Deposit To Account</label>
+                  <label class="block text-xs text-gray-600 dark:text-neutral-400 mb-1">{t('toAccount')}</label>
                   <select
                     value={payAccountId()}
                     onChange={(e) => setPayAccountId(e.currentTarget.value)}
@@ -704,7 +709,7 @@ export function SalesView() {
               </div>
 
               <div>
-                <label class="block text-xs text-gray-600 dark:text-neutral-400 mb-1">Date</label>
+                <label class="block text-xs text-gray-600 dark:text-neutral-400 mb-1">{t('date')}</label>
                 <input
                   type="date"
                   value={payDate()}
@@ -714,12 +719,12 @@ export function SalesView() {
               </div>
 
               <div>
-                <label class="block text-xs text-gray-600 dark:text-neutral-400 mb-1">Notes / Reference</label>
+                <label class="block text-xs text-gray-600 dark:text-neutral-400 mb-1">{t('notes')}</label>
                 <input
                   type="text"
                   value={payNotes()}
                   onInput={(e) => setPayNotes(e.currentTarget.value)}
-                  placeholder="e.g., FonePay Ref #12345 or Cheque #"
+                  placeholder={currentLang() === 'ne' ? 'विवरण वा सन्दर्भ नं.' : 'e.g., FonePay Ref #12345 or Cheque #'}
                   class="w-full px-3 py-2 bg-gray-50 dark:bg-neutral-900 border border-gray-300 dark:border-neutral-800 rounded-lg text-gray-900 dark:text-white text-sm focus:outline-none focus:border-emerald-500"
                 />
               </div>
@@ -730,13 +735,13 @@ export function SalesView() {
                   onClick={() => setShowPaymentInModal(false)}
                   class="px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-neutral-900 dark:hover:bg-neutral-800 text-gray-700 dark:text-neutral-300 rounded-lg text-sm transition-colors"
                 >
-                  Cancel
+                  {t('cancel')}
                 </button>
                 <button
                   type="submit"
                   class="px-5 py-2 bg-brand-500 hover:bg-brand-600 text-white font-medium rounded-lg text-sm shadow-lg shadow-brand-500/30"
                 >
-                  Save Payment In
+                  {t('save')}
                 </button>
               </div>
             </form>
@@ -749,7 +754,7 @@ export function SalesView() {
         <div class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div class="bg-white dark:bg-neutral-950 border border-gray-200 dark:border-neutral-800 rounded-2xl w-full max-w-2xl p-6 space-y-5 shadow-2xl max-h-[90vh] overflow-y-auto">
             <div class="flex items-center justify-between">
-              <h2 class="text-lg font-bold text-gray-900 dark:text-white">Create Price Quotation / Estimate</h2>
+              <h2 class="text-lg font-bold text-gray-900 dark:text-white">{t('newQuotation')}</h2>
               <button
                 onClick={() => setShowQuotationModal(false)}
                 class="text-gray-400 hover:text-gray-600 dark:text-neutral-400 dark:hover:text-white text-xl"
@@ -761,18 +766,18 @@ export function SalesView() {
             <form onSubmit={handleCreateQuotation} class="space-y-4">
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label class="block text-xs text-gray-600 dark:text-neutral-400 mb-1">Customer Name *</label>
+                  <label class="block text-xs text-gray-600 dark:text-neutral-400 mb-1">{t('customerName')} *</label>
                   <input
                     type="text"
                     required
                     value={quotePartyName()}
                     onInput={(e) => setQuotePartyName(e.currentTarget.value)}
-                    placeholder="Enter customer or company name"
+                    placeholder={currentLang() === 'ne' ? 'ग्राहकको नाम राख्नुहोस्' : 'Enter customer or company name'}
                     class="w-full px-3 py-2 bg-gray-50 dark:bg-neutral-900 border border-gray-300 dark:border-neutral-800 rounded-lg text-gray-900 dark:text-white text-sm focus:outline-none focus:border-emerald-500"
                   />
                 </div>
                 <div>
-                  <label class="block text-xs text-gray-600 dark:text-neutral-400 mb-1">Customer Phone</label>
+                  <label class="block text-xs text-gray-600 dark:text-neutral-400 mb-1">{currentLang() === 'ne' ? 'ग्राहकको फोन' : 'Customer Phone'}</label>
                   <input
                     type="text"
                     value={quotePartyPhone()}
@@ -784,7 +789,7 @@ export function SalesView() {
               </div>
 
               <div>
-                <label class="block text-xs text-gray-600 dark:text-neutral-400 mb-1">Valid Until (Expiry Date)</label>
+                <label class="block text-xs text-gray-600 dark:text-neutral-400 mb-1">{currentLang() === 'ne' ? 'म्याद मिति' : 'Valid Until (Expiry Date)'}</label>
                 <input
                   type="date"
                   value={quoteValidUntil()}
@@ -796,13 +801,13 @@ export function SalesView() {
               {/* Items Table */}
               <div class="border border-gray-200 dark:border-neutral-800 rounded-xl p-3 bg-gray-50/70 dark:bg-neutral-900/40 space-y-3">
                 <div class="flex items-center justify-between">
-                  <span class="text-xs font-semibold text-gray-500 dark:text-neutral-400 uppercase tracking-wider">Quotation Items</span>
+                  <span class="text-xs font-semibold text-gray-500 dark:text-neutral-400 uppercase tracking-wider">{currentLang() === 'ne' ? 'सामानहरूको विवरण' : 'Quotation Items'}</span>
                   <button
                     type="button"
                     onClick={addQuoteItem}
                     class="px-2.5 py-1 bg-white dark:bg-neutral-800 hover:bg-gray-100 dark:hover:bg-neutral-700 text-gray-700 dark:text-neutral-200 rounded text-xs flex items-center gap-1 border border-gray-200 dark:border-transparent transition-colors"
                   >
-                    <IconPlus class="w-3.5 h-3.5" /> Add Item
+                    <IconPlus class="w-3.5 h-3.5" /> {currentLang() === 'ne' ? 'सामान थप्नुहोस्' : 'Add Item'}
                   </button>
                 </div>
 
@@ -812,7 +817,7 @@ export function SalesView() {
                       <div class="flex items-center gap-2">
                         <input
                           type="text"
-                          placeholder="Item name / description"
+                          placeholder={t('productName')}
                           required
                           value={it.itemName}
                           onInput={(e) => updateQuoteItem(idx(), 'itemName', e.currentTarget.value)}
@@ -820,7 +825,7 @@ export function SalesView() {
                         />
                         <input
                           type="number"
-                          placeholder="Qty"
+                          placeholder={t('qty')}
                           min="1"
                           required
                           value={it.quantity}
@@ -829,7 +834,7 @@ export function SalesView() {
                         />
                         <input
                           type="number"
-                          placeholder="Unit Rate"
+                          placeholder={t('rate')}
                           min="0"
                           required
                           value={it.unitPrice}
@@ -854,17 +859,17 @@ export function SalesView() {
                 </div>
 
                 <div class="flex justify-end pt-2 border-t border-gray-200 dark:border-neutral-800 font-semibold text-gray-900 dark:text-white text-sm">
-                  <span>Grand Total:</span>
+                  <span>{t('grandTotal')}:</span>
                   <span class="ml-3 text-emerald-600 dark:text-emerald-400 font-mono">Rs. {quoteTotal().toLocaleString()}</span>
                 </div>
               </div>
 
               <div>
-                <label class="block text-xs text-gray-600 dark:text-neutral-400 mb-1">Notes / Terms</label>
+                <label class="block text-xs text-gray-600 dark:text-neutral-400 mb-1">{t('notes')}</label>
                 <textarea
                   value={quoteNotes()}
                   onInput={(e) => setQuoteNotes(e.currentTarget.value)}
-                  placeholder="Terms of delivery, payment conditions..."
+                  placeholder={currentLang() === 'ne' ? 'सर्तहरू तथा कैफियत...' : 'Terms of delivery, payment conditions...'}
                   rows="2"
                   class="w-full px-3 py-2 bg-gray-50 dark:bg-neutral-900 border border-gray-300 dark:border-neutral-800 rounded-lg text-gray-900 dark:text-white text-sm focus:outline-none focus:border-emerald-500"
                 />
@@ -876,13 +881,13 @@ export function SalesView() {
                   onClick={() => setShowQuotationModal(false)}
                   class="px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-neutral-900 dark:hover:bg-neutral-800 text-gray-700 dark:text-neutral-300 rounded-lg text-sm transition-colors"
                 >
-                  Cancel
+                  {t('cancel')}
                 </button>
                 <button
                   type="submit"
                   class="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-lg text-sm shadow-lg shadow-blue-900/30"
                 >
-                  Create Quotation
+                  {t('save')}
                 </button>
               </div>
             </form>
@@ -895,7 +900,7 @@ export function SalesView() {
         <div class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div class="bg-white dark:bg-neutral-950 border border-gray-200 dark:border-neutral-800 rounded-2xl w-full max-w-2xl p-6 space-y-5 shadow-2xl max-h-[90vh] overflow-y-auto">
             <div class="flex items-center justify-between">
-              <h2 class="text-lg font-bold text-gray-900 dark:text-white">Create Sales Return (Credit Note)</h2>
+              <h2 class="text-lg font-bold text-gray-900 dark:text-white">{t('newSalesReturn')}</h2>
               <button
                 onClick={() => setShowReturnModal(false)}
                 class="text-gray-400 hover:text-gray-600 dark:text-neutral-400 dark:hover:text-white text-xl"
@@ -906,7 +911,7 @@ export function SalesView() {
 
             <form onSubmit={handleCreateReturn} class="space-y-4">
               <div>
-                <label class="block text-xs text-gray-600 dark:text-neutral-400 mb-1">Customer *</label>
+                <label class="block text-xs text-gray-600 dark:text-neutral-400 mb-1">{t('customer')} *</label>
                 <select
                   required
                   value={returnPartyName()}
@@ -917,7 +922,7 @@ export function SalesView() {
                   }}
                   class="w-full px-3 py-2 bg-gray-50 dark:bg-neutral-900 border border-gray-300 dark:border-neutral-800 rounded-lg text-gray-900 dark:text-white text-sm focus:outline-none focus:border-rose-500"
                 >
-                  <option value="">-- Select Customer --</option>
+                  <option value="">{currentLang() === 'ne' ? '-- ग्राहक छान्नुहोस् --' : '-- Select Customer --'}</option>
                   <For each={parties.filter((p) => p.partyType === 'customer')}>
                     {(p) => <option value={p.name}>{p.name}</option>}
                   </For>
@@ -927,13 +932,13 @@ export function SalesView() {
               {/* Items Table */}
               <div class="border border-gray-200 dark:border-neutral-800 rounded-xl p-3 bg-gray-50/70 dark:bg-neutral-900/40 space-y-3">
                 <div class="flex items-center justify-between">
-                  <span class="text-xs font-semibold text-gray-500 dark:text-neutral-400 uppercase tracking-wider">Returned Items</span>
+                  <span class="text-xs font-semibold text-gray-500 dark:text-neutral-400 uppercase tracking-wider">{currentLang() === 'ne' ? 'फिर्ता सामानहरू' : 'Returned Items'}</span>
                   <button
                     type="button"
                     onClick={addReturnItem}
                     class="px-2.5 py-1 bg-white dark:bg-neutral-800 hover:bg-gray-100 dark:hover:bg-neutral-700 text-gray-700 dark:text-neutral-200 rounded text-xs flex items-center gap-1 border border-gray-200 dark:border-transparent transition-colors"
                   >
-                    <IconPlus class="w-3.5 h-3.5" /> Add Item
+                    <IconPlus class="w-3.5 h-3.5" /> {currentLang() === 'ne' ? 'सामान थप्नुहोस्' : 'Add Item'}
                   </button>
                 </div>
 
@@ -943,7 +948,7 @@ export function SalesView() {
                       <div class="flex items-center gap-2">
                         <input
                           type="text"
-                          placeholder="Item name"
+                          placeholder={t('productName')}
                           required
                           value={it.itemName}
                           onInput={(e) => updateReturnItem(idx(), 'itemName', e.currentTarget.value)}
@@ -951,7 +956,7 @@ export function SalesView() {
                         />
                         <input
                           type="number"
-                          placeholder="Qty"
+                          placeholder={t('qty')}
                           min="1"
                           required
                           value={it.quantity}
@@ -960,7 +965,7 @@ export function SalesView() {
                         />
                         <input
                           type="number"
-                          placeholder="Price"
+                          placeholder={t('price')}
                           min="0"
                           required
                           value={it.unitPrice}
@@ -985,14 +990,14 @@ export function SalesView() {
                 </div>
 
                 <div class="flex justify-end pt-2 border-t border-gray-200 dark:border-neutral-800 font-semibold text-gray-900 dark:text-white text-sm">
-                  <span>Return Total:</span>
+                  <span>{currentLang() === 'ne' ? 'फिर्ता जम्मा:' : 'Return Total:'}</span>
                   <span class="ml-3 text-rose-600 dark:text-rose-400 font-mono">Rs. {returnTotal().toLocaleString()}</span>
                 </div>
               </div>
 
               <div class="grid grid-cols-2 gap-3">
                 <div>
-                  <label class="block text-xs text-gray-600 dark:text-neutral-400 mb-1">Cash Refund (Rs.)</label>
+                  <label class="block text-xs text-gray-600 dark:text-neutral-400 mb-1">{currentLang() === 'ne' ? 'नगद फिर्ता (रु.)' : 'Cash Refund (Rs.)'}</label>
                   <input
                     type="number"
                     min="0"
@@ -1003,7 +1008,7 @@ export function SalesView() {
                   />
                 </div>
                 <div>
-                  <label class="block text-xs text-gray-600 dark:text-neutral-400 mb-1">Khata Credit (Rs.)</label>
+                  <label class="block text-xs text-gray-600 dark:text-neutral-400 mb-1">{currentLang() === 'ne' ? 'खातामा उधारो समायोजन (रु.)' : 'Khata Credit (Rs.)'}</label>
                   <input
                     type="number"
                     min="0"
@@ -1016,12 +1021,12 @@ export function SalesView() {
               </div>
 
               <div>
-                <label class="block text-xs text-gray-600 dark:text-neutral-400 mb-1">Reason for Return</label>
+                <label class="block text-xs text-gray-600 dark:text-neutral-400 mb-1">{currentLang() === 'ne' ? 'फिर्ताको कारण' : 'Reason for Return'}</label>
                 <input
                   type="text"
                   value={returnReason()}
                   onInput={(e) => setReturnReason(e.currentTarget.value)}
-                  placeholder="e.g., Expired goods, defective packaging"
+                  placeholder={currentLang() === 'ne' ? 'कारण राख्नुहोस् (जस्तै: बिग्रिएको, डेट सकिएको)' : 'e.g., Expired goods, defective packaging'}
                   class="w-full px-3 py-2 bg-gray-50 dark:bg-neutral-900 border border-gray-300 dark:border-neutral-800 rounded-lg text-gray-900 dark:text-white text-sm focus:outline-none focus:border-rose-500"
                 />
               </div>
@@ -1032,13 +1037,13 @@ export function SalesView() {
                   onClick={() => setShowReturnModal(false)}
                   class="px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-neutral-900 dark:hover:bg-neutral-800 text-gray-700 dark:text-neutral-300 rounded-lg text-sm transition-colors"
                 >
-                  Cancel
+                  {t('cancel')}
                 </button>
                 <button
                   type="submit"
                   class="px-5 py-2 bg-rose-600 hover:bg-rose-500 text-white font-medium rounded-lg text-sm shadow-lg shadow-rose-900/30"
                 >
-                  Issue Credit Note
+                  {t('save')}
                 </button>
               </div>
             </form>
@@ -1052,7 +1057,7 @@ export function SalesView() {
           <div class="bg-white dark:bg-neutral-950 border border-gray-200 dark:border-neutral-800 rounded-2xl w-full max-w-lg p-6 space-y-4 shadow-2xl">
             <div class="flex items-center justify-between border-b border-gray-200 dark:border-neutral-800 pb-3">
               <div>
-                <h3 class="text-base font-bold text-gray-900 dark:text-white">Invoice Details</h3>
+                <h3 class="text-base font-bold text-gray-900 dark:text-white">{currentLang() === 'ne' ? 'बिक्री बिल विवरण' : 'Invoice Details'}</h3>
                 <p class="text-xs font-mono text-emerald-600 dark:text-emerald-400">{selectedInvoice()?.invoiceNumber}</p>
               </div>
               <button
@@ -1065,20 +1070,20 @@ export function SalesView() {
 
             <div class="space-y-3 text-sm">
               <div class="flex justify-between">
-                <span class="text-gray-500 dark:text-neutral-400">Customer:</span>
-                <span class="text-gray-900 dark:text-white font-medium">{selectedInvoice()?.partyName || 'Cash Customer'}</span>
+                <span class="text-gray-500 dark:text-neutral-400">{t('customer')}:</span>
+                <span class="text-gray-900 dark:text-white font-medium">{selectedInvoice()?.partyName || (currentLang() === 'ne' ? 'नगद ग्राहक' : 'Cash Customer')}</span>
               </div>
               <div class="flex justify-between">
-                <span class="text-gray-500 dark:text-neutral-400">Date:</span>
+                <span class="text-gray-500 dark:text-neutral-400">{t('date')}:</span>
                 <span class="text-gray-800 dark:text-neutral-200">{selectedInvoice()?.invoiceDateAd} ({selectedInvoice()?.invoiceDateBs})</span>
               </div>
               <div class="flex justify-between">
-                <span class="text-gray-500 dark:text-neutral-400">Payment Mode:</span>
+                <span class="text-gray-500 dark:text-neutral-400">{t('paymentMethod')}:</span>
                 <span class="text-gray-800 dark:text-neutral-200 uppercase font-mono">{selectedInvoice()?.paymentMode}</span>
               </div>
 
               <div class="border-t border-b border-gray-200 dark:border-neutral-800 py-2 space-y-1.5">
-                <div class="text-xs font-semibold text-gray-500 dark:text-neutral-400 uppercase">Items</div>
+                <div class="text-xs font-semibold text-gray-500 dark:text-neutral-400 uppercase">{t('items')}</div>
                 <For each={selectedInvoice()?.items || []}>
                   {(it: any) => (
                     <div class="flex justify-between text-xs">
@@ -1093,23 +1098,23 @@ export function SalesView() {
 
               <div class="space-y-1 text-xs">
                 <div class="flex justify-between">
-                  <span class="text-gray-500 dark:text-neutral-400">Subtotal:</span>
+                  <span class="text-gray-500 dark:text-neutral-400">{t('subtotal')}:</span>
                   <span class="font-mono text-gray-700 dark:text-neutral-200">Rs. {selectedInvoice()?.subtotal?.toLocaleString()}</span>
                 </div>
                 <div class="flex justify-between">
-                  <span class="text-gray-500 dark:text-neutral-400">Discount:</span>
+                  <span class="text-gray-500 dark:text-neutral-400">{t('discount')}:</span>
                   <span class="font-mono text-rose-600 dark:text-rose-400">- Rs. {selectedInvoice()?.discountAmount?.toLocaleString()}</span>
                 </div>
                 <div class="flex justify-between font-bold text-sm text-gray-900 dark:text-white pt-1">
-                  <span>Grand Total:</span>
+                  <span>{t('grandTotal')}:</span>
                   <span class="font-mono text-emerald-600 dark:text-emerald-400">Rs. {selectedInvoice()?.totalAmount?.toLocaleString()}</span>
                 </div>
                 <div class="flex justify-between text-gray-700 dark:text-neutral-300">
-                  <span>Paid:</span>
+                  <span>{t('paid')}:</span>
                   <span class="font-mono text-emerald-600 dark:text-emerald-400">Rs. {selectedInvoice()?.paidAmount?.toLocaleString()}</span>
                 </div>
                 <div class="flex justify-between text-gray-700 dark:text-neutral-300">
-                  <span>Due:</span>
+                  <span>{t('due')}:</span>
                   <span class="font-mono text-amber-600 dark:text-amber-400">Rs. {selectedInvoice()?.dueAmount?.toLocaleString()}</span>
                 </div>
               </div>
@@ -1120,7 +1125,7 @@ export function SalesView() {
                 onClick={() => setSelectedInvoice(null)}
                 class="px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-gray-900 dark:text-white rounded-lg text-sm transition-colors"
               >
-                Close
+                {t('close')}
               </button>
             </div>
           </div>

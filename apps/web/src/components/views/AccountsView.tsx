@@ -13,6 +13,7 @@ import {
   type AccountTransaction,
 } from '../../db/localDb';
 import { formatNepaliCurrency } from '@byapar/core';
+import { currentLang } from '../../services/i18n';
 import { IconAccounts, IconQrCode, IconPlus, IconX, IconTransfer } from '../icons';
 
 export const AccountsView: Component = () => {
@@ -532,7 +533,7 @@ export const AccountsView: Component = () => {
               </div>
 
               <div>
-                <label class="block text-xs font-semibold text-gray-600 dark:text-neutral-300 mb-1">Opening Balance (रु.)</label>
+                <label class="block text-xs font-semibold text-gray-600 dark:text-neutral-300 mb-1">{currentLang() === 'ne' ? 'सुरुवाती मौज्दात (रु.)' : 'Opening Balance (Rs.)'}</label>
                 <input
                   type="number"
                   placeholder="0.00"
@@ -634,7 +635,7 @@ export const AccountsView: Component = () => {
 
             <form onSubmit={handleDeposit} class="space-y-3">
               <div>
-                <label class="block text-xs font-semibold text-gray-600 dark:text-neutral-300 mb-1">Deposit Amount (रु.) *</label>
+                <label class="block text-xs font-semibold text-gray-600 dark:text-neutral-300 mb-1">{currentLang() === 'ne' ? 'थप रकम (रु.) *' : 'Deposit Amount (Rs.) *'}</label>
                 <input
                   type="number"
                   placeholder="0.00"
@@ -703,7 +704,7 @@ export const AccountsView: Component = () => {
 
             <form onSubmit={handleWithdraw} class="space-y-3">
               <div>
-                <label class="block text-xs font-semibold text-gray-600 dark:text-neutral-300 mb-1">Withdrawal Amount (रु.) *</label>
+                <label class="block text-xs font-semibold text-gray-600 dark:text-neutral-300 mb-1">{currentLang() === 'ne' ? 'झिक्ने रकम (रु.) *' : 'Withdrawal Amount (Rs.) *'}</label>
                 <input
                   type="number"
                   placeholder="0.00"
@@ -797,7 +798,7 @@ export const AccountsView: Component = () => {
               </div>
 
               <div>
-                <label class="block text-xs font-semibold text-gray-600 dark:text-neutral-300 mb-1">Transfer Amount (रु.) *</label>
+                <label class="block text-xs font-semibold text-gray-600 dark:text-neutral-300 mb-1">{currentLang() === 'ne' ? 'सार्ने रकम (रु.) *' : 'Transfer Amount (Rs.) *'}</label>
                 <input
                   type="number"
                   placeholder="0.00"

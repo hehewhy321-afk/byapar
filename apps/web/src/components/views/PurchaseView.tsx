@@ -13,6 +13,7 @@ import {
   PurchaseBill,
   PurchaseReturn,
 } from '../../db/localDb';
+import { t, currentLang } from '../../services/i18n';
 import {
   IconPurchase,
   IconSearch,
@@ -253,10 +254,10 @@ export function PurchaseView() {
             <div class="p-2 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
               <IconPurchase class="w-6 h-6" />
             </div>
-            <h1 class="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">Purchase Management</h1>
+            <h1 class="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">{t('purchaseHub')}</h1>
           </div>
           <p class="text-sm text-gray-500 dark:text-neutral-400 mt-1">
-            Record supplier purchase bills, payments to vendors, and purchase returns with inventory auto-restock.
+            {currentLang() === 'ne' ? 'साहुजीबाट सामान खरिद, भुक्तानी तथा फिर्ता हिसाब।' : 'Record supplier purchase bills, payments to vendors, and purchase returns with inventory auto-restock.'}
           </p>
         </div>
 
@@ -267,7 +268,7 @@ export function PurchaseView() {
               class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-medium text-sm transition-all shadow-lg shadow-blue-900/30 flex items-center gap-2"
             >
               <IconPlus class="w-4 h-4" />
-              <span>New Purchase Bill</span>
+              <span>{t('addPurchaseBill')}</span>
             </button>
           </Show>
 
@@ -277,7 +278,7 @@ export function PurchaseView() {
               class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-medium text-sm transition-all shadow-lg shadow-blue-900/30 flex items-center gap-2"
             >
               <IconPlus class="w-4 h-4" />
-              <span>Record Payment Out</span>
+              <span>{t('recordPaymentOut')}</span>
             </button>
           </Show>
 
@@ -287,7 +288,7 @@ export function PurchaseView() {
               class="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-lg font-medium text-sm transition-all shadow-lg shadow-rose-900/30 flex items-center gap-2"
             >
               <IconPlus class="w-4 h-4" />
-              <span>New Purchase Return</span>
+              <span>{t('newPurchaseReturn')}</span>
             </button>
           </Show>
         </div>
@@ -304,7 +305,7 @@ export function PurchaseView() {
           }`}
         >
           <IconReceipt class="w-4 h-4" />
-          <span>Purchase Bills</span>
+          <span>{t('purchaseBills')}</span>
           <span class="ml-1 text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-neutral-800 text-gray-700 dark:text-neutral-300">
             {purchaseBills.length}
           </span>
@@ -319,7 +320,7 @@ export function PurchaseView() {
           }`}
         >
           <IconTruck class="w-4 h-4" />
-          <span>Payment Out</span>
+          <span>{t('paymentOut')}</span>
           <span class="ml-1 text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-neutral-800 text-gray-700 dark:text-neutral-300">
             {paymentRecords.filter((p) => p.type === 'out').length}
           </span>
@@ -334,7 +335,7 @@ export function PurchaseView() {
           }`}
         >
           <IconPurchase class="w-4 h-4 text-rose-600 dark:text-rose-400" />
-          <span>Purchase Return</span>
+          <span>{t('purchaseReturns')}</span>
           <span class="ml-1 text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-neutral-800 text-gray-700 dark:text-neutral-300">
             {purchaseReturns.length}
           </span>
@@ -346,7 +347,7 @@ export function PurchaseView() {
         <IconSearch class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-neutral-500" />
         <input
           type="text"
-          placeholder="Search by bill number, supplier name, phone..."
+          placeholder={currentLang() === 'ne' ? 'बिल नं., साहुजीको नाम वा फोनबाट खोज्नुहोस्...' : 'Search by bill number, supplier name, phone...'}
           value={searchTerm()}
           onInput={(e) => setSearchTerm(e.currentTarget.value)}
           class="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-neutral-950 border border-gray-200 dark:border-neutral-800 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-neutral-500 focus:outline-none focus:border-blue-500/50 text-sm transition-all shadow-sm"
@@ -360,14 +361,14 @@ export function PurchaseView() {
             <table class="w-full text-left text-sm text-gray-700 dark:text-neutral-300">
               <thead class="bg-gray-50 dark:bg-neutral-900/60 border-b border-gray-200 dark:border-neutral-800 text-xs text-gray-500 dark:text-neutral-400 font-semibold uppercase tracking-wider">
                 <tr>
-                  <th class="px-5 py-3.5">Bill #</th>
-                  <th class="px-5 py-3.5">Supplier</th>
-                  <th class="px-5 py-3.5">Date</th>
-                  <th class="px-5 py-3.5 text-right">Total</th>
-                  <th class="px-5 py-3.5 text-right">Paid</th>
-                  <th class="px-5 py-3.5 text-right">Due</th>
-                  <th class="px-5 py-3.5 text-center">Status</th>
-                  <th class="px-5 py-3.5 text-right">Actions</th>
+                  <th class="px-5 py-3.5">{t('billNumber')}</th>
+                  <th class="px-5 py-3.5">{t('supplier')}</th>
+                  <th class="px-5 py-3.5">{t('date')}</th>
+                  <th class="px-5 py-3.5 text-right">{t('total')}</th>
+                  <th class="px-5 py-3.5 text-right">{t('paid')}</th>
+                  <th class="px-5 py-3.5 text-right">{t('due')}</th>
+                  <th class="px-5 py-3.5 text-center">{t('status')}</th>
+                  <th class="px-5 py-3.5 text-right">{t('actions')}</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-gray-100 dark:divide-neutral-900">
@@ -376,7 +377,7 @@ export function PurchaseView() {
                   fallback={
                     <tr>
                       <td colspan="8" class="px-5 py-12 text-center text-gray-400 dark:text-neutral-500">
-                        No purchase bills recorded. Click "New Purchase Bill" to add incoming stock.
+                        {currentLang() === 'ne' ? 'कुनै खरिद बिल भेटिएन।' : 'No purchase bills recorded. Click "New Purchase Bill" to add incoming stock.'}
                       </td>
                     </tr>
                   }
@@ -412,14 +413,14 @@ export function PurchaseView() {
                               : 'bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-500/30'
                           }`}
                         >
-                          {bill.status === 'paid' ? 'PAID' : bill.status === 'partial' ? 'PARTIAL' : 'DUE'}
+                          {bill.status === 'paid' ? (currentLang() === 'ne' ? 'चुक्ता' : 'PAID') : bill.status === 'partial' ? (currentLang() === 'ne' ? 'आंशिक' : 'PARTIAL') : (currentLang() === 'ne' ? 'बाँकी' : 'DUE')}
                         </span>
                       </td>
                       <td class="px-5 py-4 text-right">
                         <button
                           onClick={() => setSelectedBill(bill)}
                           class="p-2 rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-neutral-900 dark:hover:bg-neutral-800 text-gray-600 hover:text-gray-900 dark:text-neutral-300 dark:hover:text-white transition-colors"
-                          title="View Bill Details"
+                          title={t('viewReceipt')}
                         >
                           <IconEye class="w-4 h-4" />
                         </button>
@@ -440,11 +441,11 @@ export function PurchaseView() {
             <table class="w-full text-left text-sm text-gray-700 dark:text-neutral-300">
               <thead class="bg-gray-50 dark:bg-neutral-900/60 border-b border-gray-200 dark:border-neutral-800 text-xs text-gray-500 dark:text-neutral-400 font-semibold uppercase tracking-wider">
                 <tr>
-                  <th class="px-5 py-3.5">Supplier Name</th>
-                  <th class="px-5 py-3.5">Date</th>
-                  <th class="px-5 py-3.5">Mode</th>
-                  <th class="px-5 py-3.5">Notes</th>
-                  <th class="px-5 py-3.5 text-right">Amount Paid</th>
+                  <th class="px-5 py-3.5">{t('supplierName')}</th>
+                  <th class="px-5 py-3.5">{t('date')}</th>
+                  <th class="px-5 py-3.5">{t('paymentMethod')}</th>
+                  <th class="px-5 py-3.5">{t('notes')}</th>
+                  <th class="px-5 py-3.5 text-right">{t('amountPaid')}</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-gray-100 dark:divide-neutral-900">
@@ -453,7 +454,7 @@ export function PurchaseView() {
                   fallback={
                     <tr>
                       <td colspan="5" class="px-5 py-12 text-center text-gray-400 dark:text-neutral-500">
-                        No payments to suppliers recorded yet. Click "Record Payment Out".
+                        {currentLang() === 'ne' ? 'कुनै भुक्तानी दर्ता गरिएको छैन।' : 'No payments to suppliers recorded yet.'}
                       </td>
                     </tr>
                   }
@@ -487,12 +488,12 @@ export function PurchaseView() {
             <table class="w-full text-left text-sm text-gray-700 dark:text-neutral-300">
               <thead class="bg-gray-50 dark:bg-neutral-900/60 border-b border-gray-200 dark:border-neutral-800 text-xs text-gray-500 dark:text-neutral-400 font-semibold uppercase tracking-wider">
                 <tr>
-                  <th class="px-5 py-3.5">Return #</th>
-                  <th class="px-5 py-3.5">Supplier</th>
-                  <th class="px-5 py-3.5">Date</th>
-                  <th class="px-5 py-3.5">Reason</th>
-                  <th class="px-5 py-3.5 text-right">Refund Amount</th>
-                  <th class="px-5 py-3.5 text-right">Total Amount</th>
+                  <th class="px-5 py-3.5">{currentLang() === 'ne' ? 'फिर्ता नं.' : 'Return #'}</th>
+                  <th class="px-5 py-3.5">{t('supplier')}</th>
+                  <th class="px-5 py-3.5">{t('date')}</th>
+                  <th class="px-5 py-3.5">{currentLang() === 'ne' ? 'कारण' : 'Reason'}</th>
+                  <th class="px-5 py-3.5 text-right">{currentLang() === 'ne' ? 'फिर्ता रकम' : 'Refund Amount'}</th>
+                  <th class="px-5 py-3.5 text-right">{t('total')}</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-gray-100 dark:divide-neutral-900">
@@ -501,7 +502,7 @@ export function PurchaseView() {
                   fallback={
                     <tr>
                       <td colspan="6" class="px-5 py-12 text-center text-gray-400 dark:text-neutral-500">
-                        No purchase returns recorded. Click "New Purchase Return" to return goods.
+                        {currentLang() === 'ne' ? 'कुनै खरिद फिर्ता रेकर्ड छैन।' : 'No purchase returns recorded.'}
                       </td>
                     </tr>
                   }
@@ -532,7 +533,7 @@ export function PurchaseView() {
         <div class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div class="bg-white dark:bg-neutral-950 border border-gray-200 dark:border-neutral-800 rounded-2xl w-full max-w-2xl p-6 space-y-5 shadow-2xl max-h-[90vh] overflow-y-auto">
             <div class="flex items-center justify-between">
-              <h2 class="text-lg font-bold text-gray-900 dark:text-white">Add Purchase Bill (Inward Stock)</h2>
+              <h2 class="text-lg font-bold text-gray-900 dark:text-white">{t('addPurchaseBill')}</h2>
               <button
                 onClick={() => setShowBillModal(false)}
                 class="text-gray-400 hover:text-gray-600 dark:text-neutral-400 dark:hover:text-white text-xl"
@@ -544,7 +545,7 @@ export function PurchaseView() {
             <form onSubmit={handleCreateBill} class="space-y-4">
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label class="block text-xs text-gray-600 dark:text-neutral-400 mb-1">Supplier *</label>
+                  <label class="block text-xs text-gray-600 dark:text-neutral-400 mb-1">{t('supplier')} *</label>
                   <select
                     required
                     value={billSupplierName()}
@@ -556,7 +557,7 @@ export function PurchaseView() {
                     }}
                     class="w-full px-3 py-2 bg-gray-50 dark:bg-neutral-900 border border-gray-300 dark:border-neutral-800 rounded-lg text-gray-900 dark:text-white text-sm focus:outline-none focus:border-blue-500"
                   >
-                    <option value="">-- Select Supplier --</option>
+                    <option value="">{currentLang() === 'ne' ? '-- साहुजी छान्नुहोस् --' : '-- Select Supplier --'}</option>
                     <For each={parties.filter((p) => p.partyType === 'supplier')}>
                       {(p) => <option value={p.name}>{p.name}</option>}
                     </For>
@@ -564,7 +565,7 @@ export function PurchaseView() {
                 </div>
 
                 <div>
-                  <label class="block text-xs text-gray-600 dark:text-neutral-400 mb-1">Bill Date</label>
+                  <label class="block text-xs text-gray-600 dark:text-neutral-400 mb-1">{t('date')}</label>
                   <input
                     type="date"
                     value={billDate()}
@@ -577,13 +578,13 @@ export function PurchaseView() {
               {/* Items Table */}
               <div class="border border-gray-200 dark:border-neutral-800 rounded-xl p-3 bg-gray-50/70 dark:bg-neutral-900/40 space-y-3">
                 <div class="flex items-center justify-between">
-                  <span class="text-xs font-semibold text-gray-500 dark:text-neutral-400 uppercase tracking-wider">Purchase Items</span>
+                  <span class="text-xs font-semibold text-gray-500 dark:text-neutral-400 uppercase tracking-wider">{currentLang() === 'ne' ? 'खरिद गरिएका सामानहरू' : 'Purchase Items'}</span>
                   <button
                     type="button"
                     onClick={addBillItem}
                     class="px-2.5 py-1 bg-white dark:bg-neutral-800 hover:bg-gray-100 dark:hover:bg-neutral-700 text-gray-700 dark:text-neutral-200 rounded text-xs flex items-center gap-1 border border-gray-200 dark:border-transparent transition-colors"
                   >
-                    <IconPlus class="w-3.5 h-3.5" /> Add Item
+                    <IconPlus class="w-3.5 h-3.5" /> {currentLang() === 'ne' ? 'सामान थप्नुहोस्' : 'Add Item'}
                   </button>
                 </div>
 
@@ -603,14 +604,14 @@ export function PurchaseView() {
                           }}
                           class="flex-1 px-3 py-1.5 bg-white dark:bg-neutral-950 border border-gray-300 dark:border-neutral-800 rounded text-gray-900 dark:text-white text-xs"
                         >
-                          <option value="">-- Select or type item --</option>
+                          <option value="">{currentLang() === 'ne' ? '-- सामान छान्नुहोस् --' : '-- Select or type item --'}</option>
                           <For each={items}>
-                            {(i) => <option value={i.name}>{i.name} (Stock: {i.currentStock})</option>}
+                            {(i) => <option value={i.name}>{i.name} ({currentLang() === 'ne' ? 'मौज्दात' : 'Stock'}: {i.currentStock})</option>}
                           </For>
                         </select>
                         <input
                           type="number"
-                          placeholder="Qty"
+                          placeholder={t('qty')}
                           min="1"
                           required
                           value={it.quantity}
@@ -619,7 +620,7 @@ export function PurchaseView() {
                         />
                         <input
                           type="number"
-                          placeholder="Cost"
+                          placeholder={t('buyPrice')}
                           min="0"
                           required
                           value={it.costPrice}
@@ -644,14 +645,14 @@ export function PurchaseView() {
                 </div>
 
                 <div class="flex justify-end pt-2 border-t border-gray-200 dark:border-neutral-800 font-semibold text-gray-900 dark:text-white text-sm">
-                  <span>Total Bill Amount:</span>
+                  <span>{t('total')}:</span>
                   <span class="ml-3 text-blue-600 dark:text-blue-400 font-mono">Rs. {billTotal().toLocaleString()}</span>
                 </div>
               </div>
 
               <div class="grid grid-cols-2 gap-3">
                 <div>
-                  <label class="block text-xs text-gray-600 dark:text-neutral-400 mb-1">Paid Amount (Rs.)</label>
+                  <label class="block text-xs text-gray-600 dark:text-neutral-400 mb-1">{t('paid')} (Rs.)</label>
                   <input
                     type="number"
                     min="0"
@@ -662,27 +663,27 @@ export function PurchaseView() {
                   />
                 </div>
                 <div>
-                  <label class="block text-xs text-gray-600 dark:text-neutral-400 mb-1">Payment Mode</label>
+                  <label class="block text-xs text-gray-600 dark:text-neutral-400 mb-1">{t('paymentMethod')}</label>
                   <select
                     value={billPaymentMode()}
                     onChange={(e) => setBillPaymentMode(e.currentTarget.value as PaymentMode)}
                     class="w-full px-3 py-2 bg-gray-50 dark:bg-neutral-900 border border-gray-300 dark:border-neutral-800 rounded-lg text-gray-900 dark:text-white text-sm focus:outline-none focus:border-blue-500"
                   >
-                    <option value="cash">Cash</option>
-                    <option value="fonepay">FonePay / QR</option>
-                    <option value="bank_transfer">Bank Transfer</option>
-                    <option value="cheque">Cheque</option>
+                    <option value="cash">{t('cash')}</option>
+                    <option value="fonepay">{t('fonepay')}</option>
+                    <option value="bank_transfer">{t('bank')}</option>
+                    <option value="cheque">{currentLang() === 'ne' ? 'चेक' : 'Cheque'}</option>
                   </select>
                 </div>
               </div>
 
               <div>
-                <label class="block text-xs text-gray-600 dark:text-neutral-400 mb-1">Notes / Remarks</label>
+                <label class="block text-xs text-gray-600 dark:text-neutral-400 mb-1">{t('notes')}</label>
                 <input
                   type="text"
                   value={billNotes()}
                   onInput={(e) => setBillNotes(e.currentTarget.value)}
-                  placeholder="e.g., Delivery challan # or remarks"
+                  placeholder={currentLang() === 'ne' ? 'चलानी नं. वा कैफियत...' : 'e.g., Delivery challan # or remarks'}
                   class="w-full px-3 py-2 bg-gray-50 dark:bg-neutral-900 border border-gray-300 dark:border-neutral-800 rounded-lg text-gray-900 dark:text-white text-sm focus:outline-none focus:border-blue-500"
                 />
               </div>
@@ -693,13 +694,13 @@ export function PurchaseView() {
                   onClick={() => setShowBillModal(false)}
                   class="px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-neutral-900 dark:hover:bg-neutral-800 text-gray-700 dark:text-neutral-300 rounded-lg text-sm transition-colors"
                 >
-                  Cancel
+                  {t('cancel')}
                 </button>
                 <button
                   type="submit"
                   class="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-lg text-sm shadow-lg shadow-blue-900/30"
                 >
-                  Save Bill & Update Stock
+                  {t('save')}
                 </button>
               </div>
             </form>
@@ -712,7 +713,7 @@ export function PurchaseView() {
         <div class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div class="bg-white dark:bg-neutral-950 border border-gray-200 dark:border-neutral-800 rounded-2xl w-full max-w-md p-6 space-y-5 shadow-2xl">
             <div class="flex items-center justify-between">
-              <h2 class="text-lg font-bold text-gray-900 dark:text-white">Record Supplier Payment Out</h2>
+              <h2 class="text-lg font-bold text-gray-900 dark:text-white">{t('recordPaymentOut')}</h2>
               <button
                 onClick={() => setShowPaymentOutModal(false)}
                 class="text-gray-400 hover:text-gray-600 dark:text-neutral-400 dark:hover:text-white text-xl"
@@ -723,18 +724,18 @@ export function PurchaseView() {
 
             <form onSubmit={handleCreatePaymentOut} class="space-y-4">
               <div>
-                <label class="block text-xs text-gray-600 dark:text-neutral-400 mb-1">Select Supplier *</label>
+                <label class="block text-xs text-gray-600 dark:text-neutral-400 mb-1">{t('supplierSelect')} *</label>
                 <select
                   required
                   value={outPartyId()}
                   onChange={(e) => setOutPartyId(e.currentTarget.value)}
                   class="w-full px-3 py-2 bg-gray-50 dark:bg-neutral-900 border border-gray-300 dark:border-neutral-800 rounded-lg text-gray-900 dark:text-white text-sm focus:outline-none focus:border-blue-500"
                 >
-                  <option value="">-- Select Supplier --</option>
+                  <option value="">{currentLang() === 'ne' ? '-- साहुजी छान्नुहोस् --' : '-- Select Supplier --'}</option>
                   <For each={parties.filter((p) => p.partyType === 'supplier')}>
                     {(p) => (
                       <option value={p.id}>
-                        {p.name} (Balance: Rs. {p.currentBalance.toLocaleString()})
+                        {p.name} ({currentLang() === 'ne' ? 'बाँकी' : 'Balance'}: Rs. {p.currentBalance.toLocaleString()})
                       </option>
                     )}
                   </For>
@@ -742,7 +743,7 @@ export function PurchaseView() {
               </div>
 
               <div>
-                <label class="block text-xs text-gray-600 dark:text-neutral-400 mb-1">Amount (Rs.) *</label>
+                <label class="block text-xs text-gray-600 dark:text-neutral-400 mb-1">{t('amountPaid')} (Rs.) *</label>
                 <input
                   type="number"
                   required
@@ -756,21 +757,21 @@ export function PurchaseView() {
 
               <div class="grid grid-cols-2 gap-3">
                 <div>
-                  <label class="block text-xs text-gray-600 dark:text-neutral-400 mb-1">Payment Mode</label>
+                  <label class="block text-xs text-gray-600 dark:text-neutral-400 mb-1">{t('paymentMethod')}</label>
                   <select
                     value={outMode()}
                     onChange={(e) => setOutMode(e.currentTarget.value as PaymentMode)}
                     class="w-full px-3 py-2 bg-gray-50 dark:bg-neutral-900 border border-gray-300 dark:border-neutral-800 rounded-lg text-gray-900 dark:text-white text-sm focus:outline-none focus:border-blue-500"
                   >
-                    <option value="cash">Cash</option>
-                    <option value="fonepay">FonePay / QR</option>
-                    <option value="bank_transfer">Bank Transfer</option>
-                    <option value="cheque">Cheque</option>
+                    <option value="cash">{t('cash')}</option>
+                    <option value="fonepay">{t('fonepay')}</option>
+                    <option value="bank_transfer">{t('bank')}</option>
+                    <option value="cheque">{currentLang() === 'ne' ? 'चेक' : 'Cheque'}</option>
                   </select>
                 </div>
 
                 <div>
-                  <label class="block text-xs text-gray-600 dark:text-neutral-400 mb-1">Paid From Account</label>
+                  <label class="block text-xs text-gray-600 dark:text-neutral-400 mb-1">{t('fromAccount')}</label>
                   <select
                     value={outAccountId()}
                     onChange={(e) => setOutAccountId(e.currentTarget.value)}
@@ -788,7 +789,7 @@ export function PurchaseView() {
               </div>
 
               <div>
-                <label class="block text-xs text-gray-600 dark:text-neutral-400 mb-1">Date</label>
+                <label class="block text-xs text-gray-600 dark:text-neutral-400 mb-1">{t('date')}</label>
                 <input
                   type="date"
                   value={outDate()}
@@ -798,12 +799,12 @@ export function PurchaseView() {
               </div>
 
               <div>
-                <label class="block text-xs text-gray-600 dark:text-neutral-400 mb-1">Notes / Reference</label>
+                <label class="block text-xs text-gray-600 dark:text-neutral-400 mb-1">{t('notes')}</label>
                 <input
                   type="text"
                   value={outNotes()}
                   onInput={(e) => setOutNotes(e.currentTarget.value)}
-                  placeholder="e.g., Cheque # or Bank transfer ref"
+                  placeholder={currentLang() === 'ne' ? 'चेक नं. वा बैंक विवरण' : 'e.g., Cheque # or Bank transfer ref'}
                   class="w-full px-3 py-2 bg-gray-50 dark:bg-neutral-900 border border-gray-300 dark:border-neutral-800 rounded-lg text-gray-900 dark:text-white text-sm focus:outline-none focus:border-blue-500"
                 />
               </div>
@@ -814,13 +815,13 @@ export function PurchaseView() {
                   onClick={() => setShowPaymentOutModal(false)}
                   class="px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-neutral-900 dark:hover:bg-neutral-800 text-gray-700 dark:text-neutral-300 rounded-lg text-sm transition-colors"
                 >
-                  Cancel
+                  {t('cancel')}
                 </button>
                 <button
                   type="submit"
                   class="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-lg text-sm shadow-lg shadow-blue-900/30"
                 >
-                  Save Payment Out
+                  {t('save')}
                 </button>
               </div>
             </form>
@@ -833,7 +834,7 @@ export function PurchaseView() {
         <div class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div class="bg-white dark:bg-neutral-950 border border-gray-200 dark:border-neutral-800 rounded-2xl w-full max-w-2xl p-6 space-y-5 shadow-2xl max-h-[90vh] overflow-y-auto">
             <div class="flex items-center justify-between">
-              <h2 class="text-lg font-bold text-gray-900 dark:text-white">Create Purchase Return (Debit Note)</h2>
+              <h2 class="text-lg font-bold text-gray-900 dark:text-white">{t('newPurchaseReturn')}</h2>
               <button
                 onClick={() => setShowReturnModal(false)}
                 class="text-gray-400 hover:text-gray-600 dark:text-neutral-400 dark:hover:text-white text-xl"
@@ -844,7 +845,7 @@ export function PurchaseView() {
 
             <form onSubmit={handleCreateReturn} class="space-y-4">
               <div>
-                <label class="block text-xs text-gray-600 dark:text-neutral-400 mb-1">Supplier *</label>
+                <label class="block text-xs text-gray-600 dark:text-neutral-400 mb-1">{t('supplier')} *</label>
                 <select
                   required
                   value={returnSupplierName()}
@@ -855,7 +856,7 @@ export function PurchaseView() {
                   }}
                   class="w-full px-3 py-2 bg-gray-50 dark:bg-neutral-900 border border-gray-300 dark:border-neutral-800 rounded-lg text-gray-900 dark:text-white text-sm focus:outline-none focus:border-rose-500"
                 >
-                  <option value="">-- Select Supplier --</option>
+                  <option value="">{currentLang() === 'ne' ? '-- साहुजी छान्नुहोस् --' : '-- Select Supplier --'}</option>
                   <For each={parties.filter((p) => p.partyType === 'supplier')}>
                     {(p) => <option value={p.name}>{p.name}</option>}
                   </For>
@@ -865,13 +866,13 @@ export function PurchaseView() {
               {/* Items Table */}
               <div class="border border-gray-200 dark:border-neutral-800 rounded-xl p-3 bg-gray-50/70 dark:bg-neutral-900/40 space-y-3">
                 <div class="flex items-center justify-between">
-                  <span class="text-xs font-semibold text-gray-500 dark:text-neutral-400 uppercase tracking-wider">Returned Items</span>
+                  <span class="text-xs font-semibold text-gray-500 dark:text-neutral-400 uppercase tracking-wider">{currentLang() === 'ne' ? 'फिर्ता सामानहरू' : 'Returned Items'}</span>
                   <button
                     type="button"
                     onClick={addReturnItem}
                     class="px-2.5 py-1 bg-white dark:bg-neutral-800 hover:bg-gray-100 dark:hover:bg-neutral-700 text-gray-700 dark:text-neutral-200 rounded text-xs flex items-center gap-1 border border-gray-200 dark:border-transparent transition-colors"
                   >
-                    <IconPlus class="w-3.5 h-3.5" /> Add Item
+                    <IconPlus class="w-3.5 h-3.5" /> {currentLang() === 'ne' ? 'सामान थप्नुहोस्' : 'Add Item'}
                   </button>
                 </div>
 
@@ -891,14 +892,14 @@ export function PurchaseView() {
                           }}
                           class="flex-1 px-3 py-1.5 bg-white dark:bg-neutral-950 border border-gray-300 dark:border-neutral-800 rounded text-gray-900 dark:text-white text-xs"
                         >
-                          <option value="">-- Select Item --</option>
+                          <option value="">{currentLang() === 'ne' ? '-- सामान छान्नुहोस् --' : '-- Select Item --'}</option>
                           <For each={items}>
                             {(i) => <option value={i.name}>{i.name}</option>}
                           </For>
                         </select>
                         <input
                           type="number"
-                          placeholder="Qty"
+                          placeholder={t('qty')}
                           min="1"
                           required
                           value={it.quantity}
@@ -907,7 +908,7 @@ export function PurchaseView() {
                         />
                         <input
                           type="number"
-                          placeholder="Rate"
+                          placeholder={t('buyPrice')}
                           min="0"
                           required
                           value={it.costPrice}
@@ -932,14 +933,14 @@ export function PurchaseView() {
                 </div>
 
                 <div class="flex justify-end pt-2 border-t border-gray-200 dark:border-neutral-800 font-semibold text-gray-900 dark:text-white text-sm">
-                  <span>Total Returned:</span>
+                  <span>{currentLang() === 'ne' ? 'फिर्ता जम्मा:' : 'Total Returned:'}</span>
                   <span class="ml-3 text-rose-600 dark:text-rose-400 font-mono">Rs. {returnTotal().toLocaleString()}</span>
                 </div>
               </div>
 
               <div class="grid grid-cols-2 gap-3">
                 <div>
-                  <label class="block text-xs text-gray-600 dark:text-neutral-400 mb-1">Refund Received (Rs.)</label>
+                  <label class="block text-xs text-gray-600 dark:text-neutral-400 mb-1">{currentLang() === 'ne' ? 'फिर्ता प्राप्त रकम (रु.)' : 'Refund Received (Rs.)'}</label>
                   <input
                     type="number"
                     min="0"
@@ -950,12 +951,12 @@ export function PurchaseView() {
                   />
                 </div>
                 <div>
-                  <label class="block text-xs text-gray-600 dark:text-neutral-400 mb-1">Reason for Return</label>
+                  <label class="block text-xs text-gray-600 dark:text-neutral-400 mb-1">{currentLang() === 'ne' ? 'फिर्ताको कारण' : 'Reason for Return'}</label>
                   <input
                     type="text"
                     value={returnReason()}
                     onInput={(e) => setReturnReason(e.currentTarget.value)}
-                    placeholder="e.g., Damaged on arrival"
+                    placeholder={currentLang() === 'ne' ? 'कारण राख्नुहोस्' : 'e.g., Damaged on arrival'}
                     class="w-full px-3 py-2 bg-gray-50 dark:bg-neutral-900 border border-gray-300 dark:border-neutral-800 rounded-lg text-gray-900 dark:text-white text-sm focus:outline-none focus:border-rose-500"
                   />
                 </div>
@@ -967,13 +968,13 @@ export function PurchaseView() {
                   onClick={() => setShowReturnModal(false)}
                   class="px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-neutral-900 dark:hover:bg-neutral-800 text-gray-700 dark:text-neutral-300 rounded-lg text-sm transition-colors"
                 >
-                  Cancel
+                  {t('cancel')}
                 </button>
                 <button
                   type="submit"
                   class="px-5 py-2 bg-rose-600 hover:bg-rose-500 text-white font-medium rounded-lg text-sm shadow-lg shadow-rose-900/30"
                 >
-                  Issue Debit Note
+                  {t('save')}
                 </button>
               </div>
             </form>
@@ -987,7 +988,7 @@ export function PurchaseView() {
           <div class="bg-white dark:bg-neutral-950 border border-gray-200 dark:border-neutral-800 rounded-2xl w-full max-w-lg p-6 space-y-4 shadow-2xl">
             <div class="flex items-center justify-between border-b border-gray-200 dark:border-neutral-800 pb-3">
               <div>
-                <h3 class="text-base font-bold text-gray-900 dark:text-white">Purchase Bill Details</h3>
+                <h3 class="text-base font-bold text-gray-900 dark:text-white">{currentLang() === 'ne' ? 'खरिद बिल विवरण' : 'Purchase Bill Details'}</h3>
                 <p class="text-xs font-mono text-blue-600 dark:text-blue-400">{selectedBill()?.billNumber}</p>
               </div>
               <button
@@ -1000,20 +1001,20 @@ export function PurchaseView() {
 
             <div class="space-y-3 text-sm">
               <div class="flex justify-between">
-                <span class="text-gray-500 dark:text-neutral-400">Supplier:</span>
+                <span class="text-gray-500 dark:text-neutral-400">{t('supplier')}:</span>
                 <span class="text-gray-900 dark:text-white font-medium">{selectedBill()?.supplierName}</span>
               </div>
               <div class="flex justify-between">
-                <span class="text-gray-500 dark:text-neutral-400">Date:</span>
+                <span class="text-gray-500 dark:text-neutral-400">{t('date')}:</span>
                 <span class="text-gray-800 dark:text-neutral-200">{selectedBill()?.date}</span>
               </div>
               <div class="flex justify-between">
-                <span class="text-gray-500 dark:text-neutral-400">Payment Mode:</span>
+                <span class="text-gray-500 dark:text-neutral-400">{t('paymentMethod')}:</span>
                 <span class="text-gray-800 dark:text-neutral-200 uppercase font-mono">{selectedBill()?.paymentMode}</span>
               </div>
 
               <div class="border-t border-b border-gray-200 dark:border-neutral-800 py-2 space-y-1.5">
-                <div class="text-xs font-semibold text-gray-500 dark:text-neutral-400 uppercase">Items Inward</div>
+                <div class="text-xs font-semibold text-gray-500 dark:text-neutral-400 uppercase">{t('items')}</div>
                 <For each={selectedBill()?.items || []}>
                   {(it) => (
                     <div class="flex justify-between text-xs">
@@ -1028,15 +1029,15 @@ export function PurchaseView() {
 
               <div class="space-y-1 text-xs">
                 <div class="flex justify-between font-bold text-sm text-gray-900 dark:text-white pt-1">
-                  <span>Grand Total:</span>
+                  <span>{t('grandTotal')}:</span>
                   <span class="font-mono text-blue-600 dark:text-blue-400">Rs. {selectedBill()?.totalAmount?.toLocaleString()}</span>
                 </div>
                 <div class="flex justify-between text-gray-700 dark:text-neutral-300">
-                  <span>Paid:</span>
+                  <span>{t('paid')}:</span>
                   <span class="font-mono text-emerald-600 dark:text-emerald-400">Rs. {selectedBill()?.paidAmount?.toLocaleString()}</span>
                 </div>
                 <div class="flex justify-between text-gray-700 dark:text-neutral-300">
-                  <span>Due:</span>
+                  <span>{t('due')}:</span>
                   <span class="font-mono text-amber-600 dark:text-amber-400">Rs. {selectedBill()?.dueAmount?.toLocaleString()}</span>
                 </div>
               </div>
@@ -1047,7 +1048,7 @@ export function PurchaseView() {
                 onClick={() => setSelectedBill(null)}
                 class="px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-gray-900 dark:text-white rounded-lg text-sm transition-colors"
               >
-                Close
+                {t('close')}
               </button>
             </div>
           </div>
