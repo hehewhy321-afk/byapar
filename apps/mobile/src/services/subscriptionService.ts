@@ -1,5 +1,4 @@
 import { Linking } from 'react-native';
-import CryptoJS from 'crypto-js';
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '../config/supabase';
 
 export interface MobileSubscriptionPlan {
@@ -306,137 +305,49 @@ export interface MobileEsewaPaymentSession {
 
 /**
  * Initiates an industrial-grade eSewa payment on Mobile:
- * 1. Generates unique transaction UUID
- * 2. Pre-inserts pending transaction into `subscription_transactions` for live admin audit
- * 3. Generates HMAC SHA256 signature
- * 4. Generates an auto-submitting POST HTML form to reliably render eSewa payment screen in WebView
+ * - Confidential keys & signatures remain 100% inside Supabase Secrets (Backend)
+ * - Server verifies authoritative plan pricing and promo codes
+ * - Returns pre-signed auto-submitting POST HTML form for in-app WebView
  */
 export async function initiateMobileEsewaPayment(params: {
   businessId: string;
   businessName: string;
   planId: string;
   billingCycle: 'monthly' | 'annual';
-  amount: number;
+  amount?: number;
   promoCode?: string;
   discountAmount?: number;
 }): Promise<MobileEsewaPaymentSession> {
-  const transactionUuid = `BYAPAR-MOB-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
-  const productCode = 'EPAYTEST';
-  const totalAmount = params.amount.toString();
-  const secretKey = '8gBm/:&EnhH.1/q';
-
-  // 1. Pre-log pending transaction in Supabase
-  try {
-    await supabase.from('subscription_transactions').insert({
+  const edgeFunctionUrl = `${SUPABASE_URL}/functions/v1/esewa-verify`;
+  const response = await fetch(edgeFunctionUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+    },
+    body: JSON.stringify({
+      action: 'initiate',
       business_id: params.businessId,
-      business_name: params.businessName || 'Mobile App Store',
-      plan_tier: params.planId,
+      plan_id: params.planId,
       billing_cycle: params.billingCycle,
-      gateway: 'esewa_mobile',
-      amount: params.amount,
-      currency: 'NPR',
-      transaction_uuid: transactionUuid,
-      promo_code: params.promoCode || null,
-      discount_amount: params.discountAmount || 0,
-      status: 'pending',
-      gateway_response: {
-        initiated_at: new Date().toISOString(),
-        platform: 'mobile_app',
-      },
-    });
-  } catch (txErr) {
-    console.warn('Pre-logging transaction error (non-fatal):', txErr);
+      promo_code: params.promoCode,
+      platform: 'mobile',
+    }),
+  });
+
+  const res = await response.json();
+  if (!response.ok || !res.success) {
+    throw new Error(res.error || 'Failed to initiate secure eSewa payment session');
   }
 
-  // 2. Generate eSewa v2 signature
-  const message = `total_amount=${totalAmount},transaction_uuid=${transactionUuid},product_code=${productCode}`;
-  const signature = CryptoJS.HmacSHA256(message, secretKey).toString(CryptoJS.enc.Base64);
-
-  // Return URLs for WebView & DeepLinks (without query params so eSewa appends ?data cleanly)
-  const successUrl = `https://byapar.app/esewa-success`;
-  const failureUrl = `https://byapar.app/esewa-failure`;
-  const actionUrl = 'https://rc-epay.esewa.com.np/api/epay/main/v2/form';
-
-  const formUrl = `${actionUrl}?amount=${totalAmount}&tax_amount=0&total_amount=${totalAmount}&transaction_uuid=${encodeURIComponent(
-    transactionUuid
-  )}&product_code=${productCode}&product_service_charge=0&product_delivery_charge=0&success_url=${encodeURIComponent(
-    successUrl
-  )}&failure_url=${encodeURIComponent(
-    failureUrl
-  )}&signed_field_names=total_amount,transaction_uuid,product_code&signature=${encodeURIComponent(signature)}`;
-
-  // eSewa ePay v2 requires HTTP POST with form fields.
-  // Rendering an auto-submitting HTML form in WebView ensures the real eSewa credentials & login screen displays reliably.
-  const htmlForm = `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Connecting to eSewa...</title>
-  <style>
-    body {
-      margin: 0;
-      padding: 0;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      height: 100vh;
-      background: #020617;
-      color: #FFFFFF;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    }
-    .spinner {
-      width: 44px;
-      height: 44px;
-      border: 4px solid rgba(96, 187, 70, 0.2);
-      border-top-color: #60BB46;
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-    }
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
-    h3 { margin-top: 18px; font-size: 16px; font-weight: 700; color: #FFFFFF; }
-    p { margin-top: 6px; font-size: 12px; color: #94A3B8; text-align: center; max-width: 260px; }
-  </style>
-</head>
-<body>
-  <div class="spinner"></div>
-  <h3>Connecting to eSewa Nepal</h3>
-  <p>Loading secure payment portal. Please do not close...</p>
-
-  <form id="esewaPaymentForm" method="POST" action="${actionUrl}">
-    <input type="hidden" name="amount" value="${totalAmount}" />
-    <input type="hidden" name="tax_amount" value="0" />
-    <input type="hidden" name="total_amount" value="${totalAmount}" />
-    <input type="hidden" name="transaction_uuid" value="${transactionUuid}" />
-    <input type="hidden" name="product_code" value="${productCode}" />
-    <input type="hidden" name="product_service_charge" value="0" />
-    <input type="hidden" name="product_delivery_charge" value="0" />
-    <input type="hidden" name="success_url" value="${successUrl}" />
-    <input type="hidden" name="failure_url" value="${failureUrl}" />
-    <input type="hidden" name="signed_field_names" value="total_amount,transaction_uuid,product_code" />
-    <input type="hidden" name="signature" value="${signature}" />
-  </form>
-
-  <script>
-    document.addEventListener("DOMContentLoaded", function() {
-      setTimeout(function() {
-        document.getElementById("esewaPaymentForm").submit();
-      }, 100);
-    });
-  </script>
-</body>
-</html>`;
-
   return {
-    formUrl,
-    htmlForm,
-    transactionUuid,
-    amount: params.amount,
-    planId: params.planId,
-    billingCycle: params.billingCycle,
+    formUrl: res.action_url || '',
+    htmlForm: res.html_form || '',
+    transactionUuid: res.transaction_uuid || '',
+    amount: res.amount ?? (params.amount || 0),
+    planId: res.plan_id || params.planId,
+    billingCycle: res.billing_cycle || params.billingCycle,
   };
 }
 

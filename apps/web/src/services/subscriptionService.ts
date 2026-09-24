@@ -264,34 +264,18 @@ export async function getBusinessSubscription(businessId: string): Promise<Busin
   };
 }
 
-export async function generateEsewaSignature(message: string, secretKey: string = '8gBm/:&EnhH.1/q'): Promise<string> {
-  const encoder = new TextEncoder();
-  const keyData = encoder.encode(secretKey);
-  const messageData = encoder.encode(message);
-
-  const cryptoKey = await crypto.subtle.importKey(
-    'raw',
-    keyData,
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign']
-  );
-
-  const signatureBuffer = await crypto.subtle.sign('HMAC', cryptoKey, messageData);
-  const hashArray = Array.from(new Uint8Array(signatureBuffer));
-  let binary = '';
-  for (let i = 0; i < hashArray.length; i++) {
-    binary += String.fromCharCode(hashArray[i]);
-  }
-  return btoa(binary);
-}
-
 export interface EsewaPaymentInitiation {
   actionUrl: string;
   fields: Record<string, string>;
   transactionUuid: string;
 }
 
+/**
+ * Initiates an industrial-grade eSewa payment:
+ * - Confidential secrets & HMAC-SHA256 signatures are securely isolated in Supabase Secrets (Backend)
+ * - Server validates authoritative plan price & promo discounts to prevent client tampering
+ * - Server returns pre-signed form fields for direct gateway POST submission
+ */
 export async function initiateEsewaPayment(params: {
   businessId: string;
   businessName: string;
@@ -302,100 +286,52 @@ export async function initiateEsewaPayment(params: {
   autoSubmit?: boolean;
 }): Promise<{ success: boolean; data?: EsewaPaymentInitiation; error?: string }> {
   try {
-    const plans = await fetchSubscriptionPlans();
-    const plan = plans.find((p) => p.id === params.planId);
-    if (!plan) throw new Error('Selected plan does not exist');
-
-    const basePrice = params.billingCycle === 'annual' ? plan.annual_price : plan.monthly_price;
-    let finalPrice = basePrice;
-    let promoData: PromoValidationResult | null = null;
-
-    if (params.promoCode) {
-      promoData = await validatePromoCode(params.promoCode, params.planId, basePrice);
-      if (promoData.valid) {
-        finalPrice = promoData.finalPrice;
-      }
-    }
-
-    if (finalPrice <= 0) {
-      // If 100% discount, activate directly
-      const upg = await upgradeBusinessSubscription({
-        businessId: params.businessId,
-        planId: params.planId,
-        billingCycle: params.billingCycle,
-        userId: params.userId,
-        promoCode: params.promoCode,
-      });
-      return { success: upg.success, error: upg.error };
-    }
-
-    const transactionUuid = `SUB-${params.businessId.slice(0, 8)}-${Date.now()}`;
-    const productCode = 'EPAYTEST'; // eSewa standard UAT merchant code
-    const totalAmount = finalPrice.toString();
-
-    // Insert pending transaction in Supabase
-    await supabase.from('subscription_transactions').insert({
-      business_id: params.businessId,
-      business_name: params.businessName,
-      plan_tier: params.planId,
-      billing_cycle: params.billingCycle,
-      gateway: 'esewa',
-      amount: finalPrice,
-      currency: 'NPR',
-      transaction_uuid: transactionUuid,
-      promo_code: promoData?.code || null,
-      discount_amount: promoData?.discountAmount || 0,
-      status: 'pending',
+    const { data: initRes, error: initErr } = await supabase.functions.invoke('esewa-verify', {
+      body: {
+        action: 'initiate',
+        business_id: params.businessId,
+        plan_id: params.planId,
+        billing_cycle: params.billingCycle,
+        promo_code: params.promoCode,
+        platform: 'web',
+        origin: window.location.origin,
+      },
     });
+
+    if (initErr || !initRes || !initRes.success) {
+      throw new Error(initRes?.error || initErr?.message || 'Could not initiate secure eSewa payment');
+    }
+
+    if (initRes.freeActivated) {
+      return { success: true };
+    }
 
     // Save pending intent in localStorage for safe resume or cancellation
     localStorage.setItem(
       'byapar_pending_subscription_tx',
       JSON.stringify({
-        transactionUuid,
+        transactionUuid: initRes.transaction_uuid,
         planId: params.planId,
-        planName: plan.name,
+        planName: initRes.plan_name,
         billingCycle: params.billingCycle,
         businessId: params.businessId,
-        amount: finalPrice,
+        amount: initRes.amount,
         initiatedAt: new Date().toISOString(),
       })
     );
 
-    // Build signature message
-    const message = `total_amount=${totalAmount},transaction_uuid=${transactionUuid},product_code=${productCode}`;
-    const signature = await generateEsewaSignature(message, '8gBm/:&EnhH.1/q');
-
-    const successUrl = `${window.location.origin}/?payment=esewa_success`;
-    const failureUrl = `${window.location.origin}/?payment=esewa_failure`;
-    const actionUrl = 'https://rc-epay.esewa.com.np/api/epay/main/v2/form';
-
-    const fields: Record<string, string> = {
-      amount: totalAmount,
-      tax_amount: '0',
-      total_amount: totalAmount,
-      transaction_uuid: transactionUuid,
-      product_code: productCode,
-      product_service_charge: '0',
-      product_delivery_charge: '0',
-      success_url: successUrl,
-      failure_url: failureUrl,
-      signed_field_names: 'total_amount,transaction_uuid,product_code',
-      signature: signature,
-    };
-
     // Auto submit form to eSewa Payment Gateway unless explicitly suppressed
-    if (params.autoSubmit !== false) {
+    if (params.autoSubmit !== false && initRes.fields && initRes.action_url) {
       const form = document.createElement('form');
       form.setAttribute('method', 'POST');
-      form.setAttribute('action', actionUrl);
+      form.setAttribute('action', initRes.action_url);
       form.setAttribute('style', 'display: none;');
 
-      for (const [key, value] of Object.entries(fields)) {
+      for (const [key, value] of Object.entries(initRes.fields)) {
         const input = document.createElement('input');
         input.setAttribute('type', 'hidden');
         input.setAttribute('name', key);
-        input.setAttribute('value', value);
+        input.setAttribute('value', String(value));
         form.appendChild(input);
       }
 
@@ -406,9 +342,9 @@ export async function initiateEsewaPayment(params: {
     return {
       success: true,
       data: {
-        actionUrl,
-        fields,
-        transactionUuid,
+        actionUrl: initRes.action_url,
+        fields: initRes.fields,
+        transactionUuid: initRes.transaction_uuid,
       },
     };
   } catch (err: any) {
