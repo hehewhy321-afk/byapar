@@ -43,10 +43,11 @@ import {
   IconBell,
 } from '../icons';
 import { unreadNotificationCount } from '../../services/notificationService';
+import { t } from '../../services/i18n';
 
 interface NavItemProps {
   icon: Component<{ class?: string }>;
-  label: string;
+  label: string | (() => string);
   tab: ActiveTab;
   isCollapsed?: boolean;
   onNavigate?: () => void;
@@ -55,12 +56,13 @@ interface NavItemProps {
 
 const NavItem: Component<NavItemProps> = (props) => {
   const isActive = () => activeTab() === props.tab;
+  const labelText = () => (typeof props.label === 'function' ? props.label() : props.label);
   return (
     <button
       class={`nav-item w-full ${
         isActive() ? 'active !bg-[#FF4500] !text-white shadow-md shadow-[#FF4500]/25' : ''
       } ${props.isCollapsed ? 'justify-center !px-0' : ''}`}
-      title={props.isCollapsed ? props.label : undefined}
+      title={props.isCollapsed ? labelText() : undefined}
       onClick={() => {
         setActiveTab(props.tab);
         if (props.onNavigate) props.onNavigate();
@@ -68,7 +70,7 @@ const NavItem: Component<NavItemProps> = (props) => {
     >
       <props.icon class="w-[18px] h-[18px] shrink-0" />
       <Show when={!props.isCollapsed}>
-        <span class="truncate flex-1 text-left">{props.label}</span>
+        <span class="truncate flex-1 text-left">{labelText()}</span>
         <Show when={props.badge && props.badge > 0}>
           <span class="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-rose-500 text-white shrink-0">
             {props.badge}
@@ -248,88 +250,88 @@ export const Sidebar: Component = () => {
         <nav class="flex-1 overflow-y-auto py-2 px-2 space-y-0.5 relative">
           {/* Personal Section */}
           <Show when={!isSidebarCollapsed() || isMobileSidebarOpen()}>
-            <div class="nav-section">Personal</div>
+            <div class="nav-section">{t('personal')}</div>
           </Show>
           <NavItem
             icon={IconDashboard}
-            label="Dashboard"
+            label={() => t('dashboard')}
             tab="dashboard"
             isCollapsed={isSidebarCollapsed() && !isMobileSidebarOpen()}
             onNavigate={closeMobileSidebar}
           />
           <NavItem
             icon={IconSales}
-            label="Sales"
+            label={() => t('sales')}
             tab="sales"
             isCollapsed={isSidebarCollapsed() && !isMobileSidebarOpen()}
             onNavigate={closeMobileSidebar}
           />
           <NavItem
             icon={IconPurchase}
-            label="Purchase"
+            label={() => t('purchase')}
             tab="purchase"
             isCollapsed={isSidebarCollapsed() && !isMobileSidebarOpen()}
             onNavigate={closeMobileSidebar}
           />
           <NavItem
             icon={IconPos}
-            label="POS Billing"
+            label={() => t('pos')}
             tab="pos"
             isCollapsed={isSidebarCollapsed() && !isMobileSidebarOpen()}
             onNavigate={closeMobileSidebar}
           />
           <NavItem
             icon={IconKhata}
-            label="Parties"
+            label={() => t('parties')}
             tab="khata"
             isCollapsed={isSidebarCollapsed() && !isMobileSidebarOpen()}
             onNavigate={closeMobileSidebar}
           />
           <NavItem
             icon={IconInventory}
-            label="Inventory"
+            label={() => t('inventory')}
             tab="inventory"
             isCollapsed={isSidebarCollapsed() && !isMobileSidebarOpen()}
             onNavigate={closeMobileSidebar}
           />
           <NavItem
             icon={IconBillGallery}
-            label="Bill Gallery"
+            label={() => t('billGallery')}
             tab="bill-gallery"
             isCollapsed={isSidebarCollapsed() && !isMobileSidebarOpen()}
             onNavigate={closeMobileSidebar}
           />
           <NavItem
             icon={IconExpense}
-            label="Expenses"
+            label={() => t('expenses')}
             tab="expense"
             isCollapsed={isSidebarCollapsed() && !isMobileSidebarOpen()}
             onNavigate={closeMobileSidebar}
           />
           <NavItem
             icon={IconIncome}
-            label="Income"
+            label={() => t('income')}
             tab="income"
             isCollapsed={isSidebarCollapsed() && !isMobileSidebarOpen()}
             onNavigate={closeMobileSidebar}
           />
           <NavItem
             icon={IconAccounts}
-            label="Manage Accounts"
+            label={() => t('accounts')}
             tab="accounts"
             isCollapsed={isSidebarCollapsed() && !isMobileSidebarOpen()}
             onNavigate={closeMobileSidebar}
           />
           <NavItem
             icon={IconStaff}
-            label="Manage Staff"
+            label={() => t('staff')}
             tab="staff"
             isCollapsed={isSidebarCollapsed() && !isMobileSidebarOpen()}
             onNavigate={closeMobileSidebar}
           />
           <NavItem
             icon={IconReports}
-            label="Reports"
+            label={() => t('reports')}
             tab="reports"
             isCollapsed={isSidebarCollapsed() && !isMobileSidebarOpen()}
             onNavigate={closeMobileSidebar}
@@ -337,7 +339,7 @@ export const Sidebar: Component = () => {
 
           {/* Others Section */}
           <Show when={!isSidebarCollapsed() || isMobileSidebarOpen()}>
-            <div class="nav-section">Others</div>
+            <div class="nav-section">{t('others')}</div>
           </Show>
 
           {/* Useful Tools - Collapsible / Flyout */}
@@ -471,7 +473,7 @@ export const Sidebar: Component = () => {
 
           <NavItem
             icon={IconSettings}
-            label="Settings"
+            label={() => t('settings')}
             tab="settings"
             isCollapsed={isSidebarCollapsed() && !isMobileSidebarOpen()}
             onNavigate={closeMobileSidebar}

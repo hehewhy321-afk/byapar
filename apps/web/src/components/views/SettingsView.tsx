@@ -441,11 +441,15 @@ export const SettingsView: Component = () => {
             </div>
             <div class="flex items-center justify-between border-t border-gray-100 dark:border-neutral-800 pt-3">
               <div>
-                <p class="text-sm text-gray-700 dark:text-neutral-200">Language</p>
-                <p class="text-xs text-gray-400 dark:text-neutral-500">Currently: {settings.lang === 'en' ? 'English' : 'Nepali'}</p>
+                <p class="text-sm font-medium text-gray-700 dark:text-neutral-200">
+                  {settings.lang === 'ne' ? 'भाषा (Language)' : 'Language'}
+                </p>
+                <p class="text-xs text-gray-400 dark:text-neutral-500">
+                  {settings.lang === 'ne' ? 'हाल: नेपाली (सजिलो भाषा)' : 'Currently: English'}
+                </p>
               </div>
-              <button class="btn-outline text-xs" onClick={toggleLang}>
-                Switch to {settings.lang === 'en' ? 'Nepali' : 'English'}
+              <button class="btn-outline text-xs font-semibold" onClick={toggleLang}>
+                {settings.lang === 'en' ? '🇳🇵 नेपालीमा बदल्नुहोस्' : '🇬🇧 Switch to English'}
               </button>
             </div>
           </div>

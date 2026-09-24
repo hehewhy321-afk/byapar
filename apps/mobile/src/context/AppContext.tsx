@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import {
   Product,
   Party,
@@ -32,7 +32,7 @@ import { supabase } from '../config/supabase';
 import { User } from '@supabase/supabase-js';
 import { updateService } from '../services/updateService';
 import { requestNotificationPermission } from '../services/notificationService';
-import { adToBs, getNepaliFiscalYear } from '@byapar/core';
+import { adToBs, getNepaliFiscalYear, Language, TranslationDict, getTranslation } from '@byapar/core';
 
 const DEFAULT_BIZ_ID = 'a0000000-0000-0000-0000-000000000001';
 
@@ -69,6 +69,10 @@ interface AppContextType {
   theme: Theme;
   setThemeMode: (mode: ThemeMode) => Promise<void>;
   toggleThemeMode: () => Promise<void>;
+  language: Language;
+  setLanguage: (lang: Language) => Promise<void>;
+  toggleLanguage: () => Promise<void>;
+  t: (key: keyof TranslationDict, fallback?: string) => string;
   store: StoreProfile;
   updateStoreProfile: (updates: Partial<StoreProfile>) => Promise<void>;
   completeOnboarding: (storeData: StoreProfile) => Promise<void>;
@@ -432,6 +436,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const [themeMode, setThemeModeState] = useState<ThemeMode>('dark');
+  const [language, setLanguageState] = useState<Language>('ne');
 
   // Cloud Auth
   const [user, setUser] = useState<User | null>(null);
@@ -1081,6 +1086,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // 1. Read cached local state for instant start
       const storedOnboarded = await storage.get<boolean>('onboarded', true);
       const storedTheme = await storage.get<ThemeMode>('theme_mode', 'dark');
+      const storedLang = await storage.get<Language>('app_language', 'ne');
       const storedStore = await storage.get<StoreProfile>('store', INITIAL_STORE);
       const storedBizId = await storage.get<string>('active_biz_id', DEFAULT_BIZ_ID);
       const storedStores = await storage.get<UserStoreItem[]>('user_stores', []);
@@ -1110,6 +1116,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       setIsOnboarded(storedOnboarded);
       setThemeModeState(storedTheme === 'light' ? 'light' : 'dark');
+      setLanguageState(storedLang === 'en' ? 'en' : 'ne');
       setStore(storedStore);
       setActiveBizId(storedBizId);
       if (storedStores && storedStores.length > 0) {
@@ -1438,6 +1445,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const nextMode = themeMode === 'dark' ? 'light' : 'dark';
     await setThemeMode(nextMode);
   };
+
+  const setLanguage = async (lang: Language) => {
+    setLanguageState(lang);
+    await storage.set('app_language', lang);
+  };
+
+  const toggleLanguage = async () => {
+    const nextLang = language === 'ne' ? 'en' : 'ne';
+    await setLanguage(nextLang);
+  };
+
+  const t = useCallback(
+    (key: keyof TranslationDict, fallback?: string): string => {
+      return getTranslation(language, key, fallback);
+    },
+    [language]
+  );
 
   const activeTheme = getTheme(themeMode);
 
@@ -2602,6 +2626,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         theme: activeTheme,
         setThemeMode,
         toggleThemeMode,
+        language,
+        setLanguage,
+        toggleLanguage,
+        t,
         store,
         updateStoreProfile,
         completeOnboarding,

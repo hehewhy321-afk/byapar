@@ -99,7 +99,7 @@ export const TopBar: Component = () => {
             <input
               type="text"
               readonly
-              placeholder="Search or create anything..."
+              placeholder={settings.lang === 'ne' ? 'सामान, खाता वा कारोबार खोज्नुहोस्...' : 'Search or create anything...'}
               class="flex-1 bg-transparent text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-neutral-500 outline-none cursor-pointer"
             />
             <kbd class="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded border border-gray-200 dark:border-neutral-800 bg-white dark:bg-black text-[10px] font-medium text-gray-400 dark:text-neutral-400">

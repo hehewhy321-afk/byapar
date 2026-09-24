@@ -8,7 +8,7 @@ import { AnimatedPressable } from './AnimatedPressable';
 const { width } = Dimensions.get('window');
 
 export const TabBar: React.FC = () => {
-  const { activeTab, setActiveTab, cart, theme, themeMode } = useApp();
+  const { activeTab, setActiveTab, cart, theme, themeMode, language, t } = useApp();
   const [showMoreModal, setShowMoreModal] = useState(false);
 
   const isDark = themeMode === 'dark';
@@ -20,11 +20,11 @@ export const TabBar: React.FC = () => {
     icon: keyof typeof Feather.glyphMap;
     badge?: number;
   }[] = [
-    { key: 'dashboard', label: 'Home', icon: 'home' },
-    { key: 'sales', label: 'Sales Hub', icon: 'trending-up' },
-    { key: 'bills', label: 'Bills Archive', icon: 'archive' },
-    { key: 'expenses', label: 'Expenses', icon: 'dollar-sign' },
-    { key: 'more', label: 'More', icon: 'grid' },
+    { key: 'dashboard', label: t('home'), icon: 'home' },
+    { key: 'sales', label: t('sales'), icon: 'trending-up' },
+    { key: 'bills', label: t('billsArchive'), icon: 'archive' },
+    { key: 'expenses', label: t('expenses'), icon: 'dollar-sign' },
+    { key: 'more', label: t('more'), icon: 'grid' },
   ];
 
   // Secondary tabs inside "More" modal
@@ -38,64 +38,64 @@ export const TabBar: React.FC = () => {
   }[] = [
     {
       key: 'pos',
-      label: 'POS Billing',
-      sub: 'Fast barcode & cash register',
+      label: t('pos'),
+      sub: language === 'ne' ? 'छिटो बारकोड र नगद बिलिङ' : 'Fast barcode & cash register',
       icon: 'shopping-bag',
       color: '#FF4500',
       bg: 'rgba(255, 69, 0, 0.14)',
     },
     {
       key: 'ledger',
-      label: 'Customer Ledger',
-      sub: 'Parties, credit & udharo khata',
+      label: t('ledger'),
+      sub: language === 'ne' ? 'ग्राहक, साहुजी र उधारो खाता' : 'Parties, credit & udharo khata',
       icon: 'book-open',
       color: '#3B82F6',
       bg: 'rgba(59, 130, 246, 0.14)',
     },
     {
       key: 'inventory',
-      label: 'Stock & Inventory',
-      sub: 'Products, catalog & low stock',
+      label: t('inventory'),
+      sub: language === 'ne' ? 'सामान, मूल्य र कम स्टक' : 'Products, catalog & low stock',
       icon: 'box',
       color: '#F59E0B',
       bg: 'rgba(245, 158, 11, 0.14)',
     },
     {
       key: 'purchase',
-      label: 'Purchase Hub',
-      sub: 'Bills, Payments Out, Returns',
+      label: t('purchaseHub'),
+      sub: language === 'ne' ? 'खरिद बिल र भुक्तानी हिसाब' : 'Bills, Payments Out, Returns',
       icon: 'truck',
       color: '#EF4444',
       bg: 'rgba(239, 68, 68, 0.14)',
     },
     {
       key: 'accounts',
-      label: 'Bank Accounts',
-      sub: 'Cash, Banks & Transfers',
+      label: t('accounts'),
+      sub: language === 'ne' ? 'नगद, बैंक तथा ट्रान्सफर' : 'Cash, Banks & Transfers',
       icon: 'credit-card',
       color: '#A855F7',
       bg: 'rgba(168, 85, 247, 0.14)',
     },
     {
       key: 'staff',
-      label: 'Staff & Roles',
-      sub: 'Permissions & Team',
+      label: t('staff'),
+      sub: language === 'ne' ? 'कर्मचारी र पहुँच अनुमति' : 'Permissions & Team',
       icon: 'users',
       color: '#0EA5E9',
       bg: 'rgba(14, 165, 233, 0.14)',
     },
     {
       key: 'reports',
-      label: 'Reports & P&L',
-      sub: 'Statements, Daybook, VAT',
+      label: t('reports'),
+      sub: language === 'ne' ? 'दैनिक हिसाब, नाफा र भ्याट' : 'Statements, Daybook, VAT',
       icon: 'bar-chart-2',
       color: '#EC4899',
       bg: 'rgba(236, 72, 153, 0.14)',
     },
     {
       key: 'settings',
-      label: 'Settings',
-      sub: 'Store profile, theme & print',
+      label: t('settings'),
+      sub: language === 'ne' ? 'पसल विवरण, भाषा र प्रिन्ट' : 'Store profile, language & print',
       icon: 'settings',
       color: '#6B7280',
       bg: 'rgba(107, 114, 128, 0.14)',
@@ -218,10 +218,10 @@ export const TabBar: React.FC = () => {
             <View style={styles.sheetHeader}>
               <View>
                 <Text style={[styles.sheetTitle, { color: theme.colors.textPrimary }]}>
-                  All Modules & Tools
+                  {language === 'ne' ? 'सबै सेवा तथा मोड्युलहरू' : 'All Modules & Tools'}
                 </Text>
                 <Text style={[styles.sheetSubtitle, { color: theme.colors.textSecondary }]}>
-                  Quick navigation to all business features
+                  {language === 'ne' ? 'व्यापारका सबै सुविधाहरू' : 'Quick navigation to all business features'}
                 </Text>
               </View>
               <TouchableOpacity

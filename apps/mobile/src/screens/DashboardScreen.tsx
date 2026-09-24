@@ -31,6 +31,8 @@ export const DashboardScreen: React.FC = () => {
     addLedgerEntry,
     cart,
     user,
+    language,
+    t,
   } = useApp();
 
   const [refreshing, setRefreshing] = useState(false);
@@ -210,7 +212,7 @@ export const DashboardScreen: React.FC = () => {
           >
             <View style={styles.cardHeaderRow}>
               <Text style={[styles.cardLabel, { color: isDark ? '#9CA3AF' : '#166534' }]}>
-                TO RECEIVE
+                {language === 'ne' ? 'लिन बाँकी' : 'TO RECEIVE'}
               </Text>
               <View style={[styles.iconBox, { backgroundColor: 'rgba(16, 185, 129, 0.15)' }]}>
                 <Feather name="arrow-down-left" size={16} color="#10B981" />
@@ -220,7 +222,9 @@ export const DashboardScreen: React.FC = () => {
               Rs. {metrics.toReceive.toLocaleString()}
             </Text>
             <Text style={[styles.cardFootnote, { color: theme.colors.textMuted }]}>
-              From {parties.filter((p) => p.balance > 0).length} customers
+              {language === 'ne'
+                ? `${parties.filter((p) => p.balance > 0).length} जना ग्राहकबाट`
+                : `From ${parties.filter((p) => p.balance > 0).length} customers`}
             </Text>
           </TouchableOpacity>
 
@@ -239,7 +243,7 @@ export const DashboardScreen: React.FC = () => {
           >
             <View style={styles.cardHeaderRow}>
               <Text style={[styles.cardLabel, { color: isDark ? '#9CA3AF' : '#991B1B' }]}>
-                TO PAY
+                {language === 'ne' ? 'तिर्न बाँकी' : 'TO PAY'}
               </Text>
               <View style={[styles.iconBox, { backgroundColor: 'rgba(239, 68, 68, 0.15)' }]}>
                 <Feather name="arrow-up-right" size={16} color="#EF4444" />
@@ -249,7 +253,9 @@ export const DashboardScreen: React.FC = () => {
               Rs. {metrics.toGive.toLocaleString()}
             </Text>
             <Text style={[styles.cardFootnote, { color: theme.colors.textMuted }]}>
-              To {parties.filter((p) => p.balance < 0).length} suppliers
+              {language === 'ne'
+                ? `${parties.filter((p) => p.balance < 0).length} जना साहुजीलाई`
+                : `To ${parties.filter((p) => p.balance < 0).length} suppliers`}
             </Text>
           </TouchableOpacity>
         </View>
@@ -271,7 +277,7 @@ export const DashboardScreen: React.FC = () => {
           >
             <View style={styles.cardHeaderRow}>
               <Text style={[styles.cardLabel, { color: theme.colors.textSecondary }]}>
-                TOTAL SALES
+                {language === 'ne' ? 'कुल बिक्री' : 'TOTAL SALES'}
               </Text>
               <View style={[styles.iconBox, { backgroundColor: 'rgba(255, 69, 0, 0.12)' }]}>
                 <Feather name="shopping-bag" size={16} color={theme.colors.primary} />
@@ -281,7 +287,9 @@ export const DashboardScreen: React.FC = () => {
               Rs. {metrics.totalSales.toLocaleString()}
             </Text>
             <Text style={[styles.cardFootnote, { color: theme.colors.textMuted }]}>
-              {invoices.length} invoices generated
+              {language === 'ne'
+                ? `${invoices.length} वटा बिल काटिएको`
+                : `${invoices.length} invoices generated`}
             </Text>
           </TouchableOpacity>
 
@@ -300,7 +308,7 @@ export const DashboardScreen: React.FC = () => {
           >
             <View style={styles.cardHeaderRow}>
               <Text style={[styles.cardLabel, { color: theme.colors.textSecondary }]}>
-                CASH & BANK
+                {language === 'ne' ? 'नगद तथा बैंक' : 'CASH & BANK'}
               </Text>
               <View style={[styles.iconBox, { backgroundColor: 'rgba(14, 165, 233, 0.15)' }]}>
                 <Feather name="credit-card" size={16} color="#0EA5E9" />
@@ -310,14 +318,16 @@ export const DashboardScreen: React.FC = () => {
               Rs. {metrics.totalBalance.toLocaleString()}
             </Text>
             <Text style={[styles.cardFootnote, { color: theme.colors.textMuted }]}>
-              {accounts.length} active accounts
+              {language === 'ne'
+                ? `${accounts.length} वटा खाताहरू`
+                : `${accounts.length} active accounts`}
             </Text>
           </TouchableOpacity>
         </View>
 
         {/* QUICK SHORTCUTS BENTO TILES */}
         <Text style={[styles.sectionTitle, { color: theme.colors.textPrimary }]}>
-          Quick Actions & Operations
+          {language === 'ne' ? 'द्रुत कार्य तथा कारोबार' : 'Quick Actions & Operations'}
         </Text>
         <View style={styles.shortcutGrid}>
           <TouchableOpacity
@@ -335,10 +345,10 @@ export const DashboardScreen: React.FC = () => {
               <Feather name="shopping-cart" size={20} color={theme.colors.primary} />
             </View>
             <Text style={[styles.shortcutTitle, { color: theme.colors.textPrimary }]}>
-              POS Billing
+              {t('pos')}
             </Text>
             <Text style={[styles.shortcutDesc, { color: theme.colors.textMuted }]}>
-              Fast checkout
+              {language === 'ne' ? 'छिटो बिल काट्ने' : 'Fast checkout'}
             </Text>
           </TouchableOpacity>
 
@@ -357,10 +367,10 @@ export const DashboardScreen: React.FC = () => {
               <Feather name="book-open" size={20} color="#10B981" />
             </View>
             <Text style={[styles.shortcutTitle, { color: theme.colors.textPrimary }]}>
-              Khata Ledger
+              {t('ledger')}
             </Text>
             <Text style={[styles.shortcutDesc, { color: theme.colors.textMuted }]}>
-              Credit & reminders
+              {language === 'ne' ? 'उधारो तथा ताकेता' : 'Credit & reminders'}
             </Text>
           </TouchableOpacity>
 
@@ -379,10 +389,10 @@ export const DashboardScreen: React.FC = () => {
               <Feather name="box" size={20} color="#A855F7" />
             </View>
             <Text style={[styles.shortcutTitle, { color: theme.colors.textPrimary }]}>
-              Stock Catalog
+              {t('inventory')}
             </Text>
             <Text style={[styles.shortcutDesc, { color: theme.colors.textMuted }]}>
-              {metrics.totalProducts} items
+              {language === 'ne' ? `${metrics.totalProducts} वटा सामान` : `${metrics.totalProducts} items`}
             </Text>
           </TouchableOpacity>
 
@@ -401,10 +411,10 @@ export const DashboardScreen: React.FC = () => {
               <Feather name="bar-chart-2" size={20} color="#EC4899" />
             </View>
             <Text style={[styles.shortcutTitle, { color: theme.colors.textPrimary }]}>
-              Reports
+              {t('reports')}
             </Text>
             <Text style={[styles.shortcutDesc, { color: theme.colors.textMuted }]}>
-              P&L & statements
+              {language === 'ne' ? 'नाफा र स्टेटमेन्ट' : 'P&L & statements'}
             </Text>
           </TouchableOpacity>
         </View>
@@ -412,10 +422,12 @@ export const DashboardScreen: React.FC = () => {
         {/* RECENT TRANSACTIONS FEED */}
         <View style={styles.activityHeaderRow}>
           <Text style={[styles.sectionTitle, { color: theme.colors.textPrimary, marginBottom: 0 }]}>
-            Recent Transactions
+            {language === 'ne' ? 'पछिल्ला कारोबारहरू' : 'Recent Transactions'}
           </Text>
           <TouchableOpacity onPress={() => setActiveTab('sales')}>
-            <Text style={[styles.viewAllLink, { color: theme.colors.primary }]}>View Hub</Text>
+            <Text style={[styles.viewAllLink, { color: theme.colors.primary }]}>
+              {language === 'ne' ? 'सबै हेर्नुहोस्' : 'View Hub'}
+            </Text>
           </TouchableOpacity>
         </View>
 

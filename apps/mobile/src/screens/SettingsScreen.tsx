@@ -96,6 +96,9 @@ export const SettingsScreen: React.FC = () => {
     changePassword,
     setShowAuthModal,
     userStores,
+    language,
+    toggleLanguage,
+    t,
   } = useApp();
 
   // Notification Permission & Preferences state
@@ -583,10 +586,10 @@ export const SettingsScreen: React.FC = () => {
         </View>
       </View>
 
-      {/* 4. APPEARANCE */}
+      {/* 4. APPEARANCE & LANGUAGE */}
       <View style={styles.categoryBlock}>
         <Text style={[styles.categoryTitle, { color: theme.colors.textMuted }]}>
-          APPEARANCE
+          {language === 'ne' ? 'रंग तथा भाषा' : 'APPEARANCE & LANGUAGE'}
         </Text>
         <View
           style={[
@@ -603,7 +606,9 @@ export const SettingsScreen: React.FC = () => {
                   color={theme.colors.textPrimary}
                 />
               </View>
-              <Text style={[styles.rowLabel, { color: theme.colors.textPrimary }]}>Dark Mode</Text>
+              <Text style={[styles.rowLabel, { color: theme.colors.textPrimary }]}>
+                {language === 'ne' ? 'डार्क मोड (Dark Mode)' : 'Dark Mode'}
+              </Text>
             </View>
             <Switch
               value={themeMode === 'dark'}
@@ -612,6 +617,46 @@ export const SettingsScreen: React.FC = () => {
               thumbColor="#FFFFFF"
             />
           </View>
+
+          {/* Language Selector */}
+          <View style={[styles.rowSeparator, { backgroundColor: theme.colors.borderGlass }]} />
+
+          <TouchableOpacity
+            style={styles.settingRow}
+            onPress={toggleLanguage}
+            activeOpacity={0.7}
+          >
+            <View style={styles.rowLeft}>
+              <View style={styles.iconContainer}>
+                <Feather name="globe" size={18} color={theme.colors.textPrimary} />
+              </View>
+              <View>
+                <Text style={[styles.rowLabel, { color: theme.colors.textPrimary }]}>
+                  {t('language')}
+                </Text>
+                <Text style={[styles.rowSubLabel, { color: theme.colors.textMuted }]}>
+                  {language === 'ne' ? 'अहिले: नेपाली (सजिलो भाषा)' : 'Currently: English'}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.rowRight}>
+              <View
+                style={{
+                  backgroundColor: '#FF450015',
+                  paddingHorizontal: 10,
+                  paddingVertical: 5,
+                  borderRadius: 8,
+                  borderWidth: 1,
+                  borderColor: '#FF450040',
+                }}
+              >
+                <Text style={{ color: '#FF4500', fontSize: 12, fontWeight: '800' }}>
+                  {language === 'ne' ? 'नेपाली (ने)' : 'English (EN)'}
+                </Text>
+              </View>
+              <Feather name="chevron-right" size={17} color={theme.colors.textMuted} />
+            </View>
+          </TouchableOpacity>
         </View>
       </View>
 

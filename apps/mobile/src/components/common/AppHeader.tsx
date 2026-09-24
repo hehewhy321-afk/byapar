@@ -27,11 +27,42 @@ const TAB_TITLES: Record<string, string> = {
 };
 
 export const AppHeader: React.FC = () => {
-  const { store, activeBizId, setActiveTab, activeTab, theme } = useApp();
+  const { store, activeBizId, setActiveTab, activeTab, theme, language, toggleLanguage, t } = useApp();
   const [unreadCount, setUnreadCount] = useState(0);
   const [showBranchModal, setShowBranchModal] = useState(false);
   const [showSubModal, setShowSubModal] = useState(false);
   const [subState, setSubState] = useState<any>(null);
+
+  const getScreenTitle = (tab: string): string => {
+    switch (tab) {
+      case 'sales':
+        return t('salesHub');
+      case 'bills':
+        return t('billsArchive');
+      case 'expenses':
+        return t('expenses');
+      case 'pos':
+        return t('pos');
+      case 'purchase':
+        return t('purchaseHub');
+      case 'accounts':
+        return t('accounts');
+      case 'inventory':
+        return t('inventory');
+      case 'ledger':
+        return t('ledger');
+      case 'reports':
+        return t('reports');
+      case 'staff':
+        return t('staff');
+      case 'settings':
+        return t('settings');
+      case 'notifications':
+        return t('notifications');
+      default:
+        return 'Byapar';
+    }
+  };
 
   const refreshSubscription = async () => {
     try {
@@ -114,7 +145,7 @@ export const AppHeader: React.FC = () => {
             style={[styles.screenTitle, { color: theme.colors.textPrimary }]}
             numberOfLines={1}
           >
-            {TAB_TITLES[activeTab] || 'Byapar'}
+            {getScreenTitle(activeTab)}
           </Text>
         </View>
       )}
@@ -129,9 +160,26 @@ export const AppHeader: React.FC = () => {
             activeScale={0.92}
           >
             <Feather name="zap" size={13} color="#FFFFFF" />
-            <Text style={styles.upgradePillText}>Upgrade</Text>
+            <Text style={styles.upgradePillText}>{t('upgrade')}</Text>
           </AnimatedPressable>
         )}
+
+        {/* Quick Language Toggle */}
+        <AnimatedPressable
+          style={[
+            styles.langBtn,
+            {
+              backgroundColor: theme.colors.card,
+              borderColor: theme.colors.borderGlass,
+            },
+          ]}
+          onPress={toggleLanguage}
+          activeScale={0.9}
+        >
+          <Text style={[styles.langBtnText, { color: theme.colors.primary }]}>
+            {language === 'ne' ? 'नेपाली' : 'EN'}
+          </Text>
+        </AnimatedPressable>
 
         <AnimatedPressable
           style={[
@@ -294,6 +342,18 @@ const styles = StyleSheet.create({
   upgradePillText: {
     color: '#FFFFFF',
     fontSize: 12,
+    fontWeight: '800',
+  },
+  langBtn: {
+    paddingHorizontal: 8,
+    height: 36,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  langBtnText: {
+    fontSize: 11,
     fontWeight: '800',
   },
   settingsBtn: {
