@@ -40,6 +40,14 @@ export const SubscriptionModal: Component = () => {
   const isDowngrade = () => selectedRank() < currentRank();
   const isCurrentActive = () => selectedRank() === currentRank() && currentSub()?.planTier !== 'free';
 
+  // 7-DAY SUBSCRIPTION LIFECYCLE RULES
+  const daysRemaining = () => currentSub()?.daysRemaining ?? 0;
+  const isPaidActive = () => Boolean(
+    currentSub()?.planTier && currentSub()?.planTier !== 'free' && currentSub()?.status === 'active'
+  );
+  const isRenewalWindowOpen = () => !isPaidActive() || daysRemaining() <= 7;
+  const daysUntilRenewalWindow = () => Math.max(0, daysRemaining() - 7);
+
   const loadData = async () => {
     setLoading(true);
     try {
@@ -111,6 +119,15 @@ export const SubscriptionModal: Component = () => {
 
     // 1. Handle Downgrade
     if (isDowngrade()) {
+      if (isPaidActive() && !isRenewalWindowOpen()) {
+        alert(
+          `🔒 Plan Downgrade Locked (${daysRemaining()} Days Left)\n\n` +
+          `Your store is currently active on ${currentSub()?.planName} with ${daysRemaining()} days remaining in this billing cycle.\n\n` +
+          `To protect your prepaid subscription period, downgrading to ${p.name} will unlock when 7 or fewer days remain (in ${daysUntilRenewalWindow()} days).`
+        );
+        return;
+      }
+
       const ok = confirm(
         `Are you sure you want to downgrade from your current plan to ${p.name}?\n\n` +
         `• Daily bill uploads will be capped at ${p.daily_bill_upload_limit === -1 ? 'Unlimited' : p.daily_bill_upload_limit}\n` +
@@ -137,6 +154,28 @@ export const SubscriptionModal: Component = () => {
         alert(`Downgrade error: ${res.error}`);
       }
       return;
+    }
+
+    // 2. Handle Renewal Check
+    if (isCurrentActive()) {
+      if (isPaidActive() && !isRenewalWindowOpen()) {
+        alert(
+          `Plan Already Active (${daysRemaining()} Days Left)\n\n` +
+          `Your ${currentSub()?.planName} is active with ${daysRemaining()} days remaining.\n\n` +
+          `Renewal opens 7 days before expiry (in ${daysUntilRenewalWindow()} days). You do not need to pay again right now!`
+        );
+        return;
+      }
+    }
+
+    // 3. Handle Immediate Upgrade Confirmation
+    if (!isDowngrade() && !isCurrentActive() && isPaidActive() && !isRenewalWindowOpen()) {
+      const ok = confirm(
+        `⚡ Instant Plan Upgrade\n\n` +
+        `You currently have ${daysRemaining()} days remaining on ${currentSub()?.planName}.\n\n` +
+        `Upgrading to ${p.name} now will immediately activate your new higher limits for a fresh cycle. Do you want to proceed to payment?`
+      );
+      if (!ok) return;
     }
 
     // 2. Handle Free Plan Activation (or 100% discount promo)
@@ -505,8 +544,12 @@ export const SubscriptionModal: Component = () => {
                   onClick={handleAction}
                   disabled={upgrading()}
                   class={`text-xs font-bold !py-3 !px-6 shadow-lg flex items-center gap-2 rounded-xl transition ${
-                    isDowngrade()
+                    isDowngrade() && isPaidActive() && !isRenewalWindowOpen()
+                      ? 'bg-neutral-700 text-neutral-400 cursor-not-allowed'
+                      : isDowngrade()
                       ? 'bg-neutral-800 hover:bg-neutral-700 text-white'
+                      : isCurrentActive() && isPaidActive() && !isRenewalWindowOpen()
+                      ? 'bg-emerald-600 text-white'
                       : 'btn-primary'
                   }`}
                 >
@@ -514,9 +557,13 @@ export const SubscriptionModal: Component = () => {
                   <span>
                     {upgrading()
                       ? 'Processing...'
+                      : isDowngrade() && isPaidActive() && !isRenewalWindowOpen()
+                      ? `Downgrade (Locked • ${daysRemaining()}d left)`
                       : isDowngrade()
                       ? `Downgrade to ${selectedPlan().name}`
-                      : isCurrentActive()
+                      : isCurrentActive() && isPaidActive() && !isRenewalWindowOpen()
+                      ? `Active (${daysRemaining()}d left)`
+                      : isCurrentActive() && isRenewalWindowOpen()
                       ? `Renew ${selectedPlan().name} via eSewa`
                       : finalPrice() === 0
                       ? 'Activate Free Tier'

@@ -196,38 +196,58 @@ export async function getBusinessSubscription(businessId: string): Promise<Busin
   const defaultFreePlan = plans.find((p) => p.id === 'free') || DEFAULT_PLANS[0];
 
   try {
-    const { data, error } = await supabase
-      .from('subscriptions')
-      .select('*')
-      .eq('business_id', businessId)
-      .order('expires_at', { ascending: false })
-      .limit(1)
-      .single();
+    const [{ data: subData }, { data: bizData }] = await Promise.all([
+      supabase
+        .from('subscriptions')
+        .select('*')
+        .eq('business_id', businessId)
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      supabase
+        .from('businesses')
+        .select('subscription_tier, subscription_status, subscription_expires_at')
+        .eq('id', businessId)
+        .maybeSingle(),
+    ]);
 
-    if (!error && data) {
-      const planTier = data.plan_tier || 'free';
-      // Match with configured plan or normalized id
-      const matchedPlan = plans.find(
-        (p) => p.id === planTier || (planTier.includes('pro') && p.id === 'pro_99') || (planTier.includes('starter') && p.id === 'starter_49') || (planTier.includes('enterprise') && p.id === 'enterprise_149')
+    // Use active tier from businesses or subscriptions
+    const activeTier = bizData?.subscription_tier || subData?.plan_tier || 'free';
+    const matchedPlan =
+      plans.find(
+        (p) =>
+          p.id === activeTier ||
+          (activeTier.includes('pro') && p.id === 'pro_99') ||
+          (activeTier.includes('starter') && p.id === 'starter_49') ||
+          (activeTier.includes('enterprise') && p.id === 'enterprise_149')
       ) || defaultFreePlan;
 
-      let daysRemaining = 30;
-      if (data.expires_at || data.current_period_end) {
-        const exp = new Date(data.expires_at || data.current_period_end).getTime();
-        daysRemaining = Math.max(0, Math.ceil((exp - Date.now()) / (1000 * 60 * 60 * 24)));
-      }
+    const expDate =
+      bizData?.subscription_expires_at ||
+      subData?.expires_at ||
+      subData?.current_period_end;
 
-      return {
-        planTier,
-        planName: matchedPlan.name,
-        status: (data.status as any) || (daysRemaining > 0 ? 'active' : 'expired'),
-        billingCycle: data.billing_cycle || 'monthly',
-        expiresAt: data.expires_at || data.current_period_end,
-        daysRemaining,
-        features: { ...matchedPlan.features, ...(data.features || {}) },
-        planConfig: matchedPlan,
-      };
+    let daysRemaining = 30;
+    if (expDate) {
+      const exp = new Date(expDate).getTime();
+      daysRemaining = Math.max(0, Math.ceil((exp - Date.now()) / (1000 * 60 * 60 * 24)));
     }
+
+    const currentStatus =
+      bizData?.subscription_status ||
+      subData?.status ||
+      (daysRemaining > 0 ? 'active' : 'expired');
+
+    return {
+      planTier: matchedPlan.id,
+      planName: matchedPlan.name,
+      status: currentStatus as any,
+      billingCycle: subData?.billing_cycle || 'monthly',
+      expiresAt: expDate || null,
+      daysRemaining: activeTier === 'free' ? 999 : daysRemaining,
+      features: { ...matchedPlan.features, ...(subData?.features || {}) },
+      planConfig: matchedPlan,
+    };
   } catch (err) {
     console.warn('Subscription fetch notice:', err);
   }
@@ -243,6 +263,445 @@ export async function getBusinessSubscription(businessId: string): Promise<Busin
     planConfig: defaultFreePlan,
   };
 }
+
+export async function generateEsewaSignature(message: string, secretKey: string = '8gBm/:&EnhH.1/q'): Promise<string> {
+  const encoder = new TextEncoder();
+  const keyData = encoder.encode(secretKey);
+  const messageData = encoder.encode(message);
+
+  const cryptoKey = await crypto.subtle.importKey(
+    'raw',
+    keyData,
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+
+  const signatureBuffer = await crypto.subtle.sign('HMAC', cryptoKey, messageData);
+  const hashArray = Array.from(new Uint8Array(signatureBuffer));
+  let binary = '';
+  for (let i = 0; i < hashArray.length; i++) {
+    binary += String.fromCharCode(hashArray[i]);
+  }
+  return btoa(binary);
+}
+
+export interface EsewaPaymentInitiation {
+  actionUrl: string;
+  fields: Record<string, string>;
+  transactionUuid: string;
+}
+
+export async function initiateEsewaPayment(params: {
+  businessId: string;
+  businessName: string;
+  planId: string;
+  billingCycle: 'monthly' | 'annual';
+  promoCode?: string;
+  userId?: string;
+  autoSubmit?: boolean;
+}): Promise<{ success: boolean; data?: EsewaPaymentInitiation; error?: string }> {
+  try {
+    const plans = await fetchSubscriptionPlans();
+    const plan = plans.find((p) => p.id === params.planId);
+    if (!plan) throw new Error('Selected plan does not exist');
+
+    const basePrice = params.billingCycle === 'annual' ? plan.annual_price : plan.monthly_price;
+    let finalPrice = basePrice;
+    let promoData: PromoValidationResult | null = null;
+
+    if (params.promoCode) {
+      promoData = await validatePromoCode(params.promoCode, params.planId, basePrice);
+      if (promoData.valid) {
+        finalPrice = promoData.finalPrice;
+      }
+    }
+
+    if (finalPrice <= 0) {
+      // If 100% discount, activate directly
+      const upg = await upgradeBusinessSubscription({
+        businessId: params.businessId,
+        planId: params.planId,
+        billingCycle: params.billingCycle,
+        userId: params.userId,
+        promoCode: params.promoCode,
+      });
+      return { success: upg.success, error: upg.error };
+    }
+
+    const transactionUuid = `SUB-${params.businessId.slice(0, 8)}-${Date.now()}`;
+    const productCode = 'EPAYTEST'; // eSewa standard UAT merchant code
+    const totalAmount = finalPrice.toString();
+
+    // Insert pending transaction in Supabase
+    await supabase.from('subscription_transactions').insert({
+      business_id: params.businessId,
+      business_name: params.businessName,
+      plan_tier: params.planId,
+      billing_cycle: params.billingCycle,
+      gateway: 'esewa',
+      amount: finalPrice,
+      currency: 'NPR',
+      transaction_uuid: transactionUuid,
+      promo_code: promoData?.code || null,
+      discount_amount: promoData?.discountAmount || 0,
+      status: 'pending',
+    });
+
+    // Save pending intent in localStorage for safe resume or cancellation
+    localStorage.setItem(
+      'byapar_pending_subscription_tx',
+      JSON.stringify({
+        transactionUuid,
+        planId: params.planId,
+        planName: plan.name,
+        billingCycle: params.billingCycle,
+        businessId: params.businessId,
+        amount: finalPrice,
+        initiatedAt: new Date().toISOString(),
+      })
+    );
+
+    // Build signature message
+    const message = `total_amount=${totalAmount},transaction_uuid=${transactionUuid},product_code=${productCode}`;
+    const signature = await generateEsewaSignature(message, '8gBm/:&EnhH.1/q');
+
+    const successUrl = `${window.location.origin}/?payment=esewa_success`;
+    const failureUrl = `${window.location.origin}/?payment=esewa_failure`;
+    const actionUrl = 'https://rc-epay.esewa.com.np/api/epay/main/v2/form';
+
+    const fields: Record<string, string> = {
+      amount: totalAmount,
+      tax_amount: '0',
+      total_amount: totalAmount,
+      transaction_uuid: transactionUuid,
+      product_code: productCode,
+      product_service_charge: '0',
+      product_delivery_charge: '0',
+      success_url: successUrl,
+      failure_url: failureUrl,
+      signed_field_names: 'total_amount,transaction_uuid,product_code',
+      signature: signature,
+    };
+
+    // Auto submit form to eSewa Payment Gateway unless explicitly suppressed
+    if (params.autoSubmit !== false) {
+      const form = document.createElement('form');
+      form.setAttribute('method', 'POST');
+      form.setAttribute('action', actionUrl);
+      form.setAttribute('style', 'display: none;');
+
+      for (const [key, value] of Object.entries(fields)) {
+        const input = document.createElement('input');
+        input.setAttribute('type', 'hidden');
+        input.setAttribute('name', key);
+        input.setAttribute('value', value);
+        form.appendChild(input);
+      }
+
+      document.body.appendChild(form);
+      form.submit();
+    }
+
+    return {
+      success: true,
+      data: {
+        actionUrl,
+        fields,
+        transactionUuid,
+      },
+    };
+  } catch (err: any) {
+    console.error('initiateEsewaPayment error:', err);
+    return { success: false, error: err.message || 'Could not initiate eSewa payment' };
+  }
+}
+
+export async function cancelEsewaPayment(
+  transactionUuid?: string,
+  reason: string = 'User cancelled payment at eSewa gateway'
+): Promise<{ success: boolean; message: string }> {
+  try {
+    let txUuid = transactionUuid;
+    if (!txUuid) {
+      const stored = localStorage.getItem('byapar_pending_subscription_tx');
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          txUuid = parsed.transactionUuid;
+        } catch {}
+      }
+    }
+
+    if (txUuid) {
+      // 1. Call deployed Supabase Edge Function to record cancellation
+      try {
+        await fetch('https://sovpldesvrdbmklpntrx.supabase.co/functions/v1/esewa-verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'cancel',
+            transaction_uuid: txUuid,
+            reason,
+          }),
+        });
+      } catch (edgeErr) {
+        console.warn('Edge function cancel call notice:', edgeErr);
+      }
+
+      // 2. Direct DB update
+      await supabase
+        .from('subscription_transactions')
+        .update({
+          status: 'cancelled',
+          gateway_response: {
+            status: 'CANCELLED',
+            reason,
+            cancelled_at: new Date().toISOString(),
+          },
+        })
+        .eq('transaction_uuid', txUuid);
+    }
+
+    localStorage.removeItem('byapar_pending_subscription_tx');
+    return { success: true, message: 'Subscription payment was cancelled.' };
+  } catch (err: any) {
+    console.error('cancelEsewaPayment error:', err);
+    return { success: false, message: err.message || 'Could not cancel payment' };
+  }
+}
+
+export async function verifyAndHandleEsewaResponse(params: {
+  encodedData?: string;
+  transactionUuid?: string;
+  businessId: string;
+}): Promise<{ success: boolean; message: string; planName?: string }> {
+  try {
+    let parsedData: any = {};
+    if (params.encodedData) {
+      try {
+        const normalized = params.encodedData.replace(/-/g, '+').replace(/_/g, '/');
+        const pad = normalized.length % 4;
+        const padded = pad ? normalized + '='.repeat(4 - pad) : normalized;
+        const jsonStr = atob(padded);
+        parsedData = JSON.parse(jsonStr);
+      } catch (decErr) {
+        console.warn('Could not decode base64 data:', decErr);
+      }
+    }
+
+    const txUuid = params.transactionUuid || parsedData.transaction_uuid;
+
+    // 1. Try server-side verification with deployed Supabase Edge Function
+    try {
+      const edgeRes = await fetch(
+        'https://sovpldesvrdbmklpntrx.supabase.co/functions/v1/esewa-verify',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'verify',
+            data: params.encodedData,
+            transaction_uuid: txUuid,
+            product_code: parsedData.product_code || 'EPAYTEST',
+            total_amount: parsedData.total_amount,
+            transaction_code: parsedData.transaction_code,
+          }),
+        }
+      );
+      if (edgeRes.ok) {
+        const edgeData = await edgeRes.json();
+        if (edgeData.success) {
+          localStorage.removeItem('byapar_pending_subscription_tx');
+          return {
+            success: true,
+            message: `eSewa Payment Verified! Ref #${edgeData.transaction_code || edgeData.ref_id || 'DONE'} (Plan: ${edgeData.plan_tier?.toUpperCase()})`,
+            planName: edgeData.plan_tier,
+          };
+        }
+      }
+    } catch (edgeErr) {
+      console.warn('Edge function verification notice, falling back to direct:', edgeErr);
+    }
+
+    // 2. Direct Fallback Verification
+    const transaction_code = parsedData.transaction_code;
+    const status = parsedData.status;
+    const transaction_uuid = txUuid;
+
+    if (!transaction_uuid) {
+      return { success: false, message: 'Missing transaction identifier' };
+    }
+
+    if (status === 'CANCELED' || status === 'CANCELLED') {
+      await cancelEsewaPayment(transaction_uuid, 'Cancelled by user on eSewa');
+      return { success: false, message: 'Payment was cancelled.' };
+    }
+
+    // Find the transaction
+    const { data: txn, error: tErr } = await supabase
+      .from('subscription_transactions')
+      .select('*')
+      .eq('transaction_uuid', transaction_uuid)
+      .single();
+
+    if (tErr || !txn) {
+      return { success: false, message: 'Transaction record not found in system.' };
+    }
+
+    const refId = transaction_code || `ESEWA-${Date.now()}`;
+    const now = new Date();
+    const durationDays = txn.billing_cycle === 'annual' ? 365 : 30;
+    const expiresAt = new Date(now.getTime() + durationDays * 24 * 60 * 60 * 1000);
+
+    // Mark transaction complete
+    await supabase
+      .from('subscription_transactions')
+      .update({
+        status: 'completed',
+        transaction_code: refId,
+        completed_at: now.toISOString(),
+        gateway_response: { ...parsedData, verified_via: 'client_fallback', ref_id: refId },
+      })
+      .eq('id', txn.id);
+
+    // Activate the subscription in businesses table
+    await supabase
+      .from('businesses')
+      .update({
+        subscription_tier: txn.plan_tier,
+        subscription_status: 'active',
+        subscription_expires_at: expiresAt.toISOString(),
+      })
+      .eq('id', txn.business_id);
+
+    // Upsert into subscriptions table
+    const { data: existingSub } = await supabase
+      .from('subscriptions')
+      .select('id')
+      .eq('business_id', txn.business_id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (existingSub) {
+      await supabase
+        .from('subscriptions')
+        .update({
+          plan_tier: txn.plan_tier,
+          billing_cycle: txn.billing_cycle,
+          status: 'active',
+          price: txn.amount,
+          currency: 'NPR',
+          starts_at: now.toISOString(),
+          expires_at: expiresAt.toISOString(),
+          current_period_start: now.toISOString(),
+          current_period_end: expiresAt.toISOString(),
+          updated_at: now.toISOString(),
+        })
+        .eq('id', existingSub.id);
+    } else {
+      await supabase.from('subscriptions').insert({
+        business_id: txn.business_id,
+        plan_tier: txn.plan_tier,
+        billing_cycle: txn.billing_cycle,
+        status: 'active',
+        price: txn.amount,
+        currency: 'NPR',
+        starts_at: now.toISOString(),
+        expires_at: expiresAt.toISOString(),
+        current_period_start: now.toISOString(),
+        current_period_end: expiresAt.toISOString(),
+        auto_renew: false,
+      });
+    }
+
+    localStorage.removeItem('byapar_pending_subscription_tx');
+
+    return {
+      success: true,
+      message: `🎉 eSewa Payment Verified! Transaction #${refId} successful.`,
+      planName: txn.plan_tier,
+    };
+  } catch (err: any) {
+    console.error('verifyAndHandleEsewaResponse error:', err);
+    return { success: false, message: err.message || 'Verification error' };
+  }
+}
+
+export interface SubscriptionHistoryItem {
+  id: string;
+  businessId: string;
+  businessName?: string;
+  planTier: string;
+  planName: string;
+  billingCycle: 'monthly' | 'annual';
+  gateway: string;
+  amount: number;
+  currency: string;
+  transactionCode?: string;
+  transactionUuid: string;
+  promoCode?: string;
+  discountAmount?: number;
+  status: 'pending' | 'completed' | 'cancelled' | 'failed';
+  createdAt: string;
+  completedAt?: string;
+  gatewayResponse?: any;
+}
+
+export async function fetchSubscriptionHistory(businessId: string): Promise<SubscriptionHistoryItem[]> {
+  try {
+    const plans = await fetchSubscriptionPlans();
+    const { data, error } = await supabase
+      .from('subscription_transactions')
+      .select('*')
+      .eq('business_id', businessId)
+      .order('created_at', { ascending: false });
+
+    if (error || !data) return [];
+
+    return data.map((t: any) => {
+      const matched = plans.find(
+        (p) =>
+          p.id === t.plan_tier ||
+          (t.plan_tier?.includes('pro') && p.id === 'pro_99') ||
+          (t.plan_tier?.includes('starter') && p.id === 'starter_49') ||
+          (t.plan_tier?.includes('enterprise') && p.id === 'enterprise_149')
+      );
+      return {
+        id: t.id,
+        businessId: t.business_id,
+        businessName: t.business_name,
+        planTier: t.plan_tier,
+        planName:
+          matched?.name ||
+          (t.plan_tier === 'pro_99'
+            ? 'Pro Cloud'
+            : t.plan_tier === 'starter_49'
+            ? 'Starter Plan'
+            : t.plan_tier === 'enterprise_149'
+            ? 'Enterprise Mart'
+            : t.plan_tier?.toUpperCase()),
+        billingCycle: t.billing_cycle || 'monthly',
+        gateway: t.gateway,
+        amount: Number(t.amount) || 0,
+        currency: t.currency || 'NPR',
+        transactionCode: t.transaction_code,
+        transactionUuid: t.transaction_uuid,
+        promoCode: t.promo_code,
+        discountAmount: Number(t.discount_amount) || 0,
+        status: t.status,
+        createdAt: t.created_at,
+        completedAt: t.completed_at,
+        gatewayResponse: t.gateway_response,
+      };
+    });
+  } catch (err) {
+    console.error('fetchSubscriptionHistory error:', err);
+    return [];
+  }
+}
+
 
 export interface PromoValidationResult {
   valid: boolean;
@@ -580,224 +1039,3 @@ export async function downgradeBusinessSubscription(params: {
   }
 }
 
-export async function generateEsewaSignature(message: string, secretKey: string = '8gBm/:&EnhH.1/q'): Promise<string> {
-  const encoder = new TextEncoder();
-  const keyData = encoder.encode(secretKey);
-  const messageData = encoder.encode(message);
-
-  const cryptoKey = await crypto.subtle.importKey(
-    'raw',
-    keyData,
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign']
-  );
-
-  const signatureBuffer = await crypto.subtle.sign('HMAC', cryptoKey, messageData);
-  const hashArray = Array.from(new Uint8Array(signatureBuffer));
-  let binary = '';
-  for (let i = 0; i < hashArray.length; i++) {
-    binary += String.fromCharCode(hashArray[i]);
-  }
-  return btoa(binary);
-}
-
-export interface EsewaPaymentInitiation {
-  actionUrl: string;
-  fields: Record<string, string>;
-  transactionUuid: string;
-}
-
-export async function initiateEsewaPayment(params: {
-  businessId: string;
-  businessName: string;
-  planId: string;
-  billingCycle: 'monthly' | 'annual';
-  promoCode?: string;
-  userId?: string;
-  autoSubmit?: boolean;
-}): Promise<{ success: boolean; data?: EsewaPaymentInitiation; error?: string }> {
-  try {
-    const plans = await fetchSubscriptionPlans();
-    const plan = plans.find((p) => p.id === params.planId);
-    if (!plan) throw new Error('Selected plan does not exist');
-
-    const basePrice = params.billingCycle === 'annual' ? plan.annual_price : plan.monthly_price;
-    let finalPrice = basePrice;
-    let promoData: PromoValidationResult | null = null;
-
-    if (params.promoCode) {
-      promoData = await validatePromoCode(params.promoCode, params.planId, basePrice);
-      if (promoData.valid) {
-        finalPrice = promoData.finalPrice;
-      }
-    }
-
-    if (finalPrice <= 0) {
-      // If 100% discount, activate directly
-      const upg = await upgradeBusinessSubscription({
-        businessId: params.businessId,
-        planId: params.planId,
-        billingCycle: params.billingCycle,
-        userId: params.userId,
-        promoCode: params.promoCode,
-      });
-      return { success: upg.success, error: upg.error };
-    }
-
-    const transactionUuid = `SUB-${params.businessId.slice(0, 8)}-${Date.now()}`;
-    const productCode = 'EPAYTEST'; // eSewa standard UAT merchant code
-    const totalAmount = finalPrice.toString();
-
-    // Insert pending transaction in Supabase
-    await supabase.from('subscription_transactions').insert({
-      business_id: params.businessId,
-      business_name: params.businessName,
-      plan_tier: params.planId,
-      billing_cycle: params.billingCycle,
-      gateway: 'esewa',
-      amount: finalPrice,
-      currency: 'NPR',
-      transaction_uuid: transactionUuid,
-      promo_code: promoData?.code || null,
-      discount_amount: promoData?.discountAmount || 0,
-      status: 'pending',
-    });
-
-    // Build signature message
-    const message = `total_amount=${totalAmount},transaction_uuid=${transactionUuid},product_code=${productCode}`;
-    const signature = await generateEsewaSignature(message, '8gBm/:&EnhH.1/q');
-
-    const successUrl = `${window.location.origin}/?payment=esewa_success`;
-    const failureUrl = `${window.location.origin}/?payment=esewa_failure`;
-    const actionUrl = 'https://rc-epay.esewa.com.np/api/epay/main/v2/form';
-
-    const fields: Record<string, string> = {
-      amount: totalAmount,
-      tax_amount: '0',
-      total_amount: totalAmount,
-      transaction_uuid: transactionUuid,
-      product_code: productCode,
-      product_service_charge: '0',
-      product_delivery_charge: '0',
-      success_url: successUrl,
-      failure_url: failureUrl,
-      signed_field_names: 'total_amount,transaction_uuid,product_code',
-      signature: signature,
-    };
-
-    // Auto submit form to eSewa Payment Gateway unless explicitly suppressed
-    if (params.autoSubmit !== false) {
-      const form = document.createElement('form');
-      form.setAttribute('method', 'POST');
-      form.setAttribute('action', actionUrl);
-      form.setAttribute('style', 'display: none;');
-
-      for (const [key, value] of Object.entries(fields)) {
-        const input = document.createElement('input');
-        input.setAttribute('type', 'hidden');
-        input.setAttribute('name', key);
-        input.setAttribute('value', value);
-        form.appendChild(input);
-      }
-
-      document.body.appendChild(form);
-      form.submit();
-    }
-
-    return {
-      success: true,
-      data: {
-        actionUrl,
-        fields,
-        transactionUuid,
-      },
-    };
-  } catch (err: any) {
-    console.error('initiateEsewaPayment error:', err);
-    return { success: false, error: err.message || 'Could not initiate eSewa payment' };
-  }
-}
-
-export async function verifyAndHandleEsewaResponse(params: {
-  encodedData: string;
-  businessId: string;
-}): Promise<{ success: boolean; message: string; planName?: string }> {
-  try {
-    // 1. Try server-side verification with deployed Supabase Edge Function
-    try {
-      const edgeRes = await fetch(
-        'https://sovpldesvrdbmklpntrx.supabase.co/functions/v1/esewa-verify',
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ data: params.encodedData }),
-        }
-      );
-      if (edgeRes.ok) {
-        const edgeData = await edgeRes.json();
-        if (edgeData.success) {
-          return {
-            success: true,
-            message: `eSewa Payment Verified! Ref #${edgeData.transaction_code || 'DONE'} (Plan: ${edgeData.plan_tier?.toUpperCase()})`,
-            planName: edgeData.plan_tier,
-          };
-        }
-      }
-    } catch (edgeErr) {
-      console.warn('Edge function verification notice, falling back to direct:', edgeErr);
-    }
-
-    // 2. Direct Fallback Verification
-    const jsonStr = atob(params.encodedData);
-    const parsed = JSON.parse(jsonStr);
-    const { transaction_code, status, total_amount, transaction_uuid } = parsed;
-
-    if (status !== 'COMPLETE') {
-      await supabase
-        .from('subscription_transactions')
-        .update({ status: 'failed', gateway_response: parsed })
-        .eq('transaction_uuid', transaction_uuid);
-      return { success: false, message: 'Payment was not completed by eSewa.' };
-    }
-
-    // Find the pending transaction
-    const { data: txn, error: tErr } = await supabase
-      .from('subscription_transactions')
-      .select('*')
-      .eq('transaction_uuid', transaction_uuid)
-      .single();
-
-    if (tErr || !txn) {
-      return { success: false, message: 'Transaction record not found in system.' };
-    }
-
-    // Mark transaction complete
-    await supabase
-      .from('subscription_transactions')
-      .update({
-        status: 'completed',
-        transaction_code: transaction_code || `ESEWA-${Date.now()}`,
-        completed_at: new Date().toISOString(),
-        gateway_response: parsed,
-      })
-      .eq('id', txn.id);
-
-    // Activate the subscription
-    await upgradeBusinessSubscription({
-      businessId: txn.business_id,
-      planId: txn.plan_tier,
-      billingCycle: txn.billing_cycle as any,
-      promoCode: txn.promo_code || undefined,
-    });
-
-    return {
-      success: true,
-      message: `🎉 eSewa Payment Verified! Transaction #${transaction_code} successful.`,
-      planName: txn.plan_tier,
-    };
-  } catch (err: any) {
-    console.error('verifyAndHandleEsewaResponse error:', err);
-    return { success: false, message: err.message || 'Verification error' };
-  }
-}

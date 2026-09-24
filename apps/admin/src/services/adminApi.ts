@@ -263,19 +263,41 @@ export async function getSubscriptionsList(): Promise<SubscriptionItem[]> {
         billing_cycle,
         current_period_start,
         current_period_end,
+        expires_at,
         auto_renew,
         businesses (
-          name
+          name,
+          subscription_tier,
+          subscription_status,
+          subscription_expires_at
         )
       `)
-      .order('current_period_end', { ascending: true });
+      .order('current_period_end', { ascending: false });
 
     if (error || !data) return [];
 
-    return data.map((s: any) => {
+    // Deduplicate by business_id so merchants have exactly one canonical license card
+    const uniqueByBiz = new Map<string, any>();
+    for (const s of data) {
+      if (!s.business_id) continue;
+      if (!uniqueByBiz.has(s.business_id)) {
+        uniqueByBiz.set(s.business_id, s);
+      } else {
+        const cur = uniqueByBiz.get(s.business_id);
+        if (s.status === 'active' && cur.status !== 'active') {
+          uniqueByBiz.set(s.business_id, s);
+        }
+      }
+    }
+
+    return Array.from(uniqueByBiz.values()).map((s: any) => {
+      const activeTier = s.businesses?.subscription_tier || s.plan_tier || 'free';
+      const activeStatus = s.businesses?.subscription_status || s.status || 'active';
+      const expDate = s.businesses?.subscription_expires_at || s.expires_at || s.current_period_end;
+
       let daysRemaining: number | undefined = undefined;
-      if (s.current_period_end) {
-        const diffMs = new Date(s.current_period_end).getTime() - Date.now();
+      if (expDate) {
+        const diffMs = new Date(expDate).getTime() - Date.now();
         daysRemaining = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
       }
 
@@ -283,11 +305,11 @@ export async function getSubscriptionsList(): Promise<SubscriptionItem[]> {
         id: s.id,
         businessId: s.business_id,
         businessName: s.businesses?.name || 'Unnamed Shop',
-        planTier: s.plan_tier,
-        status: s.status,
+        planTier: activeTier,
+        status: activeStatus,
         billingCycle: s.billing_cycle || 'monthly',
         currentPeriodStart: s.current_period_start,
-        currentPeriodEnd: s.current_period_end,
+        currentPeriodEnd: expDate,
         daysRemaining,
         autoRenew: s.auto_renew ?? true,
       };
@@ -381,6 +403,7 @@ export interface SubscriptionTransactionRecord {
   status: string;
   created_at: string;
   completed_at?: string;
+  gateway_response?: any;
 }
 
 export async function getSubscriptionTransactions(): Promise<SubscriptionTransactionRecord[]> {
@@ -399,6 +422,81 @@ export async function getSubscriptionTransactions(): Promise<SubscriptionTransac
   } catch (err) {
     console.error('getSubscriptionTransactions error:', err);
     return [];
+  }
+}
+
+export async function checkAndSyncEsewaTransaction(
+  transactionUuid: string
+): Promise<{ success: boolean; status: string; message: string; refId?: string; details?: any }> {
+  try {
+    const res = await fetch('https://sovpldesvrdbmklpntrx.supabase.co/functions/v1/esewa-verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'check_status',
+        transaction_uuid: transactionUuid,
+      }),
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.success) {
+      return {
+        success: true,
+        status: data.status || 'completed',
+        message: data.message || 'eSewa transaction verified & completed!',
+        refId: data.transaction_code || data.ref_id,
+        details: data,
+      };
+    }
+
+    return {
+      success: false,
+      status: data.status || 'pending',
+      message: data.message || data.error || 'Status check completed',
+      details: data.details || data,
+    };
+  } catch (err: any) {
+    console.error('checkAndSyncEsewaTransaction error:', err);
+    return { success: false, status: 'error', message: err.message || 'Network error querying eSewa API' };
+  }
+}
+
+export async function cancelSubscriptionTransaction(
+  transactionUuid: string,
+  reason: string = 'Admin manually cancelled transaction'
+): Promise<{ success: boolean; message: string }> {
+  try {
+    // 1. Edge function
+    try {
+      await fetch('https://sovpldesvrdbmklpntrx.supabase.co/functions/v1/esewa-verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'cancel',
+          transaction_uuid: transactionUuid,
+          reason,
+        }),
+      });
+    } catch {}
+
+    // 2. Direct DB fallback
+    await supabase
+      .from('subscription_transactions')
+      .update({
+        status: 'cancelled',
+        gateway_response: {
+          status: 'CANCELLED',
+          reason,
+          cancelled_by: 'admin',
+          cancelled_at: new Date().toISOString(),
+        },
+      })
+      .eq('transaction_uuid', transactionUuid);
+
+    return { success: true, message: 'Transaction cancelled successfully.' };
+  } catch (err: any) {
+    console.error('cancelSubscriptionTransaction error:', err);
+    return { success: false, message: err.message || 'Failed to cancel transaction' };
   }
 }
 

@@ -131,25 +131,49 @@ export const App: Component = () => {
     // Handle eSewa Callback if returning from payment gateway
     (async () => {
       try {
-        const urlParams = new URLSearchParams(window.location.search);
-        const payment = urlParams.get('payment');
-        const encodedData = urlParams.get('data');
+        const fullHref = window.location.href;
+        const isEsewaSuccess = fullHref.includes('payment=esewa_success') || fullHref.includes('status=COMPLETE');
+        const isEsewaFailure = fullHref.includes('payment=esewa_failure') || fullHref.includes('status=CANCELED') || fullHref.includes('status=CANCELLED');
 
-        if (payment === 'esewa_success' && encodedData) {
+        if (!isEsewaSuccess && !isEsewaFailure) return;
+
+        // Extract base64 'data' parameter from query string or URL
+        let encodedData: string | null = null;
+        const dataMatch = fullHref.match(/[?&]data=([^&#]+)/);
+        if (dataMatch && dataMatch[1]) {
+          encodedData = decodeURIComponent(dataMatch[1]);
+        }
+
+        // Also extract transaction UUID if present in URL
+        let transactionUuid: string | undefined = undefined;
+        const uuidMatch = fullHref.match(/[?&]transaction_uuid=([^&#]+)/);
+        if (uuidMatch && uuidMatch[1]) {
+          transactionUuid = decodeURIComponent(uuidMatch[1]);
+        }
+
+        if (isEsewaSuccess && (encodedData || transactionUuid)) {
           const { verifyAndHandleEsewaResponse } = await import('./services/subscriptionService');
           const verifyRes = await verifyAndHandleEsewaResponse({
-            encodedData,
+            encodedData: encodedData || undefined,
+            transactionUuid,
             businessId: currentBusiness.id,
           });
+
+          window.history.replaceState({}, '', window.location.pathname);
+
           if (verifyRes.success) {
-            alert(`🎉 Payment Verified Successfully!\n${verifyRes.message}`);
+            alert(`🎉 Payment Verified Successfully!\n${verifyRes.message}\nYour subscription tier is now active.`);
+            // Reload window to re-hydrate all features & limits
+            window.location.reload();
           } else {
             alert(`eSewa Verification Notice: ${verifyRes.message}`);
           }
+        } else if (isEsewaFailure) {
+          const { cancelEsewaPayment } = await import('./services/subscriptionService');
+          await cancelEsewaPayment(transactionUuid, 'User cancelled on eSewa gateway');
+
           window.history.replaceState({}, '', window.location.pathname);
-        } else if (payment === 'esewa_failure') {
-          alert('eSewa transaction was cancelled or unsuccessful. Please try again.');
-          window.history.replaceState({}, '', window.location.pathname);
+          alert('ℹ️ eSewa transaction was cancelled. No charges were made.');
         }
       } catch (cbErr) {
         console.error('eSewa callback handling notice:', cbErr);

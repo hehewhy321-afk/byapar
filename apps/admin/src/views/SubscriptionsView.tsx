@@ -8,6 +8,8 @@ import {
   SubscriptionPlanConfig,
   getSubscriptionTransactions,
   SubscriptionTransactionRecord,
+  checkAndSyncEsewaTransaction,
+  cancelSubscriptionTransaction,
 } from '../services/adminApi';
 
 export const SubscriptionsView: Component = () => {
@@ -19,6 +21,10 @@ export const SubscriptionsView: Component = () => {
   const [activeSubTab, setActiveSubTab] = createSignal<'all' | 'expiring' | 'expired' | 'active'>('expiring');
   const [actionSuccess, setActionSuccess] = createSignal<string | null>(null);
 
+  // eSewa Audit & Sync State
+  const [checkingTxUuid, setCheckingTxUuid] = createSignal<string | null>(null);
+  const [viewingPayload, setViewingPayload] = createSignal<SubscriptionTransactionRecord | null>(null);
+
   // Edit Plan Modal State
   const [editingPlan, setEditingPlan] = createSignal<SubscriptionPlanConfig | null>(null);
   const [savingPlan, setSavingPlan] = createSignal(false);
@@ -29,6 +35,31 @@ export const SubscriptionsView: Component = () => {
   const [editStatus, setEditStatus] = createSignal<string>('active');
   const [editDays, setEditDays] = createSignal<number>(30);
   const [savingSub, setSavingSub] = createSignal(false);
+
+  const handleCheckEsewa = async (t: SubscriptionTransactionRecord) => {
+    setCheckingTxUuid(t.transaction_uuid);
+    const res = await checkAndSyncEsewaTransaction(t.transaction_uuid);
+    setCheckingTxUuid(null);
+    if (res.success) {
+      setActionSuccess(`✅ eSewa Sync: Transaction is ${res.status.toUpperCase()}! (Ref: #${res.refId || 'N/A'})`);
+    } else {
+      setActionSuccess(`ℹ️ eSewa Status: ${res.status.toUpperCase()} (${res.message})`);
+    }
+    loadData();
+    setTimeout(() => setActionSuccess(null), 5000);
+  };
+
+  const handleCancelTx = async (t: SubscriptionTransactionRecord) => {
+    if (!confirm(`Cancel pending transaction ${t.transaction_uuid} for ${t.business_name || t.business_id}?`)) return;
+    const res = await cancelSubscriptionTransaction(t.transaction_uuid, 'Admin manually cancelled transaction');
+    if (res.success) {
+      setActionSuccess(`Transaction marked as cancelled.`);
+      loadData();
+      setTimeout(() => setActionSuccess(null), 4000);
+    } else {
+      alert(`Failed to cancel: ${res.message}`);
+    }
+  };
 
   const loadData = async () => {
     try {
@@ -542,7 +573,8 @@ export const SubscriptionsView: Component = () => {
                     <th class="p-3.5 text-right">Amount</th>
                     <th class="p-3.5">Promo</th>
                     <th class="p-3.5 text-center">Status</th>
-                    <th class="p-3.5">Txn Reference</th>
+                    <th class="p-3.5">Txn Reference & eSewa Ref</th>
+                    <th class="p-3.5 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100 text-gray-700">
@@ -550,7 +582,7 @@ export const SubscriptionsView: Component = () => {
                     each={transactions()}
                     fallback={
                       <tr>
-                        <td colspan="9" class="p-8 text-center text-gray-400">
+                        <td colspan="10" class="p-8 text-center text-gray-400">
                           No transactions found yet. Live eSewa & RevenueCat payments will appear here automatically.
                         </td>
                       </tr>
@@ -568,7 +600,8 @@ export const SubscriptionsView: Component = () => {
                           })}
                         </td>
                         <td class="p-3.5 font-semibold text-gray-900">
-                          {t.business_name || t.business_id.slice(0, 8)}
+                          <div>{t.business_name || 'Shop'}</div>
+                          <div class="text-[10px] font-mono text-gray-400 font-normal">{t.business_id.slice(0, 8)}...</div>
                         </td>
                         <td class="p-3.5">
                           <Show
@@ -584,7 +617,7 @@ export const SubscriptionsView: Component = () => {
                             </span>
                           </Show>
                         </td>
-                        <td class="p-3.5 font-medium uppercase text-[11px]">
+                        <td class="p-3.5 font-bold uppercase text-[11px] text-gray-800">
                           {t.plan_tier}
                         </td>
                         <td class="p-3.5 capitalize text-gray-500">
@@ -607,16 +640,63 @@ export const SubscriptionsView: Component = () => {
                             class={`px-2 py-0.5 rounded-full text-[10px] font-bold capitalize ${
                               t.status === 'completed'
                                 ? 'bg-emerald-100 text-emerald-800'
+                                : t.status === 'cancelled'
+                                ? 'bg-gray-200 text-gray-700 border border-gray-300'
                                 : t.status === 'failed'
                                 ? 'bg-rose-100 text-rose-800'
-                                : 'bg-amber-100 text-amber-800'
+                                : 'bg-amber-100 text-amber-800 animate-pulse'
                             }`}
                           >
                             {t.status}
                           </span>
                         </td>
-                        <td class="p-3.5 font-mono text-[10px] text-gray-500 max-w-[140px] truncate" title={t.transaction_code || t.transaction_uuid}>
-                          {t.transaction_code || t.transaction_uuid}
+                        <td class="p-3.5 font-mono text-[11px]">
+                          <Show
+                            when={t.transaction_code}
+                            fallback={<span class="text-gray-400 text-[10px]">{t.transaction_uuid}</span>}
+                          >
+                            <div class="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded inline-block border border-emerald-200">
+                              #{t.transaction_code}
+                            </div>
+                            <div class="text-[9px] text-gray-400 truncate max-w-[120px]" title={t.transaction_uuid}>
+                              {t.transaction_uuid}
+                            </div>
+                          </Show>
+                        </td>
+                        <td class="p-3.5 text-right">
+                          <div class="flex items-center justify-end gap-1.5">
+                            <Show when={t.gateway === 'esewa'}>
+                              <button
+                                type="button"
+                                disabled={checkingTxUuid() === t.transaction_uuid}
+                                onClick={() => handleCheckEsewa(t)}
+                                class="px-2 py-1 bg-white hover:bg-gray-50 border border-gray-200 text-gray-700 rounded-lg text-[10px] font-semibold transition shadow-sm flex items-center gap-1"
+                                title="Query eSewa Status API in real time"
+                              >
+                                <span>{checkingTxUuid() === t.transaction_uuid ? 'Checking...' : '🔍 Sync eSewa'}</span>
+                              </button>
+                            </Show>
+
+                            <Show when={t.status === 'pending'}>
+                              <button
+                                type="button"
+                                onClick={() => handleCancelTx(t)}
+                                class="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-[10px] font-semibold transition"
+                                title="Mark this pending transaction as cancelled"
+                              >
+                                Cancel
+                              </button>
+                            </Show>
+
+                            <button
+                              type="button"
+                              onClick={() => setViewingPayload(t)}
+                              class="px-2 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-[10px] font-medium transition"
+                              title="View eSewa API audit payload"
+                            >
+                              Audit
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     )}
@@ -902,6 +982,130 @@ export const SubscriptionsView: Component = () => {
             </form>
           </div>
         </div>
+      </Show>
+
+      {/* ========================================================================= */}
+      {/* VIEW 4: TRANSACTION AUDIT & ESEWA API PAYLOAD MODAL                       */}
+      {/* ========================================================================= */}
+      <Show when={viewingPayload()}>
+        {(t) => {
+          const item = t();
+          return (
+            <div
+              class="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in"
+              onClick={() => setViewingPayload(null)}
+            >
+              <div
+                class="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl border border-gray-200 max-h-[90vh] overflow-y-auto"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div class="flex items-center justify-between pb-3 border-b border-gray-100 mb-4">
+                  <div>
+                    <h3 class="text-base font-bold text-gray-900 font-heading">
+                      eSewa Transaction Audit Log
+                    </h3>
+                    <p class="text-xs text-gray-400">
+                      Live verification and raw gateway payload from eSewa ePay API
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setViewingPayload(null)}
+                    class="text-gray-400 hover:text-gray-600 p-1"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div class="space-y-4 text-xs">
+                  {/* Primary Card */}
+                  <div class="grid grid-cols-2 gap-3 p-3.5 bg-gray-50 rounded-2xl border border-gray-100 font-mono">
+                    <div>
+                      <span class="text-gray-400 text-[10px] uppercase block">Merchant Store</span>
+                      <span class="font-bold text-gray-900 text-xs font-sans">
+                        {item.business_name || item.business_id}
+                      </span>
+                    </div>
+                    <div>
+                      <span class="text-gray-400 text-[10px] uppercase block">Current Status</span>
+                      <span class={`font-bold capitalize ${
+                        item.status === 'completed'
+                          ? 'text-emerald-700'
+                          : item.status === 'cancelled'
+                          ? 'text-gray-600'
+                          : 'text-amber-600'
+                      }`}>
+                        {item.status}
+                      </span>
+                    </div>
+                    <div>
+                      <span class="text-gray-400 text-[10px] uppercase block">eSewa Ref / Txn Code</span>
+                      <span class="font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                        {item.transaction_code || item.gateway_response?.ref_id || 'Not assigned'}
+                      </span>
+                    </div>
+                    <div>
+                      <span class="text-gray-400 text-[10px] uppercase block">Total Amount</span>
+                      <span class="font-bold text-gray-900 text-xs">
+                        रु {item.amount.toLocaleString()} NPR
+                      </span>
+                    </div>
+                    <div class="col-span-2">
+                      <span class="text-gray-400 text-[10px] uppercase block">Transaction UUID</span>
+                      <span class="text-gray-600 break-all select-all">
+                        {item.transaction_uuid}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Raw eSewa Payload Box */}
+                  <div>
+                    <div class="flex items-center justify-between mb-1.5">
+                      <span class="font-bold text-gray-700">Raw eSewa API Gateway Response</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(JSON.stringify(item.gateway_response || {}, null, 2));
+                          setActionSuccess('Copied raw eSewa payload to clipboard!');
+                          setTimeout(() => setActionSuccess(null), 3000);
+                        }}
+                        class="text-[10px] text-blue-600 hover:underline font-mono"
+                      >
+                        Copy JSON
+                      </button>
+                    </div>
+                    <pre class="bg-gray-900 text-gray-100 p-4 rounded-2xl text-[11px] font-mono overflow-x-auto max-h-56 leading-relaxed shadow-inner border border-gray-800">
+                      {JSON.stringify(item.gateway_response || { notice: 'No raw gateway response recorded yet.' }, null, 2)}
+                    </pre>
+                  </div>
+
+                  <div class="flex items-center justify-between pt-3 border-t border-gray-100">
+                    <Show when={item.gateway === 'esewa'}>
+                      <button
+                        type="button"
+                        disabled={checkingTxUuid() === item.transaction_uuid}
+                        onClick={async () => {
+                          await handleCheckEsewa(item);
+                          setViewingPayload(null);
+                        }}
+                        class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold shadow-sm flex items-center gap-1.5 transition"
+                      >
+                        <span>🔄 Query eSewa Status API Now</span>
+                      </button>
+                    </Show>
+                    <button
+                      type="button"
+                      onClick={() => setViewingPayload(null)}
+                      class="px-4 py-2 border border-gray-200 rounded-xl text-gray-600 hover:bg-gray-50 font-semibold ml-auto"
+                    >
+                      Close
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        }}
       </Show>
     </div>
   );

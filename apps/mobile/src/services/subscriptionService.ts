@@ -1,6 +1,6 @@
 import { Linking } from 'react-native';
 import CryptoJS from 'crypto-js';
-import { supabase } from '../config/supabase';
+import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '../config/supabase';
 
 export interface MobileSubscriptionPlan {
   id: string;
@@ -184,51 +184,67 @@ export async function getMobileSubscription(businessId: string): Promise<MobileS
   const defaultFreePlan = plans.find((p) => p.id === 'free') || DEFAULT_MOBILE_PLANS[0];
 
   try {
-    const { data, error } = await supabase
+    // 1. Check businesses table (the primary source of truth for business license status)
+    const { data: bizData } = await supabase
+      .from('businesses')
+      .select('subscription_tier, subscription_status, subscription_expires_at, name')
+      .eq('id', businessId)
+      .maybeSingle();
+
+    // 2. Check subscriptions table for details
+    const { data: subData } = await supabase
       .from('subscriptions')
       .select('*')
       .eq('business_id', businessId)
       .order('expires_at', { ascending: false })
       .limit(1)
-      .single();
+      .maybeSingle();
 
-    if (!error && data) {
-      const planTier = data.plan_tier || 'free';
-      const matchedPlan = plans.find(
-        (p) => p.id === planTier || (planTier.includes('pro') && p.id === 'pro_99') || (planTier.includes('starter') && p.id === 'starter_49') || (planTier.includes('enterprise') && p.id === 'enterprise_149')
-      ) || defaultFreePlan;
+    const rawTier = bizData?.subscription_tier || subData?.plan_tier || 'free';
+    const planTier = rawTier.toLowerCase().trim();
 
-      let daysRemaining = 30;
-      if (data.expires_at || data.current_period_end) {
-        const exp = new Date(data.expires_at || data.current_period_end).getTime();
-        daysRemaining = Math.max(0, Math.ceil((exp - Date.now()) / (1000 * 60 * 60 * 24)));
-      }
+    const matchedPlan = plans.find(
+      (p) =>
+        p.id === planTier ||
+        (planTier.includes('enterprise') && p.id === 'enterprise_149') ||
+        (planTier.includes('pro') && p.id === 'pro_99') ||
+        (planTier.includes('starter') && p.id === 'starter_49')
+    ) || defaultFreePlan;
 
-      return {
-        planTier,
-        planName: matchedPlan.name,
-        status: (data.status as any) || (daysRemaining > 0 ? 'active' : 'expired'),
-        billingCycle: data.billing_cycle || 'monthly',
-        expiresAt: data.expires_at || data.current_period_end,
-        daysRemaining,
-        features: { ...matchedPlan.features, ...(data.features || {}) },
-        planConfig: matchedPlan,
-      };
+    const expiresAtStr = bizData?.subscription_expires_at || subData?.expires_at || subData?.current_period_end;
+    let daysRemaining = 30;
+    if (expiresAtStr) {
+      const exp = new Date(expiresAtStr).getTime();
+      daysRemaining = Math.max(0, Math.ceil((exp - Date.now()) / (1000 * 60 * 60 * 24)));
+    } else if (matchedPlan.id === 'free') {
+      daysRemaining = 999;
     }
+
+    const liveStatus = bizData?.subscription_status || subData?.status || 'active';
+
+    return {
+      planTier: matchedPlan.id,
+      planName: matchedPlan.name,
+      status: liveStatus === 'cancelled' ? 'expired' : daysRemaining > 0 ? 'active' : 'expired',
+      billingCycle: subData?.billing_cycle || 'monthly',
+      expiresAt: expiresAtStr || null,
+      daysRemaining,
+      features: { ...matchedPlan.features, ...(subData?.features || {}) },
+      planConfig: matchedPlan,
+    };
   } catch (err) {
     console.warn('Mobile subscription fetch error:', err);
+    return {
+      planTier: 'free',
+      planName: defaultFreePlan.name,
+      status: 'active',
+      billingCycle: 'monthly',
+      expiresAt: null,
+      daysRemaining: 999,
+      features: defaultFreePlan.features,
+      planConfig: defaultFreePlan,
+    };
   }
-
-  return {
-    planTier: 'free',
-    planName: defaultFreePlan.name,
-    status: 'active',
-    billingCycle: 'monthly',
-    expiresAt: null,
-    daysRemaining: 999,
-    features: defaultFreePlan.features,
-    planConfig: defaultFreePlan,
-  };
 }
 
 export async function validateMobilePromoCode(code: string, planTier: string, originalPrice: number) {
@@ -279,114 +295,255 @@ export async function validateMobilePromoCode(code: string, planTier: string, or
   }
 }
 
-export async function upgradeMobileSubscription(params: {
-  businessId: string;
+export interface MobileEsewaPaymentSession {
+  formUrl: string;
+  htmlForm: string;
+  transactionUuid: string;
+  amount: number;
   planId: string;
   billingCycle: 'monthly' | 'annual';
-  userId?: string;
+}
+
+/**
+ * Initiates an industrial-grade eSewa payment on Mobile:
+ * 1. Generates unique transaction UUID
+ * 2. Pre-inserts pending transaction into `subscription_transactions` for live admin audit
+ * 3. Generates HMAC SHA256 signature
+ * 4. Generates an auto-submitting POST HTML form to reliably render eSewa payment screen in WebView
+ */
+export async function initiateMobileEsewaPayment(params: {
+  businessId: string;
+  businessName: string;
+  planId: string;
+  billingCycle: 'monthly' | 'annual';
+  amount: number;
   promoCode?: string;
-}) {
+  discountAmount?: number;
+}): Promise<MobileEsewaPaymentSession> {
+  const transactionUuid = `BYAPAR-MOB-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
+  const productCode = 'EPAYTEST';
+  const totalAmount = params.amount.toString();
+  const secretKey = '8gBm/:&EnhH.1/q';
+
+  // 1. Pre-log pending transaction in Supabase
   try {
-    const plans = await fetchMobileSubscriptionPlans();
-    const plan = plans.find((p) => p.id === params.planId);
-    if (!plan) throw new Error('Selected plan not found');
+    await supabase.from('subscription_transactions').insert({
+      business_id: params.businessId,
+      business_name: params.businessName || 'Mobile App Store',
+      plan_tier: params.planId,
+      billing_cycle: params.billingCycle,
+      gateway: 'esewa_mobile',
+      amount: params.amount,
+      currency: 'NPR',
+      transaction_uuid: transactionUuid,
+      promo_code: params.promoCode || null,
+      discount_amount: params.discountAmount || 0,
+      status: 'pending',
+      gateway_response: {
+        initiated_at: new Date().toISOString(),
+        platform: 'mobile_app',
+      },
+    });
+  } catch (txErr) {
+    console.warn('Pre-logging transaction error (non-fatal):', txErr);
+  }
 
-    const basePrice = params.billingCycle === 'annual' ? plan.annual_price : plan.monthly_price;
-    let finalPrice = basePrice;
-    let promoData: any = null;
+  // 2. Generate eSewa v2 signature
+  const message = `total_amount=${totalAmount},transaction_uuid=${transactionUuid},product_code=${productCode}`;
+  const signature = CryptoJS.HmacSHA256(message, secretKey).toString(CryptoJS.enc.Base64);
 
-    if (params.promoCode) {
-      promoData = await validateMobilePromoCode(params.promoCode, params.planId, basePrice);
-      if (promoData.valid) finalPrice = promoData.finalPrice;
+  // Return URLs for WebView & DeepLinks (without query params so eSewa appends ?data cleanly)
+  const successUrl = `https://byapar.app/esewa-success`;
+  const failureUrl = `https://byapar.app/esewa-failure`;
+  const actionUrl = 'https://rc-epay.esewa.com.np/api/epay/main/v2/form';
+
+  const formUrl = `${actionUrl}?amount=${totalAmount}&tax_amount=0&total_amount=${totalAmount}&transaction_uuid=${encodeURIComponent(
+    transactionUuid
+  )}&product_code=${productCode}&product_service_charge=0&product_delivery_charge=0&success_url=${encodeURIComponent(
+    successUrl
+  )}&failure_url=${encodeURIComponent(
+    failureUrl
+  )}&signed_field_names=total_amount,transaction_uuid,product_code&signature=${encodeURIComponent(signature)}`;
+
+  // eSewa ePay v2 requires HTTP POST with form fields.
+  // Rendering an auto-submitting HTML form in WebView ensures the real eSewa credentials & login screen displays reliably.
+  const htmlForm = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Connecting to eSewa...</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      background: #020617;
+      color: #FFFFFF;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    .spinner {
+      width: 44px;
+      height: 44px;
+      border: 4px solid rgba(96, 187, 70, 0.2);
+      border-top-color: #60BB46;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    h3 { margin-top: 18px; font-size: 16px; font-weight: 700; color: #FFFFFF; }
+    p { margin-top: 6px; font-size: 12px; color: #94A3B8; text-align: center; max-width: 260px; }
+  </style>
+</head>
+<body>
+  <div class="spinner"></div>
+  <h3>Connecting to eSewa Nepal</h3>
+  <p>Loading secure payment portal. Please do not close...</p>
+
+  <form id="esewaPaymentForm" method="POST" action="${actionUrl}">
+    <input type="hidden" name="amount" value="${totalAmount}" />
+    <input type="hidden" name="tax_amount" value="0" />
+    <input type="hidden" name="total_amount" value="${totalAmount}" />
+    <input type="hidden" name="transaction_uuid" value="${transactionUuid}" />
+    <input type="hidden" name="product_code" value="${productCode}" />
+    <input type="hidden" name="product_service_charge" value="0" />
+    <input type="hidden" name="product_delivery_charge" value="0" />
+    <input type="hidden" name="success_url" value="${successUrl}" />
+    <input type="hidden" name="failure_url" value="${failureUrl}" />
+    <input type="hidden" name="signed_field_names" value="total_amount,transaction_uuid,product_code" />
+    <input type="hidden" name="signature" value="${signature}" />
+  </form>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", function() {
+      setTimeout(function() {
+        document.getElementById("esewaPaymentForm").submit();
+      }, 100);
+    });
+  </script>
+</body>
+</html>`;
+
+  return {
+    formUrl,
+    htmlForm,
+    transactionUuid,
+    amount: params.amount,
+    planId: params.planId,
+    billingCycle: params.billingCycle,
+  };
+}
+
+/**
+ * Verifies mobile eSewa payment via Supabase Edge Function
+ */
+export async function verifyMobileEsewaPayment(
+  data: string,
+  transactionUuid?: string,
+  businessId?: string
+): Promise<{ success: boolean; message: string; data?: any }> {
+  try {
+    const cleanUuid = (transactionUuid || '').split('?')[0].split('&')[0].trim();
+    const edgeFunctionUrl = `${SUPABASE_URL}/functions/v1/esewa-verify`;
+    const response = await fetch(edgeFunctionUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify({
+        action: 'verify',
+        data: data || '',
+        transaction_uuid: cleanUuid,
+        transactionUuid: cleanUuid,
+        business_id: businessId,
+        businessId,
+      }),
+    });
+
+    const res = await response.json();
+    if (!response.ok || !res.success) {
+      return { success: false, message: res.error || 'eSewa payment verification failed' };
     }
 
-    const durationDays = params.billingCycle === 'annual' ? 365 : 30;
-    const expiresAt = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000).toISOString();
-    const nowIso = new Date().toISOString();
-
-    const { data: existing } = await supabase
-      .from('subscriptions')
-      .select('id')
-      .eq('business_id', params.businessId)
-      .limit(1);
-
-    if (existing && existing.length > 0) {
-      await supabase
-        .from('subscriptions')
-        .update({
-          plan_tier: plan.id,
-          billing_cycle: params.billingCycle,
-          status: 'active',
-          price: finalPrice,
-          currency: 'NPR',
-          features: plan.features,
-          current_period_end: expiresAt,
-          expires_at: expiresAt,
-          updated_at: nowIso,
-        })
-        .eq('id', existing[0].id);
-    } else {
-      await supabase
-        .from('subscriptions')
-        .insert({
-          business_id: params.businessId,
-          plan_tier: plan.id,
-          billing_cycle: params.billingCycle,
-          status: 'active',
-          price: finalPrice,
-          currency: 'NPR',
-          features: plan.features,
-          starts_at: nowIso,
-          current_period_end: expiresAt,
-          expires_at: expiresAt,
-        });
-    }
-
-    // Log Promo Redemption if applicable
-    if (promoData && promoData.valid && promoData.promoId) {
-      await supabase.from('promo_redemptions').insert({
-        promo_code_id: promoData.promoId,
-        business_id: params.businessId,
-        redeemed_by: params.userId || null,
-        discount_applied: promoData.discountAmount,
-      });
-
-      const { data: curPromo } = await supabase
-        .from('promo_codes')
-        .select('current_redemptions')
-        .eq('id', promoData.promoId)
-        .single();
-      if (curPromo) {
-        await supabase
-          .from('promo_codes')
-          .update({ current_redemptions: (curPromo.current_redemptions || 0) + 1 })
-          .eq('id', promoData.promoId);
-      }
-    }
-
-    // Log transaction to subscription_transactions for Admin sync
-    try {
-      await supabase.from('subscription_transactions').insert({
-        business_id: params.businessId,
-        business_name: 'Mobile App Store',
-        plan_tier: plan.id,
-        billing_cycle: params.billingCycle,
-        gateway: 'esewa_mobile',
-        amount: finalPrice,
-        currency: 'NPR',
-        transaction_uuid: `MOB-SUB-${Date.now()}`,
-        promo_code: promoData?.code || null,
-        discount_amount: promoData?.discountAmount || 0,
-        status: 'success',
-      });
-    } catch (txErr) {
-      console.warn('Mobile transaction log warning:', txErr);
-    }
-
-    return { success: true };
+    return { success: true, message: 'Payment successfully verified!', data: res };
   } catch (err: any) {
-    console.error('upgradeMobileSubscription error:', err);
-    return { success: false, error: err.message };
+    console.error('verifyMobileEsewaPayment error:', err);
+    return { success: false, message: err.message || 'Network error verifying eSewa payment' };
+  }
+}
+
+/**
+ * Cancels mobile eSewa payment via Supabase Edge Function so status doesn't stay pending
+ */
+export async function cancelMobileEsewaPayment(
+  transactionUuid: string,
+  reason?: string,
+  businessId?: string
+): Promise<{ success: boolean }> {
+  try {
+    const edgeFunctionUrl = `${SUPABASE_URL}/functions/v1/esewa-verify`;
+    await fetch(edgeFunctionUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify({
+        action: 'cancel',
+        transaction_uuid: transactionUuid,
+        transactionUuid,
+        business_id: businessId,
+        businessId,
+        reason: reason || 'Cancelled on mobile app',
+      }),
+    });
+    return { success: true };
+  } catch (err) {
+    console.warn('cancelMobileEsewaPayment error:', err);
+    return { success: false };
+  }
+}
+
+export interface MobileSubscriptionTransactionRecord {
+  id: string;
+  business_id: string;
+  plan_tier: string;
+  billing_cycle: string;
+  amount: number;
+  currency: string;
+  gateway: string;
+  status: 'pending' | 'completed' | 'failed' | 'cancelled';
+  transaction_uuid: string;
+  transaction_code?: string;
+  gateway_response?: any;
+  created_at: string;
+}
+
+export async function fetchMobileSubscriptionHistory(
+  businessId: string
+): Promise<MobileSubscriptionTransactionRecord[]> {
+  try {
+    const { data, error } = await supabase
+      .from('subscription_transactions')
+      .select('*')
+      .eq('business_id', businessId)
+      .order('created_at', { ascending: false })
+      .limit(30);
+
+    if (error) throw error;
+    return (data || []) as MobileSubscriptionTransactionRecord[];
+  } catch (err) {
+    console.warn('fetchMobileSubscriptionHistory error:', err);
+    return [];
   }
 }
 
@@ -398,45 +555,45 @@ export async function downgradeMobileSubscription(params: {
     const plans = await fetchMobileSubscriptionPlans();
     const targetPlan = plans.find((p) => p.id === params.targetPlanId) || DEFAULT_MOBILE_PLANS[0];
 
-    const { error } = await supabase
+    // 1. Update businesses table (subscription_tier is the actual DB column)
+    const { error: bizErr } = await supabase
       .from('businesses')
       .update({
-        subscription_plan: targetPlan.id,
+        subscription_tier: targetPlan.id,
         subscription_status: targetPlan.id === 'free' ? 'free' : 'active',
         updated_at: new Date().toISOString(),
       })
       .eq('id', params.businessId);
 
-    if (error) throw error;
+    if (bizErr) throw bizErr;
+
+    // 2. Update subscriptions table
+    await supabase
+      .from('subscriptions')
+      .update({
+        plan_tier: targetPlan.id,
+        status: targetPlan.id === 'free' ? 'free' : 'active',
+        features: targetPlan.features,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('business_id', params.businessId);
+
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message || 'Failed to downgrade plan' };
   }
 }
 
-export async function initiateMobileEsewaPayment(params: {
+/**
+ * Free plan activation without gateway
+ */
+export async function activateFreeMobileSubscription(params: {
   businessId: string;
-  businessName: string;
-  planId: string;
-  billingCycle: 'monthly' | 'annual';
-  amount: number;
-  promoCode?: string;
-  discountAmount?: number;
-}): Promise<void> {
-  const transactionUuid = `BYAPAR-MOB-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-  const productCode = 'EPAYTEST';
-  const totalAmount = params.amount.toString();
-  const secretKey = '8gBm/:&EnhH.1/q';
-
-  const message = `total_amount=${totalAmount},transaction_uuid=${transactionUuid},product_code=${productCode}`;
-  const signature = CryptoJS.HmacSHA256(message, secretKey).toString(CryptoJS.enc.Base64);
-
-  const formUrl = `https://rc-epay.esewa.com.np/api/epay/main/v2/form?amount=${totalAmount}&tax_amount=0&total_amount=${totalAmount}&transaction_uuid=${transactionUuid}&product_code=${productCode}&product_service_charge=0&product_delivery_charge=0&success_url=https://byapar.app/esewa-success&failure_url=https://byapar.app/esewa-failure&signed_field_names=total_amount,transaction_uuid,product_code&signature=${encodeURIComponent(signature)}`;
-
-  if (await Linking.canOpenURL(formUrl)) {
-    await Linking.openURL(formUrl);
-  } else {
-    throw new Error('Could not launch payment browser on device');
-  }
+}): Promise<{ success: boolean; error?: string }> {
+  return downgradeMobileSubscription({
+    businessId: params.businessId,
+    targetPlanId: 'free',
+  });
 }
+
 

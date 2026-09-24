@@ -1,4 +1,4 @@
-import { Component, createSignal, onSettled, Show } from 'solid-js';
+import { Component, createSignal, onSettled, Show, For } from 'solid-js';
 import {
   settings,
   setSettings,
@@ -14,27 +14,49 @@ import {
 import { currentUser } from '../../db/auth';
 import {
   getBusinessSubscription,
+  fetchSubscriptionHistory,
+  cancelEsewaPayment,
   BusinessSubscriptionState,
+  SubscriptionHistoryItem,
 } from '../../services/subscriptionService';
-import { IconShield, IconLock, IconStore, IconEdit, IconCrown, IconQrCode } from '../icons';
+import { SubscriptionInvoiceModal } from '../modals/SubscriptionInvoiceModal';
+import { IconShield, IconLock, IconStore, IconEdit, IconCrown, IconQrCode, IconCheck } from '../icons';
 
 export const SettingsView: Component = () => {
   const [sub, setSub] = createSignal<BusinessSubscriptionState | null>(null);
+  const [subHistory, setSubHistory] = createSignal<SubscriptionHistoryItem[]>([]);
+  const [selectedInvoice, setSelectedInvoice] = createSignal<SubscriptionHistoryItem | null>(null);
+  const [cancellingTxUuid, setCancellingTxUuid] = createSignal<string | null>(null);
   const [fonepayId, setFonepayId] = createSignal(currentBusiness.fonepayMerchantId || '');
   const [savingFonepay, setSavingFonepay] = createSignal(false);
   const [fonepaySuccess, setFonepaySuccess] = createSignal(false);
   const [uploadedQrPreview, setUploadedQrPreview] = createSignal<string>(currentBusiness.fonepayQrImage || '');
 
+  const refreshData = async () => {
+    if (!currentBusiness.id) return;
+    try {
+      const [s, h] = await Promise.all([
+        getBusinessSubscription(currentBusiness.id),
+        fetchSubscriptionHistory(currentBusiness.id),
+      ]);
+      setSub(s);
+      setSubHistory(h);
+    } catch (e) {
+      console.warn('Subscription fetch warning in settings:', e);
+    }
+  };
+
   onSettled(() => {
-    (async () => {
-      try {
-        const s = await getBusinessSubscription(currentBusiness.id);
-        setSub(s);
-      } catch (e) {
-        console.warn('Subscription fetch warning in settings:', e);
-      }
-    })();
+    refreshData();
   });
+
+  const handleCancelPending = async (txUuid: string) => {
+    if (!confirm('Are you sure you want to cancel this pending payment request?')) return;
+    setCancellingTxUuid(txUuid);
+    await cancelEsewaPayment(txUuid, 'Merchant manually cancelled pending transaction');
+    setCancellingTxUuid(null);
+    refreshData();
+  };
 
   const toggleCalendar = () => {
     setSettings((draft) => {
@@ -81,7 +103,7 @@ export const SettingsView: Component = () => {
   };
 
   return (
-    <div class="p-6 animate-fade-in max-w-2xl">
+    <div class="p-6 animate-fade-in max-w-3xl">
       {/* Header */}
       <div class="flex items-center gap-3 mb-6">
         <button
@@ -95,13 +117,13 @@ export const SettingsView: Component = () => {
         <h1 class="text-xl font-heading font-bold text-gray-900 dark:text-white">Settings</h1>
       </div>
 
-      <div class="space-y-4">
+      <div class="space-y-5">
         {/* Subscription & Plan Status */}
         <div class="stat-card border border-orange-500/30 bg-gradient-to-br from-orange-50/40 via-white to-transparent dark:from-orange-950/20 dark:via-black dark:to-transparent">
           <div class="flex items-center justify-between mb-3">
             <div class="flex items-center gap-2">
               <IconCrown class="w-4 h-4 text-[#FF4500]" />
-              <h3 class="text-sm font-semibold text-gray-900 dark:text-white">Subscription & Licensing</h3>
+              <h3 class="text-sm font-semibold text-gray-900 dark:text-white">Active Subscription & License</h3>
             </div>
             <span class={`px-2.5 py-0.5 rounded-full text-xs font-bold uppercase ${
               sub()?.planTier === 'free' 
@@ -132,7 +154,7 @@ export const SettingsView: Component = () => {
                   onClick={() => setShowSubscriptionModal(true)}
                   class="btn-outline text-xs !py-1.5 shrink-0"
                 >
-                  Manage Subscription
+                  Manage / Upgrade Plan
                 </button>
               }
             >
@@ -144,6 +166,129 @@ export const SettingsView: Component = () => {
                 <span>⚡ Upgrade to Pro</span>
               </button>
             </Show>
+          </div>
+        </div>
+
+        {/* Subscription Bought Timeline & Official Tax Invoices */}
+        <div class="stat-card">
+          <div class="flex items-center justify-between mb-3">
+            <div>
+              <h3 class="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                <span>📋 Billing History & Tax Invoices</span>
+              </h3>
+              <p class="text-[11px] text-gray-400">
+                Audit timeline of all subscription purchases, eSewa transactions, and downloadable invoices
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={refreshData}
+              class="text-xs text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200"
+              title="Refresh timeline"
+            >
+              🔄
+            </button>
+          </div>
+
+          <div class="space-y-3 mt-3">
+            <For
+              each={subHistory()}
+              fallback={
+                <div class="text-center py-6 text-xs text-neutral-400 bg-neutral-50 dark:bg-neutral-900/40 rounded-2xl border border-neutral-100 dark:border-neutral-800">
+                  No subscription purchases recorded yet. When you upgrade via eSewa, your timeline and invoices will appear here automatically.
+                </div>
+              }
+            >
+              {(t) => (
+                <div class="p-3.5 rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs transition-all hover:border-neutral-300 dark:hover:border-neutral-700">
+                  <div class="flex items-start gap-3">
+                    <div class={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${
+                      t.status === 'completed'
+                        ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600'
+                        : t.status === 'cancelled'
+                        ? 'bg-gray-100 dark:bg-neutral-800 text-neutral-400'
+                        : 'bg-amber-50 dark:bg-amber-950/40 text-amber-600'
+                    }`}>
+                      {t.status === 'completed' ? '✓' : t.status === 'cancelled' ? '✕' : '⏳'}
+                    </div>
+
+                    <div>
+                      <div class="flex items-center gap-2 flex-wrap">
+                        <span class="font-bold text-neutral-900 dark:text-white">
+                          {t.planName}
+                        </span>
+                        <span class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold capitalize bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400">
+                          {t.billingCycle}
+                        </span>
+                        <span class={`px-2 py-0.5 rounded-full text-[10px] font-bold capitalize ${
+                          t.status === 'completed'
+                            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                            : t.status === 'cancelled'
+                            ? 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400'
+                            : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                        }`}>
+                          {t.status}
+                        </span>
+                      </div>
+
+                      <div class="text-[11px] text-neutral-400 mt-1 flex items-center gap-2 flex-wrap font-mono">
+                        <span>
+                          {new Date(t.createdAt).toLocaleString('en-GB', {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </span>
+                        <span>•</span>
+                        <span>Gateway: eSewa</span>
+                        <Show when={t.transactionCode}>
+                          <span>•</span>
+                          <span class="text-neutral-500 font-bold">Ref: #{t.transactionCode}</span>
+                        </Show>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="flex items-center justify-between sm:justify-end gap-3 pt-2 sm:pt-0 border-t sm:border-t-0 border-neutral-100 dark:border-neutral-800">
+                    <div class="text-right">
+                      <div class="font-extrabold text-sm text-neutral-900 dark:text-white font-mono">
+                        रु {t.amount.toLocaleString()}
+                      </div>
+                      <Show when={t.discountAmount && t.discountAmount > 0}>
+                        <div class="text-[10px] text-emerald-600 font-mono">
+                          Saved रु {t.discountAmount}
+                        </div>
+                      </Show>
+                    </div>
+
+                    <div class="flex items-center gap-2">
+                      <Show when={t.status === 'completed'}>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedInvoice(t)}
+                          class="px-3 py-1.5 rounded-xl bg-orange-50 hover:bg-orange-100 dark:bg-orange-950/40 dark:hover:bg-orange-900/60 text-[#FF4500] font-bold text-xs flex items-center gap-1 transition shadow-sm"
+                        >
+                          <span>📄 Invoice</span>
+                        </button>
+                      </Show>
+
+                      <Show when={t.status === 'pending'}>
+                        <button
+                          type="button"
+                          disabled={cancellingTxUuid() === t.transactionUuid}
+                          onClick={() => handleCancelPending(t.transactionUuid)}
+                          class="px-2.5 py-1.5 rounded-xl border border-rose-200 dark:border-rose-900/60 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 text-xs font-semibold transition"
+                        >
+                          {cancellingTxUuid() === t.transactionUuid ? 'Cancelling...' : 'Cancel'}
+                        </button>
+                      </Show>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </For>
           </div>
         </div>
 
@@ -330,6 +475,11 @@ export const SettingsView: Component = () => {
           </div>
         </div>
       </div>
+
+      <SubscriptionInvoiceModal
+        transaction={selectedInvoice()}
+        onClose={() => setSelectedInvoice(null)}
+      />
     </div>
   );
 };

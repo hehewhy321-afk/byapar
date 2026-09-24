@@ -545,8 +545,8 @@ export const SettingsScreen: React.FC = () => {
             activeOpacity={0.7}
           >
             <View style={styles.rowLeft}>
-              <View style={[styles.iconContainer, { backgroundColor: 'rgba(255, 69, 0, 0.12)' }]}>
-                <Feather name="award" size={18} color="#FF4500" />
+              <View style={styles.iconContainer}>
+                <Feather name="award" size={18} color={theme.colors.textPrimary} />
               </View>
               <View>
                 <Text style={[styles.rowLabel, { color: theme.colors.textPrimary }]}>
@@ -585,8 +585,8 @@ export const SettingsScreen: React.FC = () => {
             activeOpacity={0.7}
           >
             <View style={styles.rowLeft}>
-              <View style={[styles.iconContainer, { backgroundColor: 'rgba(59, 130, 246, 0.12)' }]}>
-                <Feather name="layers" size={18} color="#3B82F6" />
+              <View style={styles.iconContainer}>
+                <Feather name="layers" size={18} color={theme.colors.textPrimary} />
               </View>
               <View>
                 <Text style={[styles.rowLabel, { color: theme.colors.textPrimary }]}>
@@ -686,8 +686,8 @@ export const SettingsScreen: React.FC = () => {
             activeOpacity={0.7}
           >
             <View style={styles.rowLeft}>
-              <View style={[styles.iconContainer, { backgroundColor: 'rgba(239, 68, 68, 0.12)' }]}>
-                <Feather name="grid" size={18} color="#EF4444" />
+              <View style={styles.iconContainer}>
+                <Feather name="grid" size={18} color={theme.colors.textPrimary} />
               </View>
               <View>
                 <Text style={[styles.rowLabel, { color: theme.colors.textPrimary }]}>
@@ -740,7 +740,7 @@ export const SettingsScreen: React.FC = () => {
                   Dues Reminder Template
                 </Text>
                 <Text style={[styles.rowSubLabel, { color: theme.colors.textMuted }]}>
-                  Custom message when sending Khata reminders
+                  Customize message for reminders
                 </Text>
               </View>
             </View>
@@ -770,12 +770,7 @@ export const SettingsScreen: React.FC = () => {
             <View style={styles.rowLeft}>
               <View
                 style={[
-                  styles.iconContainer,
-                  {
-                    backgroundColor: hasPermission
-                      ? 'rgba(16, 185, 129, 0.15)'
-                      : 'rgba(239, 68, 68, 0.15)',
-                  },
+                  styles.iconContainer
                 ]}
               >
                 <Feather
@@ -862,7 +857,7 @@ export const SettingsScreen: React.FC = () => {
                   Customer Udhar Due Alerts
                 </Text>
                 <Text style={[styles.rowSubLabel, { color: theme.colors.textMuted }]}>
-                  Notify when customer credit reaches scheduled due date
+                  When customer credit reaches due date
                 </Text>
               </View>
             </View>
@@ -891,7 +886,7 @@ export const SettingsScreen: React.FC = () => {
                   Low Stock Warnings
                 </Text>
                 <Text style={[styles.rowSubLabel, { color: theme.colors.textMuted }]}>
-                  Instant alert when item stock falls below threshold
+                  When item stock falls below threshold
                 </Text>
               </View>
             </View>
@@ -920,7 +915,7 @@ export const SettingsScreen: React.FC = () => {
                   Supplier Payable Reminders
                 </Text>
                 <Text style={[styles.rowSubLabel, { color: theme.colors.textMuted }]}>
-                  Remind when purchase bills are due for payment
+                  When purchase bills are due for payment
                 </Text>
               </View>
             </View>
@@ -1004,22 +999,22 @@ export const SettingsScreen: React.FC = () => {
             activeOpacity={0.7}
           >
             <View style={styles.rowLeft}>
-              <View style={[styles.iconContainer, { backgroundColor: 'rgba(16, 185, 129, 0.12)' }]}>
-                <Feather name="help-circle" size={18} color="#10B981" />
+              <View style={[styles.iconContainer]}>
+                <Feather name="help-circle" size={18} color={theme.colors.textPrimary} />
               </View>
               <View>
                 <Text style={[styles.rowLabel, { color: theme.colors.textPrimary }]}>
                   Support Helpdesk & Tickets
                 </Text>
                 <Text style={[styles.rowSubLabel, { color: theme.colors.textMuted }]}>
-                  FAQs, hotlines & merchant live support
+                  Hotlines & merchant live support
                 </Text>
               </View>
             </View>
             <View style={styles.rowRight}>
-              <Text style={[styles.rowValueText, { color: '#10B981', fontWeight: '600' }]}>
+              {/* <Text style={[styles.rowValueText, { color: '#10B981', fontWeight: '600' }]}>
                 Helpdesk
-              </Text>
+              </Text> */}
               <Feather name="chevron-right" size={17} color={theme.colors.textMuted} />
             </View>
           </TouchableOpacity>
