@@ -1,4 +1,4 @@
-import { Component, createSignal, createEffect, onCleanup, Show } from 'solid-js';
+import { Component, createSignal, createEffect, onSettled, Show } from 'solid-js';
 import { currentBusiness, updateBusinessProfile, showProfileModal, setShowProfileModal } from '../../db/localDb';
 import { currentUser } from '../../db/auth';
 import { IconStore, IconX, IconCheck } from '../icons';
@@ -38,8 +38,10 @@ export const ProfileModal: Component = () => {
       setShowProfileModal(false);
     }
   };
-  window.addEventListener('keydown', handleKeyDown);
-  onCleanup(() => window.removeEventListener('keydown', handleKeyDown));
+  onSettled(() => {
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  });
 
   const handleSave = async (e: Event) => {
     e.preventDefault();

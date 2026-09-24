@@ -134,7 +134,7 @@ export const TopBar: Component = () => {
                 class="fixed inset-0 z-40"
                 onClick={() => setNotificationsOpen(false)}
               />
-              <div class="absolute right-0 top-full mt-1.5 w-84 bg-white dark:bg-black rounded-2xl shadow-2xl border border-gray-100 dark:border-neutral-800 py-2 animate-fade-in z-50">
+              <div class="absolute right-0 top-full mt-1.5 w-80 sm:w-96 bg-white dark:bg-black rounded-2xl shadow-2xl border border-gray-100 dark:border-neutral-800 py-2 animate-fade-in z-50">
                 <div class="px-4 py-2 border-b border-gray-100 dark:border-neutral-800 flex items-center justify-between">
                   <div class="flex items-center gap-1.5">
                     <h4 class="text-xs font-bold uppercase tracking-wider text-gray-800 dark:text-white">

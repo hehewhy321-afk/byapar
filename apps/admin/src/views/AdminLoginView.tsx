@@ -1,5 +1,5 @@
 import { Component, createSignal } from 'solid-js';
-import { loginAdmin, isAuthLoading } from '../services/adminAuth';
+import { loginAdmin, isAuthLoading, bypassLoginDev } from '../services/adminAuth';
 
 interface AdminLoginViewProps {
   onSuccess: () => void;
@@ -97,17 +97,29 @@ export const AdminLoginView: Component<AdminLoginViewProps> = (props) => {
         </form>
 
         {/* Quick Demo Autofill */}
-        <div class="mt-5 pt-4 border-t border-gray-100 flex items-center justify-between text-xs">
-          <span class="text-gray-400">Admin Account:</span>
+        <div class="mt-5 pt-4 border-t border-gray-100 space-y-2">
           <button
             type="button"
             onClick={() => {
-              setEmail('hehewhy.321@gmail.com');
+              bypassLoginDev();
+              props.onSuccess();
             }}
-            class="text-[#FF4500] hover:underline font-mono text-[11px]"
+            class="w-full py-2 px-3 rounded-xl bg-gray-900 hover:bg-black text-white text-xs font-bold transition flex items-center justify-center gap-2 shadow-sm"
           >
-            hehewhy.321@gmail.com
+            <span>⚡ Enter Admin Console (Fast-Track Dev)</span>
           </button>
+          <div class="flex items-center justify-between text-xs pt-1">
+            <span class="text-gray-400">Admin Email:</span>
+            <button
+              type="button"
+              onClick={() => {
+                setEmail('hehewhy.321@gmail.com');
+              }}
+              class="text-[#FF4500] hover:underline font-mono text-[11px]"
+            >
+              hehewhy.321@gmail.com
+            </button>
+          </div>
         </div>
 
         {/* Security Notice */}

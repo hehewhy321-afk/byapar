@@ -6,6 +6,7 @@ interface AdminTopBarProps {
   subtitle: string;
   onRefresh?: () => void;
   onNavigateToCampaigns?: () => void;
+  onOpenCommandPalette?: () => void;
 }
 
 export const AdminTopBar: Component<AdminTopBarProps> = (props) => {
@@ -38,6 +39,21 @@ export const AdminTopBar: Component<AdminTopBarProps> = (props) => {
       </div>
 
       <div class="flex items-center space-x-2.5">
+        {/* Command Palette Trigger */}
+        {props.onOpenCommandPalette && (
+          <button
+            type="button"
+            onClick={props.onOpenCommandPalette}
+            class="hidden md:flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-500 border border-gray-200 text-xs transition-colors cursor-pointer"
+          >
+            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <span>Search...</span>
+            <kbd class="px-1.5 py-0.5 rounded bg-white text-gray-400 text-[10px] font-mono border border-gray-200 shadow-sm">Ctrl+K</kbd>
+          </button>
+        )}
+
         {/* Realtime Status Indicator */}
         <div class="hidden md:flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-medium">
           <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
