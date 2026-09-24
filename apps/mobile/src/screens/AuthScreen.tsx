@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -63,13 +63,27 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
   const [signupStep, setSignupStep] = useState<1 | 2>(1);
   const [selectedBusinessType, setSelectedBusinessType] = useState<BusinessType>('general');
 
-  // Form Fields
+  // Form Fields - Fresh and clean, never populated with previous session details
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [storeName, setStoreName] = useState(store.name || '');
-  const [ownerName, setOwnerName] = useState(store.ownerName || '');
-  const [phone, setPhone] = useState(store.phone || '');
+  const [storeName, setStoreName] = useState('');
+  const [ownerName, setOwnerName] = useState('');
+  const [phone, setPhone] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+
+  // Clear all cached form inputs whenever user signs out or authentication screen is opened
+  useEffect(() => {
+    if (!user) {
+      setEmail('');
+      setPassword('');
+      setStoreName('');
+      setOwnerName('');
+      setPhone('');
+      setErrorMsg(null);
+      setSuccessMsg(null);
+      setSignupStep(1);
+    }
+  }, [user, visible]);
 
   // Forgot password shift-up popup state
   const [forgotModalVisible, setForgotModalVisible] = useState(false);
@@ -328,6 +342,11 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
               onPress={() => {
                 setTab('signup');
                 setSignupStep(1);
+                setEmail('');
+                setPassword('');
+                setStoreName('');
+                setOwnerName('');
+                setPhone('');
                 setErrorMsg(null);
                 setSuccessMsg(null);
               }}

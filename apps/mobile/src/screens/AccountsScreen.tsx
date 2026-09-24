@@ -415,8 +415,18 @@ export const AccountsScreen: React.FC = () => {
       )}
 
       {/* MODAL: Add / Edit Account */}
-      <Modal visible={showAddAccountModal} transparent animationType="slide">
+      <Modal
+        visible={showAddAccountModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowAddAccountModal(false)}
+      >
         <View style={styles.modalOverlay}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => setShowAddAccountModal(false)}
+          />
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
@@ -510,8 +520,18 @@ export const AccountsScreen: React.FC = () => {
       </Modal>
 
       {/* MODAL: Money Management (Deposit, Withdraw, Transfer) */}
-      <Modal visible={showMoneyModal} transparent animationType="slide">
+      <Modal
+        visible={showMoneyModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowMoneyModal(false)}
+      >
         <View style={styles.modalOverlay}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => setShowMoneyModal(false)}
+          />
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>

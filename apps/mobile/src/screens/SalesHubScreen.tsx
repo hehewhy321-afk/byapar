@@ -14,6 +14,7 @@ import { useApp } from '../context/AppContext';
 import { PaymentMode } from '../types';
 import { formatNepaliCurrency } from '@byapar/core';
 import { AnimatedPressable } from '../components/common/AnimatedPressable';
+import { ReceiptModal } from '../components/pos/ReceiptModal';
 
 export const SalesHubScreen: React.FC = () => {
   const {
@@ -27,6 +28,7 @@ export const SalesHubScreen: React.FC = () => {
     createQuotation,
     createSalesReturn,
     setActiveTab,
+    activeInvoice,
     setActiveInvoice,
     theme,
     themeMode,
@@ -526,8 +528,10 @@ export const SalesHubScreen: React.FC = () => {
               </View>
             ) : (
               filteredInvoices.map((inv) => (
-                <View
+                <TouchableOpacity
                   key={inv.id}
+                  activeOpacity={0.75}
+                  onPress={() => setActiveInvoice(inv)}
                   style={[
                     styles.card,
                     {
@@ -615,7 +619,7 @@ export const SalesHubScreen: React.FC = () => {
                       </Text>
                     </TouchableOpacity>
                   </View>
-                </View>
+                </TouchableOpacity>
               ))
             )}
           </>
@@ -832,6 +836,11 @@ export const SalesHubScreen: React.FC = () => {
         onRequestClose={() => setShowPaymentInModal(false)}
       >
         <View style={styles.modalOverlay}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => setShowPaymentInModal(false)}
+          />
           <View
             style={[
               styles.modalCard,
@@ -966,6 +975,11 @@ export const SalesHubScreen: React.FC = () => {
         onRequestClose={() => setShowQuotationModal(false)}
       >
         <View style={styles.modalOverlay}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => setShowQuotationModal(false)}
+          />
           <View
             style={[
               styles.modalCard,
@@ -1117,6 +1131,11 @@ export const SalesHubScreen: React.FC = () => {
         onRequestClose={() => setShowReturnModal(false)}
       >
         <View style={styles.modalOverlay}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => setShowReturnModal(false)}
+          />
           <View
             style={[
               styles.modalCard,
@@ -1259,6 +1278,12 @@ export const SalesHubScreen: React.FC = () => {
           </View>
         </View>
       </Modal>
+
+      {/* 4. THERMAL RECEIPT & INVOICE DETAILS MODAL */}
+      <ReceiptModal
+        invoice={activeInvoice}
+        onClose={() => setActiveInvoice(null)}
+      />
     </View>
   );
 };

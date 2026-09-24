@@ -1008,6 +1008,10 @@ export async function syncFromCloud() {
         phone: dbBiz.phone || prev.phone,
         businessType: (dbBiz.business_type as BusinessType) || prev.businessType,
         isVatRegistered: dbBiz.is_vat_registered ?? prev.isVatRegistered,
+        fonepayQrImage: dbBiz.fonepay_qr_image || prev.fonepayQrImage || '',
+        fonepayMerchantId: dbBiz.fonepay_merchant_id || prev.fonepayMerchantId || '',
+        fonepayMerchantName: dbBiz.fonepay_merchant_name || prev.fonepayMerchantName || '',
+        fonepayQrPayload: dbBiz.fonepay_qr_payload || prev.fonepayQrPayload || '',
       }));
       localStorage.setItem('byapar_current_business', JSON.stringify(currentBusiness));
     }

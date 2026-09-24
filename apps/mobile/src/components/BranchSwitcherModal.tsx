@@ -114,6 +114,11 @@ export const BranchSwitcherModal: React.FC<BranchSwitcherModalProps> = ({
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.modalOverlay}>
+        <TouchableOpacity
+          style={StyleSheet.absoluteFill}
+          activeOpacity={1}
+          onPress={onClose}
+        />
         <View
           style={[
             styles.modalContainer,

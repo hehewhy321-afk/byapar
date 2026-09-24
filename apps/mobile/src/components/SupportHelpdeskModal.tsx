@@ -152,8 +152,18 @@ export const SupportHelpdeskModal: React.FC<SupportHelpdeskModalProps> = ({ visi
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide">
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+    >
       <View style={styles.overlay}>
+        <TouchableOpacity
+          style={StyleSheet.absoluteFill}
+          activeOpacity={1}
+          onPress={onClose}
+        />
         <View style={[styles.card, { backgroundColor: theme.colors.card, borderColor: theme.colors.borderGlass }]}>
           {/* Header */}
           <View style={styles.header}>

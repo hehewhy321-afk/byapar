@@ -379,8 +379,18 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ visible, o
   return (
     <>
       {/* PRIMARY SUBSCRIPTION MODAL */}
-      <Modal visible={visible} transparent animationType="slide">
+      <Modal
+        visible={visible}
+        transparent
+        animationType="slide"
+        onRequestClose={onClose}
+      >
         <View style={styles.overlay}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={onClose}
+          />
           <View style={[styles.card, { backgroundColor: theme.colors.card, borderColor: theme.colors.borderGlass }]}>
             {/* Header */}
             <View style={styles.header}>
@@ -848,7 +858,12 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ visible, o
       {/* IN-APP ESEWA PAYMENT WEBVIEW MODAL                                        */}
       {/* ========================================================================= */}
       {paymentSession && (
-        <Modal visible={!!paymentSession} animationType="slide" presentationStyle="pageSheet">
+        <Modal
+          visible={!!paymentSession}
+          animationType="slide"
+          presentationStyle="pageSheet"
+          onRequestClose={() => setPaymentSession(null)}
+        >
           <SafeAreaView style={{ flex: 1, backgroundColor: '#020617' }}>
             {/* Header */}
             <View style={styles.webViewHeader}>

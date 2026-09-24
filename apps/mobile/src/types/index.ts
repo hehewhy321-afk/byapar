@@ -96,6 +96,7 @@ export interface StoreProfile {
   whatsappTemplate: string;
   fonepayMerchantId?: string;
   fonepayCounterId?: string;
+  fonepayQrImage?: string;
 }
 
 export interface BankAccount {

@@ -9,6 +9,7 @@ import {
   Alert,
   Modal,
   Linking,
+  TouchableOpacity,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -346,6 +347,11 @@ export const BillArchiveScreen: React.FC = () => {
           onRequestClose={() => setPreviewBill(null)}
         >
           <View style={styles.modalOverlay}>
+            <TouchableOpacity
+              style={StyleSheet.absoluteFill}
+              activeOpacity={1}
+              onPress={() => setPreviewBill(null)}
+            />
             <FadeInView duration={240} translateY={20} style={styles.previewCard}>
               <View style={styles.previewHeader}>
                 <View style={{ flex: 1 }}>

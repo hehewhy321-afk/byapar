@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, Modal, ScrollView, Alert, Linking } from 'react-native';
+import { View, Text, StyleSheet, Modal, ScrollView, Alert, Linking, TouchableOpacity } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { Theme } from '../../theme';
 import { useApp } from '../../context/AppContext';
@@ -33,6 +33,11 @@ export const ReceiptModal: React.FC<Props> = ({ invoice, onClose }) => {
   return (
     <Modal visible={invoice !== null} animationType="fade" transparent onRequestClose={onClose}>
       <View style={styles.overlay}>
+        <TouchableOpacity
+          style={StyleSheet.absoluteFill}
+          activeOpacity={1}
+          onPress={onClose}
+        />
         <FadeInView duration={240} translateY={24} style={styles.sheet}>
           {/* RECEIPT PAPER TICKET */}
           <View style={styles.ticketCard}>

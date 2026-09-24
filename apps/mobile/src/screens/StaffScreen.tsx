@@ -295,6 +295,11 @@ export const StaffScreen: React.FC = () => {
       {/* Add / Edit Staff Modal */}
       <Modal visible={modalVisible} animationType="slide" transparent onRequestClose={() => setModalVisible(false)}>
         <View style={styles.modalBackdrop}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => setModalVisible(false)}
+          />
           <View style={[styles.modalSheet, { backgroundColor: '#09090B', borderColor: theme.colors.borderGlass }]}>
             {/* Modal Header */}
             <View style={[styles.modalHeader, { borderBottomColor: theme.colors.borderGlass }]}>

@@ -70,6 +70,11 @@ export const LedgerEntryModal: React.FC<Props> = ({
   return (
     <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
       <View style={styles.overlay}>
+        <TouchableOpacity
+          style={StyleSheet.absoluteFill}
+          activeOpacity={1}
+          onPress={onClose}
+        />
         <FadeInView duration={240} translateY={20} style={styles.card}>
           <View style={styles.header}>
             <View>

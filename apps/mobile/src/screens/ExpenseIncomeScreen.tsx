@@ -518,6 +518,11 @@ export const ExpenseIncomeScreen: React.FC = () => {
         onRequestClose={() => setShowAddModal(false)}
       >
         <View style={styles.modalOverlay}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => setShowAddModal(false)}
+          />
           <View
             style={[
               styles.modalCard,

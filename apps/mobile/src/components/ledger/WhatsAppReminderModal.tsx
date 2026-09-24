@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, Modal, TextInput, Alert, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, Modal, TextInput, Alert, ScrollView, TouchableOpacity } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { Theme } from '../../theme';
 import { Party } from '../../types';
@@ -69,6 +69,7 @@ export const WhatsAppReminderModal: React.FC<Props> = ({ visible, party, onClose
   return (
     <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
       <View style={styles.overlay}>
+        <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={onClose} />
         <FadeInView duration={240} translateY={20} style={styles.card}>
           <View style={styles.headerRow}>
             <View style={styles.waIconBox}>

@@ -891,6 +891,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           address: dbBiz.address_line || store.address,
           vatEnabled: dbBiz.is_vat_registered ?? store.vatEnabled,
           businessType: (dbBiz.business_type as BusinessType) || store.businessType || 'general',
+          fonepayMerchantId: dbBiz.fonepay_merchant_id || store.fonepayMerchantId,
+          fonepayCounterId: dbBiz.fonepay_counter_id || store.fonepayCounterId,
+          fonepayQrImage: dbBiz.fonepay_qr_image || store.fonepayQrImage,
         };
         setStore(updatedStore);
         await storage.set('store', updatedStore);
@@ -955,6 +958,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             phone: biz.phone || store.phone,
             address: biz.address_line || store.address,
             panNumber: biz.pan_vat_number || store.panNumber,
+            fonepayMerchantId: biz.fonepay_merchant_id || store.fonepayMerchantId,
+            fonepayCounterId: biz.fonepay_counter_id || store.fonepayCounterId,
+            fonepayQrImage: biz.fonepay_qr_image || store.fonepayQrImage,
           };
           setStore(updatedStore);
           await storage.set('store', updatedStore);
@@ -1183,6 +1189,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               address: b.address_line || prev.address,
               vatEnabled: b.is_vat_registered ?? prev.vatEnabled,
               businessType: (b.business_type as BusinessType) || prev.businessType,
+              fonepayMerchantId: b.fonepay_merchant_id !== undefined ? b.fonepay_merchant_id : prev.fonepayMerchantId,
+              fonepayCounterId: b.fonepay_counter_id !== undefined ? b.fonepay_counter_id : prev.fonepayCounterId,
+              fonepayQrImage: b.fonepay_qr_image !== undefined ? b.fonepay_qr_image : prev.fonepayQrImage,
             }));
           }
         }
@@ -1522,6 +1531,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setUser(null);
     setActiveBizId(DEFAULT_BIZ_ID);
     await storage.set('active_biz_id', DEFAULT_BIZ_ID);
+    setStore({ ...INITIAL_STORE });
+    await storage.set('store', INITIAL_STORE);
+    setUserStores([]);
+    await storage.set('user_stores', []);
     setProducts([]);
     setParties([]);
     setLedgerEntries([]);
@@ -1530,12 +1543,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setAccounts([]);
     setAccountTransactions([]);
     setCategories([]);
+    setQuotations([]);
+    setSalesReturns([]);
+    setPurchaseBills([]);
+    setPurchaseReturns([]);
+    setPaymentInRecords([]);
+    setPaymentOutRecords([]);
     await storage.set('products', []);
     await storage.set('parties', []);
     await storage.set('ledger', []);
     await storage.set('invoices', []);
     await storage.set('bills', []);
     await storage.set('categories', []);
+    await storage.set('accounts', []);
+    await storage.set('account_txs', []);
+    await storage.set('quotations', []);
+    await storage.set('sales_returns', []);
+    await storage.set('purchase_bills', []);
+    await storage.set('purchase_returns', []);
+    await storage.set('pay_in', []);
+    await storage.set('pay_out', []);
   };
 
   // Store Profile
@@ -1552,6 +1579,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (updates.address !== undefined) payload.address_line = updates.address;
     if (updates.vatEnabled !== undefined) payload.is_vat_registered = updates.vatEnabled;
     if (updates.businessType !== undefined) payload.business_type = updates.businessType;
+    if (updates.fonepayMerchantId !== undefined) payload.fonepay_merchant_id = updates.fonepayMerchantId;
+    if (updates.fonepayCounterId !== undefined) payload.fonepay_counter_id = updates.fonepayCounterId;
+    if (updates.fonepayQrImage !== undefined) payload.fonepay_qr_image = updates.fonepayQrImage;
 
     if (Object.keys(payload).length > 0 && activeBizId) {
       await supabase.from('businesses').update(payload).eq('id', activeBizId);

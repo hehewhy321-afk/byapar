@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { View, Text, StyleSheet, Modal, TextInput, Alert, ScrollView, Image, Linking } from 'react-native';
+import { View, Text, StyleSheet, Modal, TextInput, Alert, ScrollView, Image, Linking, TouchableOpacity } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { Theme } from '../../theme';
@@ -146,6 +146,7 @@ export const BillCollectorModal: React.FC<Props> = ({
   return (
     <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
       <View style={styles.overlay}>
+        <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={onClose} />
         <FadeInView duration={240} translateY={20} style={styles.card}>
           <View style={styles.header}>
             <View>

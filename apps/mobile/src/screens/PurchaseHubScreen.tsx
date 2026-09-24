@@ -514,6 +514,11 @@ export const PurchaseHubScreen: React.FC = () => {
         onRequestClose={() => setShowBillModal(false)}
       >
         <View style={styles.modalOverlay}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => setShowBillModal(false)}
+          />
           <View
             style={[
               styles.modalCard,
@@ -649,6 +654,11 @@ export const PurchaseHubScreen: React.FC = () => {
         onRequestClose={() => setShowPaymentOutModal(false)}
       >
         <View style={styles.modalOverlay}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => setShowPaymentOutModal(false)}
+          />
           <View
             style={[
               styles.modalCard,
@@ -785,6 +795,11 @@ export const PurchaseHubScreen: React.FC = () => {
         onRequestClose={() => setShowReturnModal(false)}
       >
         <View style={styles.modalOverlay}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => setShowReturnModal(false)}
+          />
           <View
             style={[
               styles.modalCard,

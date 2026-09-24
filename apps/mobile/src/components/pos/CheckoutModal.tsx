@@ -6,6 +6,8 @@ import {
   Modal,
   TextInput,
   ScrollView,
+  Image,
+  TouchableOpacity,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useApp } from '../../context/AppContext';
@@ -53,6 +55,11 @@ export const CheckoutModal: React.FC<Props> = ({ visible, onClose, onSelectMode 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.overlay}>
+        <TouchableOpacity
+          style={StyleSheet.absoluteFill}
+          activeOpacity={1}
+          onPress={onClose}
+        />
         <View
           style={[
             styles.modalSheet,
@@ -308,17 +315,25 @@ export const CheckoutModal: React.FC<Props> = ({ visible, onClose, onSelectMode 
                       </View>
                     </View>
 
-                    {/* QR GRAPHIC */}
+                    {/* QR GRAPHIC OR UPLOADED STANDEE QR */}
                     <View style={styles.qrMatrixWrapper}>
-                      <View style={styles.qrBox}>
-                        <View style={styles.qrCornerTL} />
-                        <View style={styles.qrCornerTR} />
-                        <View style={styles.qrCornerBL} />
-                        <View style={styles.qrCornerBR} />
-                        <View style={styles.qrInnerGrid}>
-                          <Feather name="maximize" size={72} color="#000000" />
+                      {store.fonepayQrImage ? (
+                        <Image
+                          source={{ uri: store.fonepayQrImage }}
+                          style={{ width: 170, height: 170 }}
+                          resizeMode="contain"
+                        />
+                      ) : (
+                        <View style={styles.qrBox}>
+                          <View style={styles.qrCornerTL} />
+                          <View style={styles.qrCornerTR} />
+                          <View style={styles.qrCornerBL} />
+                          <View style={styles.qrCornerBR} />
+                          <View style={styles.qrInnerGrid}>
+                            <Feather name="maximize" size={72} color="#000000" />
+                          </View>
                         </View>
-                      </View>
+                      )}
                     </View>
 
                     <Text style={styles.qrStoreName}>{store.name || 'Store Merchant'}</Text>

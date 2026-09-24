@@ -501,6 +501,11 @@ export const DashboardScreen: React.FC = () => {
         onRequestClose={() => setQuickLedgerModal(false)}
       >
         <View style={styles.modalOverlay}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => setQuickLedgerModal(false)}
+          />
           <View
             style={[
               styles.modalCard,
@@ -722,6 +727,11 @@ export const DashboardScreen: React.FC = () => {
         onRequestClose={() => setContactPickerVisible(false)}
       >
         <View style={styles.modalOverlay}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => setContactPickerVisible(false)}
+          />
           <View
             style={[
               styles.pickerModalCard,
