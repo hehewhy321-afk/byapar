@@ -4,8 +4,11 @@ import {
   addStaffMember,
   updateStaffMember,
   deleteStaffMember,
+  currentBusiness,
+  setShowSubscriptionModal,
   StaffMember,
 } from '../../db/localDb';
+import { checkStaffLimit } from '../../services/planLimits';
 import {
   STAFF_ROLES,
   StaffRole,
@@ -61,7 +64,13 @@ export function StaffView() {
     });
   }
 
-  function openAddModal() {
+  async function openAddModal() {
+    const check = await checkStaffLimit(currentBusiness.id, staffList.length);
+    if (!check.allowed) {
+      alert(check.message);
+      setShowSubscriptionModal(true);
+      return;
+    }
     setEditingStaffId(null);
     setStaffName('');
     setStaffPhone('');

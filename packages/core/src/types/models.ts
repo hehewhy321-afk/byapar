@@ -23,6 +23,10 @@ export interface Business {
   currency: string;
   transactionDateLock?: string;
   logoUrl?: string;
+  fonepayQrImage?: string;
+  fonepayMerchantId?: string;
+  fonepayMerchantName?: string;
+  fonepayQrPayload?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -239,7 +243,6 @@ export interface BusinessSubscription {
   currency: string;
   features: {
     multiDevice?: boolean;
-    soundbox?: boolean;
     unlimitedInvoices?: boolean;
     cbmsSync?: boolean;
     [key: string]: any;

@@ -48,6 +48,21 @@ function getStoredUser(): AuthUser | null {
 export const [currentUser, setCurrentUser] = createSignal<AuthUser | null>(getStoredUser());
 export const isAuthenticated = () => !!currentUser();
 
+
+export interface UserStoreMembership {
+  businessId: string;
+  businessName: string;
+  phone?: string;
+  pan?: string;
+  address?: string;
+  role: string;
+  businessType?: BusinessType;
+  planTier?: string;
+}
+
+export const [userStores, setUserStores] = createSignal<UserStoreMembership[]>([]);
+export const [showCreateStoreModal, setShowCreateStoreModal] = createSignal(false);
+
 // Fetch profile & business details for authenticated Supabase user
 export async function syncUserBusiness(user: User): Promise<AuthUser> {
   let name = user.user_metadata?.full_name || user.email?.split('@')[0] || 'व्यापारी';
@@ -70,18 +85,34 @@ export async function syncUserBusiness(user: User): Promise<AuthUser> {
       name = profile.full_name;
     }
 
-    // 2. Fetch Business Membership
-    const { data: membership } = await supabase
+    // 2. Fetch All Business Memberships for Multi-Store Support
+    const { data: memberships } = await supabase
       .from('business_members')
       .select('business_id, role, businesses(*)')
       .eq('user_id', user.id)
-      .order('created_at', { ascending: true })
-      .limit(1)
-      .single();
+      .order('created_at', { ascending: true });
 
-    if (membership?.business_id) {
-      businessId = membership.business_id;
-      const biz = (membership as any).businesses;
+    if (memberships && memberships.length > 0) {
+      const stores: UserStoreMembership[] = memberships.map((m: any) => {
+        const b = m.businesses;
+        return {
+          businessId: m.business_id,
+          businessName: b?.name || 'My Store',
+          phone: b?.phone || '',
+          pan: b?.pan_vat_number || '',
+          address: b?.address_line || '',
+          role: m.role || 'owner',
+          businessType: b?.business_type as BusinessType,
+        };
+      });
+      setUserStores(stores);
+
+      // Check if user has an existing selected store
+      const storedActiveBizId = localStorage.getItem('byapar_selected_biz_id');
+      const activeMembership = (storedActiveBizId && memberships.find((m: any) => m.business_id === storedActiveBizId)) || memberships[0];
+
+      businessId = activeMembership.business_id;
+      const biz = (activeMembership as any).businesses;
       if (biz) {
         businessName = biz.name || businessName;
         phone = biz.phone || phone;
@@ -137,6 +168,101 @@ export async function syncUserBusiness(user: User): Promise<AuthUser> {
 
   return authUser;
 }
+
+export async function switchUserStore(targetBusinessId: string) {
+  const store = userStores().find((s) => s.businessId === targetBusinessId);
+  if (!store) return;
+
+  localStorage.setItem('byapar_selected_biz_id', targetBusinessId);
+
+  // Update current user
+  setCurrentUser((prev) => (prev ? { ...prev, businessId: targetBusinessId, businessName: store.businessName } : null));
+
+  // Sync with localDb
+  const { currentBusiness, setCurrentBusiness, syncFromCloud, initRealtimeSync } = await import('./localDb');
+  setCurrentBusiness((prev) => ({
+    ...prev,
+    id: targetBusinessId,
+    name: store.businessName,
+    nameEn: store.businessName,
+    phone: store.phone || prev.phone,
+    pan: store.pan || prev.pan,
+    address: store.address || prev.address,
+    businessType: store.businessType || prev.businessType,
+    isVatRegistered: !!store.pan,
+  }));
+  localStorage.setItem('byapar_current_business', JSON.stringify(currentBusiness));
+  syncFromCloud();
+  initRealtimeSync();
+}
+
+export async function createNewUserStore(params: {
+  name: string;
+  phone?: string;
+  pan?: string;
+  address?: string;
+  businessType?: BusinessType;
+}): Promise<{ success: boolean; businessId?: string; error?: string }> {
+  try {
+    const user = currentUser();
+    if (!user) throw new Error('You must be signed in to create an additional store');
+
+    // 1. Create Business in Supabase
+    const { data: newBiz, error: bErr } = await supabase
+      .from('businesses')
+      .insert({
+        name: params.name,
+        owner_name: user.name,
+        phone: params.phone || user.phone,
+        pan_vat_number: params.pan,
+        address_line: params.address,
+        business_type: params.businessType || 'general',
+      })
+      .select()
+      .single();
+
+    if (bErr || !newBiz) throw bErr || new Error('Failed to create store record');
+
+    // 2. Add Business Member (owner)
+    const { error: mErr } = await supabase.from('business_members').insert({
+      business_id: newBiz.id,
+      user_id: user.id,
+      role: 'owner',
+    });
+    if (mErr) console.warn('Member link warning:', mErr);
+
+    // 3. Create initial Subscription
+    await supabase.from('subscriptions').insert({
+      business_id: newBiz.id,
+      plan_tier: 'free',
+      status: 'active',
+      price: 0,
+      currency: 'NPR',
+      current_period_end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+    });
+
+    // 4. Update user stores list
+    const newStore: UserStoreMembership = {
+      businessId: newBiz.id,
+      businessName: newBiz.name,
+      phone: newBiz.phone,
+      pan: newBiz.pan_vat_number,
+      address: newBiz.address_line,
+      role: 'owner',
+      businessType: newBiz.business_type,
+    };
+    setUserStores((prev) => [...prev, newStore]);
+
+    // 5. Switch to the newly created store
+    await switchUserStore(newBiz.id);
+
+    return { success: true, businessId: newBiz.id };
+  } catch (err: any) {
+    console.error('createNewUserStore error:', err);
+    return { success: false, error: err.message || 'Failed to create new store' };
+  }
+}
+
 
 // Listen for Supabase Auth state changes
 supabase.auth.onAuthStateChange(async (event, session) => {

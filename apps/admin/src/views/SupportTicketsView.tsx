@@ -157,7 +157,7 @@ export const SupportTicketsView: Component = () => {
             Merchant Support & Helpdesk Desk
           </h2>
           <p class="text-sm text-gray-500 mt-1 max-w-2xl">
-            Respond to Kirana merchant issues, FonePay QR disputes, soundbox hardware failures, and VAT invoicing questions in real-time.
+            Respond to Kirana merchant issues, FonePay QR disputes, billing inquiries, and VAT invoicing questions in real-time.
           </p>
         </div>
 

@@ -298,6 +298,110 @@ export async function getSubscriptionsList(): Promise<SubscriptionItem[]> {
   }
 }
 
+export interface SubscriptionPlanConfig {
+  id: string;
+  name: string;
+  description?: string;
+  monthly_price: number;
+  annual_price: number;
+  currency: string;
+  daily_bill_upload_limit: number;
+  max_staff_accounts: number;
+  max_stores_allowed: number;
+  features: Record<string, any>;
+  badge_text?: string;
+  is_popular?: boolean;
+  is_active: boolean;
+  sort_order: number;
+  updated_at?: string;
+}
+
+export async function getSubscriptionPlans(): Promise<SubscriptionPlanConfig[]> {
+  try {
+    const { data, error } = await supabase
+      .from('subscription_plans')
+      .select('*')
+      .order('sort_order', { ascending: true });
+
+    if (error || !data) return [];
+    return data.map((p: any) => ({
+      ...p,
+      monthly_price: Number(p.monthly_price) || 0,
+      annual_price: Number(p.annual_price) || 0,
+    }));
+  } catch (err) {
+    console.error('getSubscriptionPlans error:', err);
+    return [];
+  }
+}
+
+export async function updateSubscriptionPlan(
+  plan: Partial<SubscriptionPlanConfig> & { id: string }
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { error } = await supabase
+      .from('subscription_plans')
+      .update({
+        name: plan.name,
+        description: plan.description,
+        monthly_price: plan.monthly_price,
+        annual_price: plan.annual_price,
+        daily_bill_upload_limit: plan.daily_bill_upload_limit,
+        max_staff_accounts: plan.max_staff_accounts,
+        max_stores_allowed: plan.max_stores_allowed,
+        features: plan.features,
+        badge_text: plan.badge_text,
+        is_popular: plan.is_popular,
+        is_active: plan.is_active,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', plan.id);
+
+    if (error) throw error;
+    return { success: true };
+  } catch (err: any) {
+    console.error('updateSubscriptionPlan error:', err);
+    return { success: false, error: err.message || 'Failed to update plan' };
+  }
+}
+
+export interface SubscriptionTransactionRecord {
+  id: string;
+  business_id: string;
+  business_name?: string;
+  plan_tier: string;
+  billing_cycle: string;
+  gateway: string;
+  amount: number;
+  currency: string;
+  transaction_code?: string;
+  transaction_uuid: string;
+  promo_code?: string;
+  discount_amount: number;
+  status: string;
+  created_at: string;
+  completed_at?: string;
+}
+
+export async function getSubscriptionTransactions(): Promise<SubscriptionTransactionRecord[]> {
+  try {
+    const { data, error } = await supabase
+      .from('subscription_transactions')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error || !data) return [];
+    return data.map((t: any) => ({
+      ...t,
+      amount: Number(t.amount) || 0,
+      discount_amount: Number(t.discount_amount) || 0,
+    }));
+  } catch (err) {
+    console.error('getSubscriptionTransactions error:', err);
+    return [];
+  }
+}
+
 export function getFirebaseConfig(): {
   projectId: string;
   projectNumber: string;

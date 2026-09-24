@@ -13,6 +13,10 @@ import {
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useApp } from '../context/AppContext';
+import { SubscriptionModal } from '../components/SubscriptionModal';
+import { SupportHelpdeskModal } from '../components/SupportHelpdeskModal';
+import { BranchSwitcherModal } from '../components/BranchSwitcherModal';
+import { getMobileSubscription } from '../services/subscriptionService';
 import { updateService, CURRENT_APP_VERSION } from '../services/updateService';
 import { buildWhatsAppReminderMessage } from '../services/whatsapp';
 import {
@@ -91,17 +95,42 @@ export const SettingsScreen: React.FC = () => {
     logout,
     changePassword,
     setShowAuthModal,
+    userStores,
   } = useApp();
 
   // Notification Permission & Preferences state
   const [hasPermission, setHasPermission] = useState<boolean>(true);
   const [notifPrefs, setNotifPrefs] = useState<NotificationPreferences>(DEFAULT_PREFERENCES);
   const [testingNotif, setTestingNotif] = useState(false);
+  const [showSubModal, setShowSubModal] = useState(false);
+  const [showHelpdeskModal, setShowHelpdeskModal] = useState(false);
+  const [showBranchModal, setShowBranchModal] = useState(false);
+  const [currentPlanName, setCurrentPlanName] = useState<string>('Free Tier');
+  const [subState, setSubState] = useState<any>(null);
+
+  // Fonepay QR State
+  const [showFonepayModal, setShowFonepayModal] = useState(false);
+  const [fonepayMerchantId, setFonepayMerchantId] = useState(store.fonepayMerchantId || '');
+  const [fonepayCounterId, setFonepayCounterId] = useState(store.fonepayCounterId || '');
+  const [savingFonepay, setSavingFonepay] = useState(false);
+
+  const loadPlanName = async () => {
+    try {
+      const sub = await getMobileSubscription(activeBizId);
+      setSubState(sub);
+      if (sub?.planName) {
+        setCurrentPlanName(sub.planName);
+      }
+    } catch (err) {
+      console.warn('Failed to load plan in settings:', err);
+    }
+  };
 
   useEffect(() => {
     checkNotificationPermission().then(setHasPermission);
     getNotificationPreferences().then(setNotifPrefs);
-  }, []);
+    loadPlanName();
+  }, [activeBizId]);
 
   const handleTogglePref = async (key: keyof NotificationPreferences, value: boolean) => {
     const updated = { ...notifPrefs, [key]: value };
@@ -190,10 +219,28 @@ export const SettingsScreen: React.FC = () => {
     setAddress(store.address || '');
     setVatEnabled(store.vatEnabled || false);
     setPaperWidth(store.paperWidth || '58mm');
+    setFonepayMerchantId(store.fonepayMerchantId || '');
+    setFonepayCounterId(store.fonepayCounterId || '');
     if (store.whatsappTemplate) {
       setMessageTemplate(store.whatsappTemplate);
     }
   }, [store]);
+
+  const handleSaveFonepay = async () => {
+    setSavingFonepay(true);
+    try {
+      await updateStoreProfile({
+        fonepayMerchantId: fonepayMerchantId.trim(),
+        fonepayCounterId: fonepayCounterId.trim(),
+      });
+      setShowFonepayModal(false);
+      Alert.alert('Fonepay QR Saved', 'Counter and merchant configuration updated.');
+    } catch {
+      Alert.alert('Error', 'Failed to save Fonepay details.');
+    } finally {
+      setSavingFonepay(false);
+    }
+  };
 
   const handleSaveStoreProfile = async () => {
     setIsSavingStore(true);
@@ -488,6 +535,77 @@ export const SettingsScreen: React.FC = () => {
               thumbColor="#FFFFFF"
             />
           </View>
+
+          {/* Subscription Tier */}
+          <View style={[styles.rowSeparator, { backgroundColor: theme.colors.borderGlass }]} />
+
+          <TouchableOpacity
+            style={styles.settingRow}
+            onPress={() => setShowSubModal(true)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.rowLeft}>
+              <View style={[styles.iconContainer, { backgroundColor: 'rgba(255, 69, 0, 0.12)' }]}>
+                <Feather name="award" size={18} color="#FF4500" />
+              </View>
+              <View>
+                <Text style={[styles.rowLabel, { color: theme.colors.textPrimary }]}>
+                  Subscription & Plans
+                </Text>
+                <Text style={[styles.rowSubLabel, { color: theme.colors.textMuted }]}>
+                  Active: {currentPlanName}
+                  {subState && subState.planTier !== 'free' && subState.daysRemaining !== undefined
+                    ? ` • ${subState.daysRemaining} days left`
+                    : ''}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.rowRight}>
+              {(!subState || subState.planTier === 'free') ? (
+                <Text style={[styles.rowValueText, { color: '#FF4500', fontWeight: '700' }]}>
+                  Upgrade
+                </Text>
+              ) : (
+                <View style={{ backgroundColor: 'rgba(16, 185, 129, 0.15)', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
+                  <Text style={{ color: '#10B981', fontSize: 11, fontWeight: '700' }}>
+                    {subState?.daysRemaining ?? 30}d left
+                  </Text>
+                </View>
+              )}
+              <Feather name="chevron-right" size={17} color={theme.colors.textMuted} />
+            </View>
+          </TouchableOpacity>
+
+          {/* Store Branches / Multi-Store */}
+          <View style={[styles.rowSeparator, { backgroundColor: theme.colors.borderGlass }]} />
+
+          <TouchableOpacity
+            style={styles.settingRow}
+            onPress={() => setShowBranchModal(true)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.rowLeft}>
+              <View style={[styles.iconContainer, { backgroundColor: 'rgba(59, 130, 246, 0.12)' }]}>
+                <Feather name="layers" size={18} color="#3B82F6" />
+              </View>
+              <View>
+                <Text style={[styles.rowLabel, { color: theme.colors.textPrimary }]}>
+                  Store Branches & Switch
+                </Text>
+                <Text style={[styles.rowSubLabel, { color: theme.colors.textMuted }]}>
+                  {userStores && userStores.length > 0
+                    ? `${userStores.length} branch${userStores.length > 1 ? 'es' : ''} in account`
+                    : '1 branch in account'}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.rowRight}>
+              <Text style={[styles.rowValueText, { color: theme.colors.textMuted }]}>
+                Switch / Add
+              </Text>
+              <Feather name="chevron-right" size={17} color={theme.colors.textMuted} />
+            </View>
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -555,6 +673,41 @@ export const SettingsScreen: React.FC = () => {
             <View style={styles.rowRight}>
               <Text style={[styles.rowValueText, { color: theme.colors.textMuted }]}>
                 {paperWidth}
+              </Text>
+              <Feather name="chevron-right" size={17} color={theme.colors.textMuted} />
+            </View>
+          </TouchableOpacity>
+
+          <View style={[styles.rowSeparator, { backgroundColor: theme.colors.borderGlass }]} />
+
+          <TouchableOpacity
+            style={styles.settingRow}
+            onPress={() => setShowFonepayModal(true)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.rowLeft}>
+              <View style={[styles.iconContainer, { backgroundColor: 'rgba(239, 68, 68, 0.12)' }]}>
+                <Feather name="grid" size={18} color="#EF4444" />
+              </View>
+              <View>
+                <Text style={[styles.rowLabel, { color: theme.colors.textPrimary }]}>
+                  Fonepay Dynamic QR
+                </Text>
+                <Text style={[styles.rowSubLabel, { color: theme.colors.textMuted }]}>
+                  {store.fonepayMerchantId
+                    ? `Merchant: ${store.fonepayMerchantId}`
+                    : 'Not configured (Tap to enter credentials)'}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.rowRight}>
+              <Text
+                style={[
+                  styles.rowValueText,
+                  { color: store.fonepayMerchantId ? '#10B981' : theme.colors.textMuted },
+                ]}
+              >
+                {store.fonepayMerchantId ? 'Configured' : 'Setup'}
               </Text>
               <Feather name="chevron-right" size={17} color={theme.colors.textMuted} />
             </View>
@@ -837,6 +990,35 @@ export const SettingsScreen: React.FC = () => {
             <View style={styles.rowRight}>
               <Text style={[styles.rowValueText, { color: theme.colors.textMuted }]}>
                 {checkingUpdate ? 'Checking...' : `v${CURRENT_APP_VERSION}`}
+              </Text>
+              <Feather name="chevron-right" size={17} color={theme.colors.textMuted} />
+            </View>
+          </TouchableOpacity>
+
+          {/* Helpdesk & Support */}
+          <View style={[styles.rowSeparator, { backgroundColor: theme.colors.borderGlass }]} />
+
+          <TouchableOpacity
+            style={styles.settingRow}
+            onPress={() => setShowHelpdeskModal(true)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.rowLeft}>
+              <View style={[styles.iconContainer, { backgroundColor: 'rgba(16, 185, 129, 0.12)' }]}>
+                <Feather name="help-circle" size={18} color="#10B981" />
+              </View>
+              <View>
+                <Text style={[styles.rowLabel, { color: theme.colors.textPrimary }]}>
+                  Support Helpdesk & Tickets
+                </Text>
+                <Text style={[styles.rowSubLabel, { color: theme.colors.textMuted }]}>
+                  FAQs, hotlines & merchant live support
+                </Text>
+              </View>
+            </View>
+            <View style={styles.rowRight}>
+              <Text style={[styles.rowValueText, { color: '#10B981', fontWeight: '600' }]}>
+                Helpdesk
               </Text>
               <Feather name="chevron-right" size={17} color={theme.colors.textMuted} />
             </View>
@@ -1320,6 +1502,126 @@ export const SettingsScreen: React.FC = () => {
                   <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
                   <Text style={styles.modalSubmitBtnText}>Save Template</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* 4. SUBSCRIPTION MODAL */}
+      <SubscriptionModal
+        visible={showSubModal}
+        onClose={() => {
+          setShowSubModal(false);
+          loadPlanName();
+        }}
+      />
+
+      {/* 5. SUPPORT HELPDESK & TICKETS */}
+      <SupportHelpdeskModal
+        visible={showHelpdeskModal}
+        onClose={() => setShowHelpdeskModal(false)}
+      />
+
+      {/* 6. MULTI-STORE BRANCH SWITCHER */}
+      <BranchSwitcherModal
+        visible={showBranchModal}
+        onClose={() => setShowBranchModal(false)}
+        onOpenSubscription={() => setShowSubModal(true)}
+      />
+
+      {/* 7. FONEPAY DYNAMIC QR CONFIG MODAL */}
+      <Modal visible={showFonepayModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View
+            style={[
+              styles.modalCard,
+              { backgroundColor: theme.colors.card, borderColor: theme.colors.borderGlass },
+            ]}
+          >
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={[styles.modalTitle, { color: theme.colors.textPrimary }]}>
+                  Fonepay Merchant Setup
+                </Text>
+                <Text style={[styles.rowSubLabel, { color: theme.colors.textMuted }]}>
+                  Configure your QR counter credentials
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setShowFonepayModal(false)}
+                style={styles.modalCloseBtn}
+              >
+                <Feather name="x" size={20} color={theme.colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modalInputGroup}>
+              <Text style={[styles.modalInputLabel, { color: theme.colors.textSecondary }]}>
+                Fonepay Merchant ID / Code *
+              </Text>
+              <TextInput
+                style={[
+                  styles.modalInput,
+                  {
+                    backgroundColor: theme.colors.surface,
+                    borderColor: theme.colors.borderGlass,
+                    color: theme.colors.textPrimary,
+                  },
+                ]}
+                value={fonepayMerchantId}
+                onChangeText={setFonepayMerchantId}
+                placeholder="e.g. 9841234567 or FP-109283"
+                placeholderTextColor={theme.colors.textMuted}
+              />
+            </View>
+
+            <View style={styles.modalInputGroup}>
+              <Text style={[styles.modalInputLabel, { color: theme.colors.textSecondary }]}>
+                Counter ID / Terminal ID (Optional)
+              </Text>
+              <TextInput
+                style={[
+                  styles.modalInput,
+                  {
+                    backgroundColor: theme.colors.surface,
+                    borderColor: theme.colors.borderGlass,
+                    color: theme.colors.textPrimary,
+                  },
+                ]}
+                value={fonepayCounterId}
+                onChangeText={setFonepayCounterId}
+                placeholder="e.g. Counter-01"
+                placeholderTextColor={theme.colors.textMuted}
+              />
+            </View>
+
+            <View style={styles.modalActionsRow}>
+              <TouchableOpacity
+                style={[
+                  styles.modalCancelBtn,
+                  {
+                    backgroundColor: theme.colors.surface,
+                    borderColor: theme.colors.borderGlass,
+                  },
+                ]}
+                onPress={() => setShowFonepayModal(false)}
+              >
+                <Text style={[styles.modalCancelBtnText, { color: theme.colors.textSecondary }]}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.modalSubmitBtn, { backgroundColor: '#EF4444' }]}
+                onPress={handleSaveFonepay}
+                disabled={savingFonepay}
+              >
+                {savingFonepay ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.modalSubmitBtnText}>Save Credentials</Text>
                 )}
               </TouchableOpacity>
             </View>

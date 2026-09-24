@@ -142,7 +142,7 @@ export const AdminRolesView: Component = () => {
           <div class="p-3 bg-amber-50/60 rounded-xl border border-amber-100">
             <div class="font-bold text-amber-900">🎧 Support Specialist</div>
             <div class="text-[11px] text-amber-700 mt-1">
-              Reviews incoming tickets, responds to merchant inquiries, and troubleshoots soundbox / printer setup.
+              Reviews incoming tickets, responds to merchant inquiries, and troubleshoots Fonepay QR / printer setup.
             </div>
           </div>
         </div>

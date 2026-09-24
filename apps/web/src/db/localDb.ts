@@ -19,7 +19,6 @@ import { getDefaultRolePermissions, StaffRole } from './permissions';
 export interface AppSettings {
   lang: 'ne' | 'en';
   calendar: 'BS' | 'AD';
-  voiceSoundboxEnabled: boolean;
   thermalPrinterWidth: '58mm' | '80mm';
 }
 
@@ -360,7 +359,6 @@ export const [settings, setSettings] = createStore<AppSettings>(
   loadStored('settings', {
     lang: 'en',
     calendar: 'AD',
-    voiceSoundboxEnabled: true,
     thermalPrinterWidth: '80mm',
   })
 );
@@ -468,7 +466,6 @@ export const [showHelpModal, setShowHelpModal] = createSignal(false);
 export const [showTutorialsModal, setShowTutorialsModal] = createSignal(false);
 export const [showWhatsNewModal, setShowWhatsNewModal] = createSignal(false);
 
-// Reactive Business Profile
 export const [currentBusiness, setCurrentBusiness] = createStore({
   id: 'a0000000-0000-0000-0000-000000000001',
   name: 'Shrestha Mart & General Store',
@@ -479,6 +476,10 @@ export const [currentBusiness, setCurrentBusiness] = createStore({
   phone: '9841234567',
   businessType: 'general' as BusinessType,
   isVatRegistered: true,
+  fonepayQrImage: '',
+  fonepayMerchantId: '',
+  fonepayMerchantName: '',
+  fonepayQrPayload: '',
   ...loadStored('current_business', {}),
 });
 
@@ -567,6 +568,10 @@ export async function updateBusinessProfile(
         phone: updatedPhone,
         address_line: updatedAddress,
         is_vat_registered: updatedVat,
+        fonepay_qr_image: data.fonepayQrImage !== undefined ? data.fonepayQrImage : currentBusiness.fonepayQrImage,
+        fonepay_merchant_id: data.fonepayMerchantId !== undefined ? data.fonepayMerchantId : currentBusiness.fonepayMerchantId,
+        fonepay_merchant_name: data.fonepayMerchantName !== undefined ? data.fonepayMerchantName : currentBusiness.fonepayMerchantName,
+        fonepay_qr_payload: data.fonepayQrPayload !== undefined ? data.fonepayQrPayload : currentBusiness.fonepayQrPayload,
       };
 
       const { error: bizErr } = await supabase.from('businesses').update(bizPayload).eq('id', bizId);

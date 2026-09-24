@@ -1,4 +1,4 @@
-import { Component, createSignal, Show, For } from 'solid-js';
+import { Component, createSignal, onSettled, Show, For } from 'solid-js';
 import {
   currentBusiness,
   settings,
@@ -16,6 +16,10 @@ import {
   toggleMobileSidebar,
 } from '../../db/localDb';
 import { currentUser, signOut } from '../../db/auth';
+import {
+  getBusinessSubscription,
+  BusinessSubscriptionState,
+} from '../../services/subscriptionService';
 import {
   syncedNotifications,
   unreadNotificationCount,
@@ -40,6 +44,18 @@ export const TopBar: Component = () => {
   const [searchFocused, setSearchFocused] = createSignal(false);
   const [profileOpen, setProfileOpen] = createSignal(false);
   const [notificationsOpen, setNotificationsOpen] = createSignal(false);
+  const [sub, setSub] = createSignal<BusinessSubscriptionState | null>(null);
+
+  onSettled(() => {
+    (async () => {
+      try {
+        const s = await getBusinessSubscription(currentBusiness.id);
+        setSub(s);
+      } catch (e) {
+        console.warn('Subscription fetch warning in TopBar:', e);
+      }
+    })();
+  });
 
   const toggleLanguage = () => {
     setSettings((draft) => {
@@ -239,6 +255,36 @@ export const TopBar: Component = () => {
             )}
           </button>
 
+          {/* Subscription Tier Badge & Conditional Upgrade Button */}
+          <div class="hidden sm:flex items-center gap-1.5 mr-1">
+            <span
+              class={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase transition ${
+                sub()?.planTier === 'free'
+                  ? 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 border border-neutral-300 dark:border-neutral-700'
+                  : sub()?.planTier === 'starter_49'
+                  ? 'bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800'
+                  : sub()?.planTier === 'pro_99'
+                  ? 'bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800'
+                  : 'bg-purple-50 dark:bg-purple-950/50 text-purple-600 dark:text-purple-400 border border-purple-200 dark:border-purple-800'
+              }`}
+            >
+              {sub()?.planName || 'Free Tier'}
+            </span>
+
+            {/* Upgrade button only shown if user is on Free Tier */}
+            <Show when={sub()?.planTier === 'free'}>
+              <button
+                type="button"
+                onClick={() => setShowSubscriptionModal(true)}
+                class="px-2.5 py-1 rounded-lg bg-gradient-to-r from-[#FF4500] to-orange-500 hover:from-orange-600 hover:to-orange-500 text-white font-bold text-[11px] shadow-sm flex items-center gap-1 transition active:scale-95"
+                title="Upgrade to unlock full limits"
+              >
+                <IconSparkles class="w-3 h-3" />
+                <span>Upgrade</span>
+              </button>
+            </Show>
+          </div>
+
           {/* User Profile Badge */}
           <div class="relative">
             <button
@@ -278,6 +324,28 @@ export const TopBar: Component = () => {
                 >
                   <IconUser class="w-4 h-4 text-gray-400 dark:text-neutral-400" />
                   <span>Store Profile & Details</span>
+                </button>
+
+                <button
+                  class="w-full text-left px-3.5 py-2 text-xs text-[#FF4500] hover:bg-orange-50 dark:hover:bg-orange-950/30 transition-colors flex items-center gap-2.5 font-semibold"
+                  onClick={() => {
+                    setProfileOpen(false);
+                    setShowSubscriptionModal(true);
+                  }}
+                >
+                  <IconSparkles class="w-4 h-4 text-[#FF4500]" />
+                  <span>Subscription & Plans</span>
+                </button>
+
+                <button
+                  class="w-full text-left px-3.5 py-2 text-xs text-gray-700 dark:text-neutral-300 hover:bg-gray-50 dark:hover:bg-neutral-900 transition-colors flex items-center gap-2.5"
+                  onClick={() => {
+                    setProfileOpen(false);
+                    import('../../db/auth').then(({ setShowCreateStoreModal }) => setShowCreateStoreModal(true));
+                  }}
+                >
+                  <span class="w-4 text-center font-bold text-sm leading-none text-emerald-600">+</span>
+                  <span>Add New Store Branch</span>
                 </button>
 
                 <Show when={currentUser()}>

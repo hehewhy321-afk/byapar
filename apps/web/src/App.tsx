@@ -24,6 +24,7 @@ import { KeyboardShortcutsModal } from './components/modals/KeyboardShortcutsMod
 import { ProfileModal } from './components/modals/ProfileModal';
 import { ChangePasswordModal } from './components/modals/ChangePasswordModal';
 import { SubscriptionModal } from './components/modals/SubscriptionModal';
+import { CreateStoreModal } from './components/modals/CreateStoreModal';
 import { AuthModal } from './components/auth/AuthModal';
 import { AuthPage } from './components/auth/AuthPage';
 import { LandingPage } from './components/landing/LandingPage';
@@ -126,6 +127,34 @@ export const App: Component = () => {
     if (currentBusiness.id) {
       initNotificationSync(currentBusiness.id);
     }
+
+    // Handle eSewa Callback if returning from payment gateway
+    (async () => {
+      try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const payment = urlParams.get('payment');
+        const encodedData = urlParams.get('data');
+
+        if (payment === 'esewa_success' && encodedData) {
+          const { verifyAndHandleEsewaResponse } = await import('./services/subscriptionService');
+          const verifyRes = await verifyAndHandleEsewaResponse({
+            encodedData,
+            businessId: currentBusiness.id,
+          });
+          if (verifyRes.success) {
+            alert(`🎉 Payment Verified Successfully!\n${verifyRes.message}`);
+          } else {
+            alert(`eSewa Verification Notice: ${verifyRes.message}`);
+          }
+          window.history.replaceState({}, '', window.location.pathname);
+        } else if (payment === 'esewa_failure') {
+          alert('eSewa transaction was cancelled or unsuccessful. Please try again.');
+          window.history.replaceState({}, '', window.location.pathname);
+        }
+      } catch (cbErr) {
+        console.error('eSewa callback handling notice:', cbErr);
+      }
+    })();
 
     return () => window.removeEventListener('keydown', handleKeyDown);
   });
@@ -406,6 +435,7 @@ export const App: Component = () => {
       <ProfileModal />
       <ChangePasswordModal />
       <SubscriptionModal />
+      <CreateStoreModal />
       <AuthModal />
     </div>
   </Show>

@@ -1,6 +1,7 @@
 import { Component, createSignal, createMemo, For, Show } from 'solid-js';
-import { bills, addBill, deleteBill, setActiveTab, type BillItem } from '../../db/localDb';
+import { bills, addBill, deleteBill, setActiveTab, currentBusiness, setShowSubscriptionModal, type BillItem } from '../../db/localDb';
 import { formatNepaliCurrency } from '@byapar/core';
+import { checkBillUploadLimit } from '../../services/planLimits';
 import { IconBillGallery, IconUpload, IconFileText, IconEye, IconTrash, IconX, IconPlus, IconSearch } from '../icons';
 
 export const BillGalleryView: Component = () => {
@@ -66,6 +67,16 @@ export const BillGalleryView: Component = () => {
     setImagePreview('');
   };
 
+  const handleOpenUploadModal = async () => {
+    const check = await checkBillUploadLimit(currentBusiness.id);
+    if (!check.allowed) {
+      alert(check.message);
+      setShowSubscriptionModal(true);
+      return;
+    }
+    setShowUploadModal(true);
+  };
+
   return (
     <div class="p-6 space-y-6 animate-fade-in">
       {/* Top Header */}
@@ -85,7 +96,7 @@ export const BillGalleryView: Component = () => {
           </div>
         </div>
 
-        <button class="btn-primary flex items-center gap-2" onClick={() => setShowUploadModal(true)}>
+        <button class="btn-primary flex items-center gap-2" onClick={handleOpenUploadModal}>
           <IconPlus class="w-4 h-4" />
           <span>Upload Bill / Voucher</span>
         </button>

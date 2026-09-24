@@ -11,7 +11,9 @@ import {
   setShowHelpModal,
   setShowTutorialsModal,
   setShowWhatsNewModal,
+  setShowSubscriptionModal,
 } from '../../db/localDb';
+import { userStores, switchUserStore, setShowCreateStoreModal } from '../../db/auth';
 import {
   IconDashboard,
   IconKhata,
@@ -80,6 +82,7 @@ const NavItem: Component<NavItemProps> = (props) => {
 export const Sidebar: Component = () => {
   const [toolsOpen, setToolsOpen] = createSignal(false);
   const [collapsedToolsOpen, setCollapsedToolsOpen] = createSignal(false);
+  const [storeSwitchOpen, setStoreSwitchOpen] = createSignal(false);
 
   const storeInitials = () =>
     (currentBusiness.name || 'Y')
@@ -150,12 +153,13 @@ export const Sidebar: Component = () => {
         </div>
 
         {/* Business Switcher */}
-        <div class="px-2.5 py-3 border-b border-gray-100 dark:border-neutral-800 shrink-0">
+        <div class="px-2.5 py-3 border-b border-gray-100 dark:border-neutral-800 shrink-0 relative">
           <button
             class={`flex items-center rounded-xl hover:bg-gray-50 dark:hover:bg-neutral-900 transition-colors border border-transparent hover:border-gray-200 dark:hover:border-neutral-800 w-full ${
               isSidebarCollapsed() && !isMobileSidebarOpen() ? 'justify-center p-1.5' : 'gap-2.5 px-2 py-2'
             }`}
             title={currentBusiness.nameEn || currentBusiness.name}
+            onClick={() => setStoreSwitchOpen(!storeSwitchOpen())}
           >
             <div class="w-8 h-8 rounded-full !bg-[#FF4500] text-white flex items-center justify-center text-xs font-bold shadow-sm shrink-0">
               {storeInitials()}
@@ -164,9 +168,80 @@ export const Sidebar: Component = () => {
               <span class="text-xs font-semibold text-gray-800 dark:text-neutral-200 truncate flex-1 text-left">
                 {currentBusiness.nameEn || currentBusiness.name}
               </span>
-              <IconChevronDown class="w-4 h-4 text-gray-400 shrink-0" />
+              <IconChevronDown class={`w-4 h-4 text-gray-400 shrink-0 transition-transform ${storeSwitchOpen() ? 'rotate-180' : ''}`} />
             </Show>
           </button>
+
+          {/* Store Switcher Dropdown Popover */}
+          <Show when={storeSwitchOpen()}>
+            <div
+              class="fixed inset-0 z-40"
+              onClick={() => setStoreSwitchOpen(false)}
+            />
+            <div class="absolute left-2.5 right-2.5 top-full mt-1 bg-white dark:bg-black rounded-2xl shadow-2xl border border-gray-200 dark:border-neutral-800 p-2 z-50 animate-fade-in text-xs">
+              <div class="px-2 py-1 flex items-center justify-between border-b border-gray-100 dark:border-neutral-800 mb-1">
+                <span class="font-bold text-[10px] uppercase tracking-wider text-gray-500">
+                  Switch Branch
+                </span>
+                <span class="text-[10px] px-1.5 py-0.2 rounded bg-orange-100 text-[#FF4500] font-bold">
+                  {userStores().length || 1} Store{userStores().length > 1 ? 's' : ''}
+                </span>
+              </div>
+
+              <div class="max-h-48 overflow-y-auto space-y-0.5">
+                <For each={userStores().length > 0 ? userStores() : [{ businessId: currentBusiness.id, businessName: currentBusiness.name, role: 'owner' }]}>
+                  {(s) => {
+                    const isSelected = () => s.businessId === currentBusiness.id;
+                    return (
+                      <button
+                        class={`w-full text-left p-2 rounded-xl flex items-center justify-between transition-colors ${
+                          isSelected()
+                            ? 'bg-orange-50 dark:bg-orange-950/40 text-[#FF4500] font-bold'
+                            : 'text-gray-700 dark:text-neutral-300 hover:bg-gray-100 dark:hover:bg-neutral-900'
+                        }`}
+                        onClick={() => {
+                          setStoreSwitchOpen(false);
+                          if (!isSelected()) {
+                            switchUserStore(s.businessId);
+                          }
+                        }}
+                      >
+                        <div class="truncate pr-2">
+                          <div class="truncate text-xs">{s.businessName}</div>
+                          <div class="text-[10px] text-gray-400 capitalize">{s.role || 'owner'}</div>
+                        </div>
+                        <Show when={isSelected()}>
+                          <span class="text-[#FF4500] text-xs font-bold shrink-0">✓</span>
+                        </Show>
+                      </button>
+                    );
+                  }}
+                </For>
+              </div>
+
+              <div class="pt-1.5 border-t border-gray-100 dark:border-neutral-800 space-y-1">
+                <button
+                  class="w-full text-left px-2 py-1.5 rounded-lg text-[#FF4500] font-semibold hover:bg-orange-50 dark:hover:bg-orange-950/30 flex items-center gap-1.5 transition"
+                  onClick={() => {
+                    setStoreSwitchOpen(false);
+                    setShowCreateStoreModal(true);
+                  }}
+                >
+                  <span class="text-base leading-none font-bold">+</span>
+                  <span>Add New Store / Branch</span>
+                </button>
+                <button
+                  class="w-full text-left px-2 py-1 rounded-lg text-gray-500 hover:text-gray-700 dark:text-neutral-400 text-[11px] transition"
+                  onClick={() => {
+                    setStoreSwitchOpen(false);
+                    setShowSubscriptionModal(true);
+                  }}
+                >
+                  👑 Upgrade Plan for More Stores
+                </button>
+              </div>
+            </div>
+          </Show>
         </div>
 
         {/* Scrollable Navigation */}

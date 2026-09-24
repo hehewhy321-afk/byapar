@@ -14,6 +14,7 @@ import {
   isDarkMode,
 } from '../../db/localDb';
 import { formatNepaliCurrency } from '@byapar/core';
+import { OnboardingChecklistWidget } from './OnboardingChecklistWidget';
 import {
   IconCalendar,
   IconChevronDown,
@@ -339,6 +340,9 @@ export const DashboardView: Component = () => {
           </button>
         </div>
       </div>
+
+      {/* Merchant Onboarding Progress Tracker */}
+      <OnboardingChecklistWidget />
 
       {/* Quick Operations Bar (Fast Kirana Actions) */}
       <div class="bg-white dark:bg-neutral-950 border border-gray-200 dark:border-neutral-800 rounded-2xl p-4 shadow-sm">

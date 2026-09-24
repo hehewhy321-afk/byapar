@@ -437,7 +437,7 @@ export const PromoCodesView: Component = () => {
                   >
                     <option value="all">All Plans</option>
                     <option value="pro">Pro Plan Only</option>
-                    <option value="enterprise">Enterprise Soundbox</option>
+                    <option value="enterprise">Enterprise Mart</option>
                   </select>
                 </div>
 

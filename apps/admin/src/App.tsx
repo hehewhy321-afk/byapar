@@ -58,7 +58,7 @@ export const App: Component = () => {
       case 'promos':
         return { title: 'Coupons & Promo Engine', subtitle: 'Discount vouchers, seasonal promotions, and redemption analytics' };
       case 'tickets':
-        return { title: 'Support & Helpdesk Desk', subtitle: 'Merchant inquiries, soundbox hardware triage, and QR tickets' };
+        return { title: 'Support & Helpdesk Desk', subtitle: 'Merchant inquiries, billing triage, and QR tickets' };
       case 'onboarding':
         return { title: 'Merchant Onboarding Tracker', subtitle: 'Milestone activation funnel, drop-off diagnosis, and push nudges' };
       case 'system_health':

@@ -10,7 +10,7 @@ export const WhatsNewModal: Component = () => {
       badge: 'Major Release',
       features: [
         'AMOLED Pure Black & Modern Line Icons: Pitch black theme with clean SVG icons across all screens.',
-        'Fonepay Dynamic QR & Soundbox: Automated voice payment announcements without manual typing.',
+        'Fonepay Dynamic QR: Automated balance-locked EMVCo QR generation with WhatsApp sharing.',
         'Multi-Account Management: Unified tracking for Cash in Hand, Nabil Bank, and Digital Wallets.',
         'Complete Khata Ledger: Fast customer & supplier accounts with credit limits and WhatsApp reminders.',
         'Bill Gallery & Vouchers: Archive and categorize paper supplier bills and expense receipts.',

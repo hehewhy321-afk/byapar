@@ -14,6 +14,7 @@ import {
 import { Feather } from '@expo/vector-icons';
 import { useApp } from '../context/AppContext';
 import { ActiveTab, Party, LedgerEntry } from '../types';
+import { OnboardingChecklistWidget } from '../components/OnboardingChecklistWidget';
 
 export const DashboardScreen: React.FC = () => {
   const {
@@ -189,6 +190,9 @@ export const DashboardScreen: React.FC = () => {
           />
         }
       >
+        {/* MERCHANT ONBOARDING PROGRESS CHECKLIST */}
+        <OnboardingChecklistWidget />
+
         {/* BENTO GRID: ROW 1 - CRITICAL FINANCIAL METRICS */}
         <View style={styles.gridRow}>
           {/* Card 1: To Receive (Receivables) */}

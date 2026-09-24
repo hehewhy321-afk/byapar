@@ -94,6 +94,8 @@ export interface StoreProfile {
   vatEnabled: boolean;
   paperWidth: '58mm' | '80mm';
   whatsappTemplate: string;
+  fonepayMerchantId?: string;
+  fonepayCounterId?: string;
 }
 
 export interface BankAccount {

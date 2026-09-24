@@ -16,6 +16,8 @@ import { Theme } from '../theme';
 import { useApp } from '../context/AppContext';
 import { BillImage } from '../types';
 import { BillCollectorModal } from '../components/bills/BillCollectorModal';
+import { SubscriptionModal } from '../components/SubscriptionModal';
+import { checkMobileBillUploadLimit } from '../services/planLimits';
 import { AnimatedPressable } from '../components/common/AnimatedPressable';
 import { FadeInView } from '../components/common/FadeInView';
 import { EmptyState } from '../components/common/EmptyState';
@@ -23,16 +25,31 @@ import { EmptyState } from '../components/common/EmptyState';
 const CATEGORIES = ['All', 'Inventory', 'Utilities', 'Rent', 'Packaging', 'Logistics', 'Other'];
 
 export const BillArchiveScreen: React.FC = () => {
-  const { bills, addBill, deleteBill, theme, themeMode } = useApp();
+  const { bills, addBill, deleteBill, theme, themeMode, activeBizId } = useApp();
   const styles = useMemo(() => createStyles(theme, themeMode), [theme, themeMode]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [isCollectorOpen, setIsCollectorOpen] = useState(false);
   const [collectorInitialImage, setCollectorInitialImage] = useState<string>('');
   const [previewBill, setPreviewBill] = useState<BillImage | null>(null);
+  const [showSubModal, setShowSubModal] = useState(false);
 
   const handleDirectCapture = async () => {
     try {
+      // 1. Check Daily Bill Upload Limit
+      const limitCheck = await checkMobileBillUploadLimit(activeBizId);
+      if (!limitCheck.allowed) {
+        Alert.alert(
+          'Daily Upload Limit Reached',
+          limitCheck.message || 'You have reached your daily bill upload limit.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Upgrade Plan', onPress: () => setShowSubModal(true) },
+          ]
+        );
+        return;
+      }
+
       const { status, canAskAgain } = await ImagePicker.requestCameraPermissionsAsync();
       if (status !== 'granted') {
         if (!canAskAgain) {
@@ -64,6 +81,20 @@ export const BillArchiveScreen: React.FC = () => {
 
   const handlePickFromGallery = async () => {
     try {
+      // 1. Check Daily Bill Upload Limit
+      const limitCheck = await checkMobileBillUploadLimit(activeBizId);
+      if (!limitCheck.allowed) {
+        Alert.alert(
+          'Daily Upload Limit Reached',
+          limitCheck.message || 'You have reached your daily bill upload limit.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Upgrade Plan', onPress: () => setShowSubModal(true) },
+          ]
+        );
+        return;
+      }
+
       const { status, canAskAgain } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
         if (!canAskAgain) {
@@ -298,6 +329,12 @@ export const BillArchiveScreen: React.FC = () => {
           setCollectorInitialImage('');
         }}
         onSave={addBill}
+      />
+
+      {/* SUBSCRIPTION MODAL */}
+      <SubscriptionModal
+        visible={showSubModal}
+        onClose={() => setShowSubModal(false)}
       />
 
       {/* DETAIL PREVIEW MODAL */}

@@ -18,13 +18,16 @@ import {
   PERMISSION_GROUPS,
   getDefaultRolePermissions,
 } from '../db/permissions';
+import { SubscriptionModal } from '../components/SubscriptionModal';
+import { checkMobileStaffLimit } from '../services/planLimits';
 
 export const StaffScreen: React.FC = () => {
-  const { staffList, addStaffMember, updateStaffMember, deleteStaffMember, theme } = useApp();
+  const { staffList, addStaffMember, updateStaffMember, deleteStaffMember, theme, activeBizId } = useApp();
 
   const [search, setSearch] = useState('');
   const [modalVisible, setModalVisible] = useState(false);
   const [editingStaffId, setEditingStaffId] = useState<string | null>(null);
+  const [showSubModal, setShowSubModal] = useState(false);
 
   // Form State
   const [name, setName] = useState('');
@@ -46,7 +49,21 @@ export const StaffScreen: React.FC = () => {
     );
   }, [staffList, search]);
 
-  const openAddModal = () => {
+  const openAddModal = async () => {
+    // 1. Check Staff Limit
+    const limitCheck = await checkMobileStaffLimit(activeBizId, staffList.length);
+    if (!limitCheck.allowed) {
+      Alert.alert(
+        'Staff Account Limit Reached',
+        limitCheck.message || 'You have reached the staff account limit for your plan.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Upgrade Plan', onPress: () => setShowSubModal(true) },
+        ]
+      );
+      return;
+    }
+
     setEditingStaffId(null);
     setName('');
     setPhone('');
@@ -483,6 +500,12 @@ export const StaffScreen: React.FC = () => {
           </View>
         </View>
       </Modal>
+
+      {/* SUBSCRIPTION MODAL */}
+      <SubscriptionModal
+        visible={showSubModal}
+        onClose={() => setShowSubModal(false)}
+      />
     </View>
   );
 };

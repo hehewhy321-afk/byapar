@@ -25,6 +25,8 @@ import {
 import { generateUUID } from '../utils/uuid';
 import { getDefaultRolePermissions, StaffRole } from '../db/permissions';
 import { storage } from '../services/storage';
+import { checkMobileStoreLimit } from '../services/planLimits';
+import { getMobileSubscription } from '../services/subscriptionService';
 import { ThemeMode, Theme, getTheme } from '../theme';
 import { supabase } from '../config/supabase';
 import { User } from '@supabase/supabase-js';
@@ -46,6 +48,16 @@ const INITIAL_STORE: StoreProfile = {
   whatsappTemplate: '',
   businessType: 'general',
 };
+
+export interface UserStoreItem {
+  businessId: string;
+  businessName: string;
+  role: string;
+  phone?: string;
+  pan?: string;
+  address?: string;
+  businessType?: BusinessType;
+}
 
 interface AppContextType {
   isReady: boolean;
@@ -73,6 +85,17 @@ interface AppContextType {
   changePassword: (oldPassword: string, newPassword: string) => Promise<{ error?: string }>;
   showAuthModal: boolean;
   setShowAuthModal: (visible: boolean) => void;
+
+  // Multi-Store Management
+  userStores: UserStoreItem[];
+  switchStore: (bizId: string) => Promise<void>;
+  createStore: (params: {
+    name: string;
+    phone?: string;
+    pan?: string;
+    address?: string;
+    businessType?: BusinessType;
+  }) => Promise<{ success: boolean; businessId?: string; error?: string }>;
 
   // Products CRUD
   products: Product[];
@@ -447,6 +470,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [incomes, setIncomes] = useState<IncomeRecord[]>([]);
 
   const [activeBizId, setActiveBizId] = useState<string>(DEFAULT_BIZ_ID);
+  const [userStores, setUserStores] = useState<UserStoreItem[]>([]);
   const [categories, setCategories] = useState<CategoryItem[]>([]);
 
   // Automatic backfill of local offline data to cloud
@@ -878,20 +902,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const resolveUserBusiness = async (supabaseUser: User): Promise<string | null> => {
     try {
-      const { data: membership } = await supabase
+      const { data: memberships } = await supabase
         .from('business_members')
         .select('business_id, role, businesses(*)')
         .eq('user_id', supabaseUser.id)
-        .order('created_at', { ascending: true })
-        .limit(1)
-        .maybeSingle();
+        .order('created_at', { ascending: true });
 
-      if (membership?.business_id) {
-        const resolvedBizId = membership.business_id;
+      if (memberships && memberships.length > 0) {
+        const stores: UserStoreItem[] = memberships.map((m: any) => {
+          const b = m.businesses;
+          return {
+            businessId: m.business_id,
+            businessName: b?.name || 'My Store',
+            phone: b?.phone || '',
+            pan: b?.pan_vat_number || '',
+            address: b?.address_line || '',
+            role: m.role || 'owner',
+            businessType: b?.business_type as BusinessType,
+          };
+        });
+
+        setUserStores(stores);
+        await storage.set('user_stores', stores);
+
+        const cachedBizId = await storage.get<string>('active_biz_id', '');
+        const targetMembership =
+          (cachedBizId && memberships.find((m: any) => m.business_id === cachedBizId)) ||
+          memberships[0];
+        const resolvedBizId = targetMembership.business_id;
+
         setActiveBizId(resolvedBizId);
         await storage.set('active_biz_id', resolvedBizId);
 
-        const biz = (membership as any).businesses;
+        const biz = (targetMembership as any).businesses;
         if (biz) {
           let cloudOwner = biz.owner_name;
           if (!cloudOwner && supabaseUser?.id) {
@@ -926,6 +969,103 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return null;
   };
 
+  const switchStore = async (bizId: string) => {
+    const target = userStores.find((s) => s.businessId === bizId);
+    if (!target) return;
+
+    setActiveBizId(bizId);
+    await storage.set('active_biz_id', bizId);
+
+    setStore((prev) => ({
+      ...prev,
+      id: bizId,
+      name: target.businessName,
+      phone: target.phone || prev.phone,
+      panNumber: target.pan || prev.panNumber,
+      address: target.address || prev.address,
+      businessType: target.businessType || prev.businessType,
+    }));
+
+    await hydrateFromCloud(bizId);
+  };
+
+  const createStore = async (params: {
+    name: string;
+    phone?: string;
+    pan?: string;
+    address?: string;
+    businessType?: BusinessType;
+  }): Promise<{ success: boolean; businessId?: string; error?: string }> => {
+    try {
+      if (!user) {
+        return { success: false, error: 'You must be signed in to create an additional store' };
+      }
+
+      // Check plan limit for multi-store
+      const sub = await getMobileSubscription(activeBizId);
+      const limitCheck = await checkMobileStoreLimit(userStores.length, sub.planTier);
+      if (!limitCheck.allowed) {
+        return { success: false, error: limitCheck.message };
+      }
+
+      // 1. Create Business in Supabase
+      const { data: newBiz, error: bErr } = await supabase
+        .from('businesses')
+        .insert({
+          name: params.name,
+          owner_name: store.ownerName || user.email?.split('@')[0] || 'Store Owner',
+          phone: params.phone || store.phone,
+          pan_vat_number: params.pan,
+          address_line: params.address,
+          business_type: params.businessType || 'general',
+        })
+        .select()
+        .single();
+
+      if (bErr || !newBiz) throw bErr || new Error('Failed to create store record');
+
+      // 2. Add Business Member (owner)
+      const { error: mErr } = await supabase.from('business_members').insert({
+        business_id: newBiz.id,
+        user_id: user.id,
+        role: 'owner',
+      });
+      if (mErr) console.warn('Member insert warning:', mErr);
+
+      // 3. Create initial Free Subscription
+      await supabase.from('subscriptions').insert({
+        business_id: newBiz.id,
+        plan_tier: 'free',
+        status: 'active',
+        price: 0,
+        currency: 'NPR',
+        current_period_end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      });
+
+      const newEntry: UserStoreItem = {
+        businessId: newBiz.id,
+        businessName: newBiz.name,
+        phone: newBiz.phone,
+        pan: newBiz.pan_vat_number,
+        address: newBiz.address_line,
+        role: 'owner',
+        businessType: newBiz.business_type as BusinessType,
+      };
+
+      const updatedStores = [...userStores, newEntry];
+      setUserStores(updatedStores);
+      await storage.set('user_stores', updatedStores);
+
+      // Switch to newly created store
+      await switchStore(newBiz.id);
+
+      return { success: true, businessId: newBiz.id };
+    } catch (err: any) {
+      console.error('Mobile createStore error:', err);
+      return { success: false, error: err.message || 'Failed to create new store' };
+    }
+  };
+
   const refreshFromCloud = async () => {
     await hydrateFromCloud(activeBizId);
   };
@@ -937,6 +1077,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const storedTheme = await storage.get<ThemeMode>('theme_mode', 'dark');
       const storedStore = await storage.get<StoreProfile>('store', INITIAL_STORE);
       const storedBizId = await storage.get<string>('active_biz_id', DEFAULT_BIZ_ID);
+      const storedStores = await storage.get<UserStoreItem[]>('user_stores', []);
       const storedCategories = await storage.get<CategoryItem[]>('categories', []);
       const storedProducts = await storage.get<Product[]>('products', []);
       const storedParties = await storage.get<Party[]>('parties', []);
@@ -965,6 +1106,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setThemeModeState(storedTheme === 'light' ? 'light' : 'dark');
       setStore(storedStore);
       setActiveBizId(storedBizId);
+      if (storedStores && storedStores.length > 0) {
+        setUserStores(storedStores);
+      }
       setCategories(storedCategories);
       setProducts(storedProducts);
       setParties(storedParties);
@@ -2442,6 +2586,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         changePassword,
         showAuthModal,
         setShowAuthModal,
+        userStores,
+        switchStore,
+        createStore,
         products,
         addProduct,
         editProduct,
