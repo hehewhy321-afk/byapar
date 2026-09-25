@@ -15,7 +15,6 @@ export type AdminTab =
   | 'feature_flags'
   | 'promos'
   | 'tickets'
-  | 'onboarding'
   | 'system_health'
   | 'webhooks'
   | 'branding'
@@ -51,7 +50,6 @@ export const CommandPalette: Component<CommandPaletteProps> = (props) => {
     { id: 'nav_health', type: 'page', title: 'System Health', subtitle: 'Live infrastructure & API latency', icon: '⚡', action: () => { props.onNavigate('system_health'); props.onClose(); } },
     { id: 'nav_shops', type: 'page', title: 'Merchants & Shops', subtitle: 'Manage stores & subscriptions', icon: '🏪', action: () => { props.onNavigate('shops'); props.onClose(); } },
     { id: 'nav_promos', type: 'page', title: 'Coupons & Promos', subtitle: 'Discount promo codes & redemptions', icon: '🏷️', action: () => { props.onNavigate('promos'); props.onClose(); } },
-    { id: 'nav_onboarding', type: 'page', title: 'Onboarding Tracker', subtitle: 'Merchant activation milestones & nudges', icon: '🚀', action: () => { props.onNavigate('onboarding'); props.onClose(); } },
     { id: 'nav_tickets', type: 'page', title: 'Support Helpdesk', subtitle: 'Merchant issues, billing & QR tickets', icon: '🎧', action: () => { props.onNavigate('tickets'); props.onClose(); } },
     { id: 'nav_flags', type: 'page', title: 'Feature Flags', subtitle: 'Rollouts, AI vision & store overrides', icon: '🚩', action: () => { props.onNavigate('feature_flags'); props.onClose(); } },
     { id: 'nav_branding', type: 'page', title: 'White-Label & Receipts', subtitle: 'Custom thermal bills & store slugs', icon: '🧾', action: () => { props.onNavigate('branding'); props.onClose(); } },

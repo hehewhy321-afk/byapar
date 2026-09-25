@@ -479,6 +479,12 @@ export const SubscriptionsView: Component = () => {
                           {p.max_stores_allowed === -1 ? 'Unlimited' : `${p.max_stores_allowed} store${p.max_stores_allowed > 1 ? 's' : ''}`}
                         </span>
                       </div>
+                      <div class="flex justify-between items-center">
+                        <span class="text-gray-600 font-medium">Monthly Txn Images:</span>
+                        <span class="font-bold text-blue-700 font-mono">
+                          {p.features?.monthly_image_upload_limit === -1 ? 'Unlimited' : `${p.features?.monthly_image_upload_limit ?? 5} / mo`}
+                        </span>
+                      </div>
                     </div>
 
                     {/* Features list */}
@@ -807,6 +813,17 @@ export const SubscriptionsView: Component = () => {
                       class="w-full px-2.5 py-1.5 border rounded-lg border-gray-200 focus:outline-none focus:border-[#FF4500]"
                     />
                   </div>
+                  <div>
+                    <label class="block text-[10px] font-semibold text-gray-600 mb-0.5">Monthly Image Uploads</label>
+                    <input
+                      type="number"
+                      min="0"
+                      placeholder="e.g. 5 or 100"
+                      value={editingPlan()?.features?.monthly_image_upload_limit ?? 5}
+                      onInput={(e) => setEditingPlan((p) => p ? ({ ...p, features: { ...p.features, monthly_image_upload_limit: Number(e.currentTarget.value) } }) : null)}
+                      class="w-full px-2.5 py-1.5 border rounded-lg border-gray-200 focus:outline-none focus:border-[#FF4500]"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -816,6 +833,14 @@ export const SubscriptionsView: Component = () => {
                   Feature Flags for this Tier
                 </div>
                 <div class="grid grid-cols-2 gap-2 text-xs">
+                  <label class="flex items-center gap-2 p-2 border rounded-lg cursor-pointer hover:bg-gray-50">
+                    <input
+                      type="checkbox"
+                      checked={editingPlan()?.features?.allow_transaction_receipts !== false}
+                      onChange={(e) => setEditingPlan((p) => p ? ({ ...p, features: { ...p.features, allow_transaction_receipts: e.currentTarget.checked } }) : null)}
+                    />
+                    <span>Transaction Images (Bills/Slips)</span>
+                  </label>
                   <label class="flex items-center gap-2 p-2 border rounded-lg cursor-pointer hover:bg-gray-50">
                     <input
                       type="checkbox"

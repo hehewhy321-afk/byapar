@@ -133,3 +133,60 @@ export async function checkStoreLimit(currentStoreCount: number, activePlanTier?
       : `Store branch limit reached (${currentStoreCount}/${limit} stores). Upgrade to Pro (2 stores) or Enterprise (5 stores) to add more branches!`,
   };
 }
+
+/**
+ * Checks if the business can upload another transaction receipt image this month
+ * Admin can set custom limit per plan (default: 5/month)
+ */
+export async function checkTransactionImageLimit(businessId?: string): Promise<LimitCheckResult> {
+  let monthlyLimit = 5;
+  let planName = 'Free Plan';
+  let planTier = 'free';
+
+  if (businessId) {
+    try {
+      const sub = await getBusinessSubscription(businessId);
+      monthlyLimit = sub.planConfig?.features?.monthly_image_upload_limit ?? 5;
+      planName = sub.planName;
+      planTier = sub.planTier;
+    } catch {
+      // fallback to default 5
+    }
+  }
+
+  if (monthlyLimit === -1 || monthlyLimit >= 9999) {
+    return {
+      allowed: true,
+      current: 0,
+      limit: -1,
+      limitDisplay: 'Unlimited',
+      planName,
+      planTier,
+    };
+  }
+
+  const startOfMonth = new Date();
+  const monthKey = `byapar_receipt_uploads_${startOfMonth.toISOString().slice(0, 7)}`;
+  const currentCount = Number(localStorage.getItem(monthKey) || '0');
+  const allowed = currentCount < monthlyLimit;
+
+  return {
+    allowed,
+    current: currentCount,
+    limit: monthlyLimit,
+    limitDisplay: `${monthlyLimit} images / month`,
+    planName,
+    planTier,
+    message: allowed
+      ? undefined
+      : `Monthly receipt image limit reached (${currentCount}/${monthlyLimit} this month). Contact admin or upgrade your plan to attach more images!`,
+  };
+}
+
+export function recordReceiptUpload() {
+  const startOfMonth = new Date();
+  const monthKey = `byapar_receipt_uploads_${startOfMonth.toISOString().slice(0, 7)}`;
+  const currentCount = Number(localStorage.getItem(monthKey) || '0');
+  localStorage.setItem(monthKey, String(currentCount + 1));
+}
+

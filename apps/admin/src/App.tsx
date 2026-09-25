@@ -17,7 +17,6 @@ import { UsersView } from './views/UsersView';
 import { FeatureFlagsView } from './views/FeatureFlagsView';
 import { PromoCodesView } from './views/PromoCodesView';
 import { SupportTicketsView } from './views/SupportTicketsView';
-import { MerchantOnboardingView } from './views/MerchantOnboardingView';
 import { SystemHealthView } from './views/SystemHealthView';
 import { WebhooksView } from './views/WebhooksView';
 import { MerchantBrandingView } from './views/MerchantBrandingView';
@@ -59,8 +58,6 @@ export const App: Component = () => {
         return { title: 'Coupons & Promo Engine', subtitle: 'Discount vouchers, seasonal promotions, and redemption analytics' };
       case 'tickets':
         return { title: 'Support & Helpdesk Desk', subtitle: 'Merchant inquiries, billing triage, and QR tickets' };
-      case 'onboarding':
-        return { title: 'Merchant Onboarding Tracker', subtitle: 'Milestone activation funnel, drop-off diagnosis, and push nudges' };
       case 'system_health':
         return { title: 'System & API Health Telemetry', subtitle: 'Live infrastructure pulse, database latency, and gateway SLA' };
       case 'webhooks':
@@ -154,9 +151,6 @@ export const App: Component = () => {
               </Match>
               <Match when={activeTab() === 'tickets'}>
                 <SupportTicketsView />
-              </Match>
-              <Match when={activeTab() === 'onboarding'}>
-                <MerchantOnboardingView />
               </Match>
               <Match when={activeTab() === 'system_health'}>
                 <SystemHealthView />
