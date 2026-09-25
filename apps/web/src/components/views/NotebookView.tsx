@@ -1,6 +1,7 @@
 import { Component, createSignal, createMemo, For, Show } from 'solid-js';
 import { notes, addNote, updateNote, deleteNote, setActiveTab, type NoteItem } from '../../db/localDb';
-import { IconNotebook, IconPlus, IconSearch, IconPin, IconCopy, IconCheck, IconEdit, IconTrash, IconX } from '../icons';
+import { IconNotebook, IconPlus, IconSearch, IconPin, IconCopy, IconCheck, IconEdit, IconTrash, IconX, IconLock } from '../icons';
+import { currentLang } from '../../services/i18n';
 
 export const NotebookView: Component = () => {
   const [showModal, setShowModal] = createSignal(false);
@@ -16,6 +17,21 @@ export const NotebookView: Component = () => {
   const [noteColor, setNoteColor] = createSignal<NoteItem['color']>('emerald');
 
   const categories = ['All', 'Daily Accounts', 'Supplier Orders', 'Cheque to Clear', 'General'];
+
+  const editingNote = createMemo(() => notes.find((n) => n.id === editingNoteId()));
+
+  const formatDateTime = (isoString?: string) => {
+    if (!isoString) return '';
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return isoString;
+    return d.toLocaleString([], {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
 
   const filteredNotes = createMemo(() => {
     const q = searchQuery().toLowerCase().trim();
@@ -116,14 +132,6 @@ export const NotebookView: Component = () => {
       {/* Top Header */}
       <div class="flex flex-wrap items-center justify-between gap-4">
         <div class="flex items-center gap-3">
-          <button
-            class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-neutral-800 transition-colors text-gray-500 dark:text-neutral-400"
-            onClick={() => setActiveTab('dashboard')}
-          >
-            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" />
-            </svg>
-          </button>
           <div>
             <h1 class="text-xl font-heading font-bold text-gray-900 dark:text-white">Notebook & Daily Notes</h1>
             <p class="text-xs text-gray-400 dark:text-neutral-400">Keep track of supplier orders, cheque due dates, and Kirana store tasks</p>
@@ -212,8 +220,13 @@ export const NotebookView: Component = () => {
                   <p class="text-xs text-gray-700 dark:text-neutral-300 whitespace-pre-wrap leading-relaxed line-clamp-6">{note.content}</p>
                 </div>
 
-                <div class="mt-4 pt-3 border-t border-black/5 dark:border-white/10 flex items-center justify-between text-[10px] text-gray-500 dark:text-neutral-400">
-                  <span>{note.updatedAt}</span>
+                <div class="mt-4 pt-3 border-t border-black/5 dark:border-white/10 flex flex-wrap items-center justify-between gap-2 text-[10px] text-gray-500 dark:text-neutral-400">
+                  <div class="flex items-center gap-1.5" title="Creation timestamp is locked and immutable">
+                    <IconLock class="w-3 h-3 text-amber-500 flex-shrink-0" />
+                    <span class="font-medium">
+                      {currentLang() === 'ne' ? 'सिर्जना:' : 'Created:'} {formatDateTime(note.createdAt || note.updatedAt)}
+                    </span>
+                  </div>
                   <div class="flex items-center gap-2">
                     <button
                       class="hover:text-gray-900 dark:hover:text-white font-medium flex items-center gap-1"
@@ -223,7 +236,7 @@ export const NotebookView: Component = () => {
                       <Show when={copiedId() === note.id} fallback={<IconCopy class="w-3.5 h-3.5" />}>
                         <IconCheck class="w-3.5 h-3.5 text-emerald-500" />
                       </Show>
-                      <span>{copiedId() === note.id ? 'Copied' : 'Copy'}</span>
+                      <span>{copiedId() === note.id ? (currentLang() === 'ne' ? 'प्रतिलिपि भयो' : 'Copied') : (currentLang() === 'ne' ? 'कपि' : 'Copy')}</span>
                     </button>
                     <button
                       class="hover:text-brand-600 dark:hover:text-brand-400 font-medium flex items-center gap-1"
@@ -231,7 +244,7 @@ export const NotebookView: Component = () => {
                       onClick={() => handleOpenEdit(note)}
                     >
                       <IconEdit class="w-3.5 h-3.5" />
-                      <span>Edit</span>
+                      <span>{currentLang() === 'ne' ? 'सम्पादन' : 'Edit'}</span>
                     </button>
                     <button
                       class="hover:text-red-500 dark:hover:text-red-400 font-medium p-1"
@@ -254,12 +267,33 @@ export const NotebookView: Component = () => {
           <div class="modal-content !max-w-md p-6 bg-white dark:bg-black border border-gray-200 dark:border-neutral-800" onClick={(e) => e.stopPropagation()}>
             <div class="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-neutral-800 mb-4">
               <h3 class="font-bold text-base text-gray-900 dark:text-white">
-                {editingNoteId() ? 'Edit Note' : 'Create New Note'}
+                {editingNoteId()
+                  ? (currentLang() === 'ne' ? 'नोट सम्पादन गर्नुहोस्' : 'Edit Note')
+                  : (currentLang() === 'ne' ? 'नयाँ नोट सिर्जना गर्नुहोस्' : 'Create New Note')}
               </h3>
               <button onClick={() => setShowModal(false)} class="text-gray-400 hover:text-gray-600 dark:hover:text-white">
                 <IconX class="w-4 h-4" />
               </button>
             </div>
+
+            <Show when={editingNoteId() && editingNote()}>
+              <div class="p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/40 flex items-center justify-between text-xs text-amber-900 dark:text-amber-200 mb-3.5">
+                <div class="flex items-center gap-2">
+                  <IconLock class="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+                  <div>
+                    <p class="font-bold text-[11px]">
+                      {currentLang() === 'ne' ? 'सिर्जना गरिएको मिति र समय (लक गरिएको):' : 'Created Date & Time (Locked):'}
+                    </p>
+                    <p class="text-[11px] font-mono text-gray-700 dark:text-neutral-300">
+                      {formatDateTime(editingNote()?.createdAt || editingNote()?.updatedAt)}
+                    </p>
+                  </div>
+                </div>
+                <span class="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-amber-200/70 dark:bg-amber-800/50 text-amber-900 dark:text-amber-200">
+                  {currentLang() === 'ne' ? 'अपरिवर्तनीय' : 'Immutable'}
+                </span>
+              </div>
+            </Show>
 
             <form onSubmit={handleSaveNote} class="space-y-3.5">
               <div>
