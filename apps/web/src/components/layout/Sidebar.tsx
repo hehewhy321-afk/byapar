@@ -43,7 +43,7 @@ import {
   IconBell,
 } from '../icons';
 import { unreadNotificationCount } from '../../services/notificationService';
-import { t } from '../../services/i18n';
+import { t, currentLang } from '../../services/i18n';
 
 interface NavItemProps {
   icon: Component<{ class?: string }>;
@@ -100,6 +100,7 @@ export const Sidebar: Component = () => {
     { label: 'Business Cards', tab: 'business-cards' as ActiveTab, icon: IconBusinessCard },
     { label: 'Greeting Cards', tab: 'greeting-cards' as ActiveTab, icon: IconGreetingCards },
     { label: 'Notebook', tab: 'notebook' as ActiveTab, icon: IconNotebook },
+    { label: () => currentLang() === 'ne' ? 'क्यालकुलेटर तथा औजार' : 'Calculators & Tools', tab: 'utilities' as ActiveTab, icon: IconTools },
   ];
 
   return (

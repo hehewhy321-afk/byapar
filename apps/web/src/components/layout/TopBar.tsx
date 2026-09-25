@@ -26,6 +26,12 @@ import {
   markNotificationAsRead,
 } from '../../services/notificationService';
 import {
+  isOnline,
+  isSyncing,
+  pendingCount,
+  processOutboxQueue,
+} from '../../services/offlineSyncService';
+import {
   IconSearch,
   IconBell,
   IconSun,
@@ -283,6 +289,61 @@ export const TopBar: Component = () => {
                 <span>Upgrade</span>
               </button>
             </Show>
+
+            {/* Offline / Online Sync Indicator Badge */}
+            <button
+              type="button"
+              onClick={() => {
+                if (isOnline() && !isSyncing()) {
+                  processOutboxQueue();
+                }
+              }}
+              class={`px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1.5 transition cursor-pointer ${
+                !isOnline()
+                  ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-800'
+                  : isSyncing()
+                  ? 'bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-400 border border-blue-300 dark:border-blue-800 animate-pulse'
+                  : pendingCount() > 0
+                  ? 'bg-yellow-100 dark:bg-yellow-950/60 text-yellow-700 dark:text-yellow-400 border border-yellow-300 dark:border-yellow-800'
+                  : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800'
+              }`}
+              title={
+                !isOnline()
+                  ? 'Offline: Changes saved locally'
+                  : isSyncing()
+                  ? 'Syncing with cloud...'
+                  : pendingCount() > 0
+                  ? `${pendingCount()} items waiting to sync. Click to sync now.`
+                  : 'Online & Synced with cloud. Click to re-sync.'
+              }
+            >
+              <span
+                class={`w-2 h-2 rounded-full ${
+                  !isOnline()
+                    ? 'bg-amber-500'
+                    : isSyncing()
+                    ? 'bg-blue-500 animate-ping'
+                    : pendingCount() > 0
+                    ? 'bg-yellow-500'
+                    : 'bg-emerald-500'
+                }`}
+              />
+              <span class="hidden sm:inline">
+                {!isOnline()
+                  ? settings.lang === 'ne'
+                    ? 'अफलाइन'
+                    : 'Offline'
+                  : isSyncing()
+                  ? settings.lang === 'ne'
+                    ? 'सिंक हुँदैछ...'
+                    : 'Syncing...'
+                  : pendingCount() > 0
+                  ? `${pendingCount()} ${settings.lang === 'ne' ? 'बाँकी' : 'Queued'}`
+                  : settings.lang === 'ne'
+                  ? 'अनलाइन'
+                  : 'Online'}
+              </span>
+            </button>
           </div>
 
           {/* User Profile Badge */}
@@ -405,6 +466,25 @@ export const TopBar: Component = () => {
           </div>
         </div>
       </div>
+
+      {/* Offline Alert Ribbon */}
+      <Show when={!isOnline()}>
+        <div class="mt-2.5 -mx-4 sm:-mx-6 px-4 sm:px-6 py-1.5 bg-amber-500/10 dark:bg-amber-500/15 border-t border-amber-500/25 flex items-center justify-between text-xs text-amber-800 dark:text-amber-300">
+          <div class="flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+            <span class="font-medium">
+              {settings.lang === 'ne'
+                ? 'अफलाइन मोड: तपाईं इन्टरनेट बिना काम गर्दै हुनुहुन्छ। सबै डाटा स्थानीय रूपमा सुरक्षित छ र अनलाइन भएपछि स्वतः सिंक हुनेछ।'
+                : 'Offline Mode: Working without internet. All data is saved locally and will auto-sync on reconnect.'}
+            </span>
+          </div>
+          <Show when={pendingCount() > 0}>
+            <span class="font-bold bg-amber-500/20 px-2 py-0.5 rounded text-[11px]">
+              {pendingCount()} {settings.lang === 'ne' ? 'सिंक बाँकी' : 'pending'}
+            </span>
+          </Show>
+        </div>
+      </Show>
     </header>
   );
 };

@@ -6,6 +6,7 @@ import {
   parties,
   items,
   accounts,
+  currentBusiness,
   createPurchaseBill,
   createPurchaseReturn,
   createPaymentOut,
@@ -14,6 +15,7 @@ import {
   PurchaseReturn,
 } from '../../db/localDb';
 import { t, currentLang } from '../../services/i18n';
+import { checkTransactionImageLimit, recordReceiptUpload } from '../../services/planLimits';
 import {
   IconPurchase,
   IconSearch,
@@ -32,6 +34,28 @@ export function PurchaseView() {
   const [showPaymentOutModal, setShowPaymentOutModal] = createSignal(false);
   const [showReturnModal, setShowReturnModal] = createSignal(false);
   const [selectedBill, setSelectedBill] = createSignal<PurchaseBill | null>(null);
+
+  // Receipt Slip states
+  const [billReceiptUrl, setBillReceiptUrl] = createSignal<string | null>(null);
+  const [viewReceiptModal, setViewReceiptModal] = createSignal<string | null>(null);
+
+  const handleBillReceiptUpload = async (e: Event) => {
+    const input = e.target as HTMLInputElement;
+    if (!input.files || input.files.length === 0) return;
+
+    const limitCheck = await checkTransactionImageLimit(currentBusiness.id);
+    if (!limitCheck.allowed) {
+      alert(limitCheck.message || 'Monthly receipt upload limit reached. Upgrade plan to attach more images.');
+      return;
+    }
+
+    const file = input.files[0];
+    const reader = new FileReader();
+    reader.onload = () => {
+      setBillReceiptUrl(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
 
   // New Purchase Bill Form State
   const [billSupplierName, setBillSupplierName] = createSignal('');
@@ -190,9 +214,15 @@ export function PurchaseView() {
       status: due === 0 ? 'paid' : paid > 0 ? 'partial' : 'unpaid',
       notes: billNotes() || undefined,
       items: validItems,
+      receiptUrl: billReceiptUrl() || undefined,
     });
 
+    if (billReceiptUrl()) {
+      recordReceiptUpload();
+    }
+
     setShowBillModal(false);
+    setBillReceiptUrl(null);
     setBillSupplierName('');
     setBillSupplierPhone('');
     setBillSupplierId('');
@@ -417,13 +447,24 @@ export function PurchaseView() {
                         </span>
                       </td>
                       <td class="px-5 py-4 text-right">
-                        <button
-                          onClick={() => setSelectedBill(bill)}
-                          class="p-2 rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-neutral-900 dark:hover:bg-neutral-800 text-gray-600 hover:text-gray-900 dark:text-neutral-300 dark:hover:text-white transition-colors"
-                          title={t('viewReceipt')}
-                        >
-                          <IconEye class="w-4 h-4" />
-                        </button>
+                        <div class="flex items-center justify-end gap-1.5">
+                          <Show when={bill.receiptUrl}>
+                            <button
+                              onClick={() => setViewReceiptModal(bill.receiptUrl!)}
+                              class="p-2 rounded-lg bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/40 dark:hover:bg-blue-900/60 text-blue-600 dark:text-blue-400 transition-colors"
+                              title={currentLang() === 'ne' ? 'रसिद हेर्नुहोस्' : 'View Receipt Slip'}
+                            >
+                              <IconReceipt class="w-4 h-4" />
+                            </button>
+                          </Show>
+                          <button
+                            onClick={() => setSelectedBill(bill)}
+                            class="p-2 rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-neutral-900 dark:hover:bg-neutral-800 text-gray-600 hover:text-gray-900 dark:text-neutral-300 dark:hover:text-white transition-colors"
+                            title={t('viewReceipt')}
+                          >
+                            <IconEye class="w-4 h-4" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   )}
@@ -686,6 +727,32 @@ export function PurchaseView() {
                   placeholder={currentLang() === 'ne' ? 'चलानी नं. वा कैफियत...' : 'e.g., Delivery challan # or remarks'}
                   class="w-full px-3 py-2 bg-gray-50 dark:bg-neutral-900 border border-gray-300 dark:border-neutral-800 rounded-lg text-gray-900 dark:text-white text-sm focus:outline-none focus:border-blue-500"
                 />
+              </div>
+
+              <div>
+                <label class="block text-xs text-gray-600 dark:text-neutral-400 mb-1">
+                  {currentLang() === 'ne' ? 'बिल / भौचर फोटो संलग्न गर्नुहोस्' : 'Attach Bill / Receipt Photo (Optional)'}
+                </label>
+                <div class="flex items-center gap-3">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleBillReceiptUpload}
+                    class="text-xs text-gray-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-gray-100 dark:file:bg-neutral-800 file:text-gray-700 dark:file:text-neutral-200 cursor-pointer"
+                  />
+                  <Show when={billReceiptUrl()}>
+                    <div class="relative inline-block shrink-0">
+                      <img src={billReceiptUrl()!} alt="Bill slip" class="w-10 h-10 object-cover rounded-lg border border-gray-200 dark:border-neutral-700" />
+                      <button
+                        type="button"
+                        onClick={() => setBillReceiptUrl(null)}
+                        class="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full w-4 h-4 text-[10px] flex items-center justify-center font-bold"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </Show>
+                </div>
               </div>
 
               <div class="flex justify-end gap-3 pt-3">
@@ -1043,10 +1110,69 @@ export function PurchaseView() {
               </div>
             </div>
 
+              <Show when={selectedBill()?.receiptUrl}>
+                <div class="pt-3 border-t border-gray-200 dark:border-neutral-800">
+                  <span class="text-xs font-semibold text-gray-500 dark:text-neutral-400 uppercase block mb-1.5">
+                    {currentLang() === 'ne' ? 'संलग्न बिल / रसिद' : 'Attached Bill / Slip'}
+                  </span>
+                  <div class="relative group inline-block">
+                    <img
+                      src={selectedBill()!.receiptUrl}
+                      alt="Bill receipt"
+                      class="max-h-40 rounded-lg border border-gray-200 dark:border-neutral-700 cursor-pointer object-contain bg-gray-50 dark:bg-neutral-900 p-1"
+                      onClick={() => setViewReceiptModal(selectedBill()!.receiptUrl!)}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setViewReceiptModal(selectedBill()!.receiptUrl!)}
+                      class="mt-1 text-xs text-blue-600 dark:text-blue-400 font-medium hover:underline flex items-center gap-1"
+                    >
+                      <IconEye class="w-3.5 h-3.5" />
+                      <span>{currentLang() === 'ne' ? 'पूरा साइज हेर्नुहोस्' : 'View Full Image'}</span>
+                    </button>
+                  </div>
+                </div>
+              </Show>
+
             <div class="flex justify-end pt-3">
               <button
                 onClick={() => setSelectedBill(null)}
                 class="px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-gray-900 dark:text-white rounded-lg text-sm transition-colors"
+              >
+                {t('close')}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Show>
+
+      {/* View Full Receipt Modal */}
+      <Show when={viewReceiptModal()}>
+        <div class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in" onClick={() => setViewReceiptModal(null)}>
+          <div class="bg-white dark:bg-neutral-950 border border-gray-200 dark:border-neutral-800 rounded-2xl w-full max-w-xl p-5 space-y-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div class="flex items-center justify-between border-b border-gray-100 dark:border-neutral-800 pb-3">
+              <h3 class="text-base font-bold text-gray-900 dark:text-white">
+                {currentLang() === 'ne' ? 'खरिद बिल / भौचर' : 'Purchase Bill / Slip'}
+              </h3>
+              <button onClick={() => setViewReceiptModal(null)} class="text-gray-400 hover:text-gray-600 dark:hover:text-white">
+                ✕
+              </button>
+            </div>
+            <div class="flex justify-center bg-gray-50 dark:bg-neutral-900 rounded-xl p-2 max-h-[70vh] overflow-auto">
+              <img src={viewReceiptModal()!} alt="Bill receipt" class="max-w-full max-h-[65vh] object-contain rounded-lg" />
+            </div>
+            <div class="flex justify-end gap-2 pt-2">
+              <a
+                href={viewReceiptModal()!}
+                download="purchase-bill-slip.png"
+                class="px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-gray-900 dark:text-white rounded-lg text-xs font-semibold flex items-center gap-1.5"
+              >
+                <span>{currentLang() === 'ne' ? 'डाउनलोड गर्नुहोस्' : 'Download'}</span>
+              </a>
+              <button
+                type="button"
+                onClick={() => setViewReceiptModal(null)}
+                class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold"
               >
                 {t('close')}
               </button>

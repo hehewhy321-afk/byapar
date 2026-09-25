@@ -20,7 +20,8 @@ import {
   SubscriptionHistoryItem,
 } from '../../services/subscriptionService';
 import { SubscriptionInvoiceModal } from '../modals/SubscriptionInvoiceModal';
-import { IconShield, IconLock, IconStore, IconEdit, IconCrown, IconQrCode, IconCheck } from '../icons';
+import { IconShield, IconLock, IconStore, IconEdit, IconCrown, IconQrCode, IconCheck, IconBusinessCard } from '../icons';
+import { currentLang } from '../../services/i18n';
 
 export const SettingsView: Component = () => {
   const [sub, setSub] = createSignal<BusinessSubscriptionState | null>(null);
@@ -104,7 +105,7 @@ export const SettingsView: Component = () => {
 
   return (
     <div class="p-6 animate-fade-in max-w-3xl">
-      {/* Header */}
+      {/* Header
       <div class="flex items-center gap-3 mb-6">
         <button
           class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-neutral-800 transition-colors text-gray-500 dark:text-neutral-400"
@@ -115,7 +116,7 @@ export const SettingsView: Component = () => {
           </svg>
         </button>
         <h1 class="text-xl font-heading font-bold text-gray-900 dark:text-white">Settings</h1>
-      </div>
+      </div> */}
 
       <div class="space-y-5">
         {/* Subscription & Plan Status */}
@@ -358,6 +359,41 @@ export const SettingsView: Component = () => {
                 {savingFonepay() ? 'Saving...' : 'Save Fonepay QR'}
               </button>
             </div>
+          </div>
+        </div>
+
+        {/* Digital Business Card Studio Shortcut */}
+        <div class="stat-card bg-gradient-to-r from-emerald-500/10 via-teal-500/5 to-transparent border border-emerald-500/30">
+          <div class="flex items-center justify-between flex-wrap gap-4">
+            <div class="flex items-start gap-3.5">
+              <div class="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-md">
+                <IconBusinessCard class="w-5 h-5" />
+              </div>
+              <div>
+                <div class="flex items-center gap-2">
+                  <h3 class="text-sm font-bold text-gray-900 dark:text-white">
+                    {currentLang() === 'ne' ? 'डिजिटल भिजिटिङ कार्ड स्टुडियो' : 'Digital Business Card Studio'}
+                  </h3>
+                  <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                    5 Templates
+                  </span>
+                </div>
+                <p class="text-xs text-gray-500 dark:text-neutral-400 mt-1 max-w-xl">
+                  {currentLang() === 'ne'
+                    ? 'आफ्नो पसलको नाम, ठेगाना, फोन र ह्वाट्सएप नम्बर राखी ५ फरक डिजाइनमा कार्ड बनाउनुहोस्, इमेज डाउनलोड गर्नुहोस् र ह्वाट्सएपमा सेयर गर्नुहोस्।'
+                    : 'Create attractive digital cards for your store with custom details, 5 design templates, dynamic color themes, PNG download & WhatsApp sharing.'}
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              class="btn-primary text-xs flex items-center gap-1.5"
+              onClick={() => setActiveTab('business-cards')}
+            >
+              <span>{currentLang() === 'ne' ? 'कार्ड बनाउनुहोस्' : 'Open Card Studio'}</span>
+              <span>→</span>
+            </button>
           </div>
         </div>
 

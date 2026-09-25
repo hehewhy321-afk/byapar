@@ -184,6 +184,7 @@ export interface PurchaseBill {
     costPrice: number;
     totalAmount: number;
   }[];
+  receiptUrl?: string;
 }
 
 export interface PurchaseReturn {
@@ -235,7 +236,9 @@ export interface ExpenseRecord {
   date: string;
   note?: string;
   recipientName?: string;
+  receiptUrl?: string;
   createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface IncomeRecord {
@@ -246,7 +249,36 @@ export interface IncomeRecord {
   date: string;
   note?: string;
   payerName?: string;
+  receiptUrl?: string;
   createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ReminderItem {
+  id: string;
+  partyId?: string;
+  partyName?: string;
+  title: string;
+  amount?: number;
+  dueDate: string;
+  dueTime?: string;
+  reminderType: 'payment_reminder' | 'task_reminder' | 'event_reminder' | 'customer_due' | 'supplier_payment' | 'custom';
+  frequency?: 'once' | 'daily' | 'weekly' | 'monthly';
+  note?: string;
+  status: 'upcoming' | 'completed';
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface NoteItem {
+  id: string;
+  title: string;
+  content: string;
+  category: string;
+  color?: string;
+  isPinned?: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export type ActiveTab =
@@ -263,7 +295,11 @@ export type ActiveTab =
   | 'staff'
   | 'more'
   | 'settings'
-  | 'notifications';
+  | 'notifications'
+  | 'reminders'
+  | 'notes'
+  | 'business_card'
+  | 'utilities';
 
 export type NotificationType =
   | 'debtor_reminder'

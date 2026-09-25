@@ -20,7 +20,7 @@ interface Props {
 }
 
 export const StoreSetupScreen: React.FC<Props> = ({ onComplete }) => {
-  const { store, completeOnboarding } = useApp();
+  const { store, completeOnboarding, language, setLanguage, themeMode, setThemeMode } = useApp();
 
   const [name, setName] = useState(store.name);
   const [ownerName, setOwnerName] = useState(store.ownerName);
@@ -119,6 +119,48 @@ export const StoreSetupScreen: React.FC<Props> = ({ onComplete }) => {
             onChangeText={setAddress}
           />
 
+          <View style={styles.prefSection}>
+            <Text style={styles.label}>Language / भाषा</Text>
+            <View style={styles.optionRow}>
+              <AnimatedPressable
+                style={[styles.prefOption, language === 'en' && styles.prefOptionActive]}
+                onPress={() => setLanguage('en')}
+                activeScale={0.96}
+              >
+                <Feather name="globe" size={14} color={language === 'en' ? theme.colors.primary : theme.colors.textMuted} />
+                <Text style={[styles.prefOptionText, language === 'en' && styles.prefOptionTextActive]}>English</Text>
+              </AnimatedPressable>
+              <AnimatedPressable
+                style={[styles.prefOption, language === 'ne' && styles.prefOptionActive]}
+                onPress={() => setLanguage('ne')}
+                activeScale={0.96}
+              >
+                <Feather name="globe" size={14} color={language === 'ne' ? theme.colors.primary : theme.colors.textMuted} />
+                <Text style={[styles.prefOptionText, language === 'ne' && styles.prefOptionTextActive]}>नेपाली</Text>
+              </AnimatedPressable>
+            </View>
+
+            <Text style={[styles.label, { marginTop: 12 }]}>App Theme / थिम</Text>
+            <View style={styles.optionRow}>
+              <AnimatedPressable
+                style={[styles.prefOption, themeMode === 'light' && styles.prefOptionActive]}
+                onPress={() => setThemeMode('light')}
+                activeScale={0.96}
+              >
+                <Feather name="sun" size={14} color={themeMode === 'light' ? theme.colors.primary : theme.colors.textMuted} />
+                <Text style={[styles.prefOptionText, themeMode === 'light' && styles.prefOptionTextActive]}>Light Mode</Text>
+              </AnimatedPressable>
+              <AnimatedPressable
+                style={[styles.prefOption, themeMode === 'dark' && styles.prefOptionActive]}
+                onPress={() => setThemeMode('dark')}
+                activeScale={0.96}
+              >
+                <Feather name="moon" size={14} color={themeMode === 'dark' ? theme.colors.primary : theme.colors.textMuted} />
+                <Text style={[styles.prefOptionText, themeMode === 'dark' && styles.prefOptionTextActive]}>Dark Mode</Text>
+              </AnimatedPressable>
+            </View>
+          </View>
+
           <AnimatedPressable style={styles.submitBtn} onPress={handleSave} activeScale={0.96}>
             <Text style={styles.submitText}>Launch Retail OS</Text>
             <Feather name="arrow-right" size={16} color="#FFFFFF" />
@@ -198,6 +240,43 @@ const styles = StyleSheet.create({
   },
   flexOne: {
     flex: 1,
+  },
+  prefSection: {
+    marginTop: 14,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.borderGlass,
+  },
+  optionRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 6,
+  },
+  prefOption: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: theme.borderRadius.md,
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1.5,
+    borderColor: theme.colors.borderGlass,
+  },
+  prefOptionActive: {
+    borderColor: theme.colors.primary,
+    backgroundColor: 'rgba(255, 69, 0, 0.08)',
+  },
+  prefOptionText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: theme.colors.textSecondary,
+  },
+  prefOptionTextActive: {
+    color: theme.colors.primary,
+    fontWeight: '800',
   },
   submitBtn: {
     flexDirection: 'row',

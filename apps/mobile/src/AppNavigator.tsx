@@ -8,6 +8,8 @@ import {
   BackHandler,
   ToastAndroid,
   Platform,
+  AppState,
+  AppStateStatus,
 } from 'react-native';
 import { useApp } from './context/AppContext';
 import { theme } from './theme';
@@ -29,7 +31,15 @@ import { NotificationScreen } from './screens/NotificationScreen';
 import { AuthScreen } from './screens/AuthScreen';
 import { DashboardScreen } from './screens/DashboardScreen';
 import { ExpenseIncomeScreen } from './screens/ExpenseIncomeScreen';
+import { RemindersScreen } from './screens/RemindersScreen';
+import { NotesScreen } from './screens/NotesScreen';
+import { BusinessCardScreen } from './screens/BusinessCardScreen';
+import { UtilitiesScreen } from './screens/UtilitiesScreen';
+import { AppLockModal } from './components/security/AppLockModal';
+import { appLockService } from './services/appLockService';
+
 import { analytics } from './services/analyticsService';
+
 import { ActiveTab } from './types';
 
 const MAIN_TABS: ActiveTab[] = [
@@ -61,7 +71,34 @@ export const AppNavigator: React.FC = () => {
     user,
   } = useApp();
   const [onboardingStep, setOnboardingStep] = useState<'intro' | 'setup'>('intro');
+  const [isAppLocked, setIsAppLocked] = useState(false);
   const lastBackPressRef = useRef<number>(0);
+
+  // App Lock Lifecycle Monitor
+  useEffect(() => {
+    const checkInitialLock = async () => {
+      const cfg = await appLockService.getConfig();
+      if (cfg.enabled && !appLockService.isSessionUnlocked()) {
+        setIsAppLocked(true);
+      }
+    };
+    checkInitialLock();
+
+    const subscription = AppState.addEventListener('change', async (nextState: AppStateStatus) => {
+      if (nextState === 'background' || nextState === 'inactive') {
+        appLockService.setSessionUnlocked(false);
+      } else if (nextState === 'active') {
+        const cfg = await appLockService.getConfig();
+        if (cfg.enabled && !appLockService.isSessionUnlocked()) {
+          setIsAppLocked(true);
+        }
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
 
   // Track screen navigation in Firebase Analytics
   useEffect(() => {
@@ -173,13 +210,27 @@ export const AppNavigator: React.FC = () => {
         {activeTab === 'staff' && <StaffScreen />}
         {activeTab === 'settings' && <SettingsScreen />}
         {activeTab === 'notifications' && <NotificationScreen />}
+        {activeTab === 'reminders' && <RemindersScreen />}
+        {activeTab === 'notes' && <NotesScreen />}
+        {activeTab === 'business_card' && <BusinessCardScreen />}
+        {activeTab === 'utilities' && <UtilitiesScreen />}
       </View>
+
 
       {/* Bottom Navigation Bar */}
       <TabBar />
 
       {/* Cloud Supabase Auth Modal */}
       <AuthScreen visible={showAuthModal} onClose={() => setShowAuthModal(false)} />
+
+      {/* App Lock Keypad Shield */}
+      <AppLockModal
+        visible={isAppLocked}
+        onUnlock={() => {
+          appLockService.setSessionUnlocked(true);
+          setIsAppLocked(false);
+        }}
+      />
     </View>
   );
 };

@@ -200,15 +200,6 @@ export const AccountsView: Component = () => {
       {/* Header */}
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div class="flex items-center gap-3">
-          <button
-            class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-neutral-800 transition-colors text-gray-500 dark:text-neutral-400"
-            onClick={() => setActiveTab('dashboard')}
-          >
-            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="19" y1="12" x2="5" y2="12" />
-              <polyline points="12 19 5 12 12 5" />
-            </svg>
-          </button>
           <div>
             <h1 class="text-xl font-heading font-bold text-gray-900 dark:text-white">Manage Accounts & Cash Flow</h1>
             <p class="text-xs text-gray-500 dark:text-neutral-400">Track bank balances, cash drawers, digital wallets, and money transfers</p>

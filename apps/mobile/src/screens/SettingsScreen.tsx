@@ -13,13 +13,16 @@ import {
   Image,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { Feather } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useApp } from '../context/AppContext';
 import { SubscriptionModal } from '../components/SubscriptionModal';
 import { SupportHelpdeskModal } from '../components/SupportHelpdeskModal';
 import { getMobileSubscription } from '../services/subscriptionService';
 import { updateService, CURRENT_APP_VERSION } from '../services/updateService';
 import { buildWhatsAppReminderMessage } from '../services/whatsapp';
+import { appLockService } from '../services/appLockService';
+import { SetupPinModal } from '../components/security/SetupPinModal';
+import { offlineSyncService, OfflineSyncStatus } from '../services/offlineSyncService';
 import {
   checkNotificationPermission,
   requestNotificationPermission,
@@ -97,9 +100,22 @@ export const SettingsScreen: React.FC = () => {
     setShowAuthModal,
     userStores,
     language,
+    setLanguage,
     toggleLanguage,
     t,
+    setActiveTab,
   } = useApp();
+
+  // Network & Cloud Sync status
+  const [syncStatus, setSyncStatus] = useState<OfflineSyncStatus>(offlineSyncService.getStatus());
+  const [showLanguageModal, setShowLanguageModal] = useState(false);
+  const [showBiometricConfirmModal, setShowBiometricConfirmModal] = useState(false);
+  const [biometricMatching, setBiometricMatching] = useState(false);
+
+  useEffect(() => {
+    const unsub = offlineSyncService.subscribe(setSyncStatus);
+    return () => unsub();
+  }, []);
 
   // Notification Permission & Preferences state
   const [hasPermission, setHasPermission] = useState<boolean>(true);
@@ -115,6 +131,101 @@ export const SettingsScreen: React.FC = () => {
   const [fonepayCounterId, setFonepayCounterId] = useState(store.fonepayCounterId || '');
   const [fonepayQrImage, setFonepayQrImage] = useState(store.fonepayQrImage || '');
   const [savingFonepay, setSavingFonepay] = useState(false);
+
+  // App Lock State
+  const [appLockConfig, setAppLockConfig] = useState({
+    enabled: false,
+    pinLength: 4 as 4 | 6,
+    useBiometrics: false,
+  });
+  const [showSetupPinModal, setShowSetupPinModal] = useState(false);
+
+  const loadAppLockConfig = async () => {
+    const cfg = await appLockService.getConfig();
+    setAppLockConfig({
+      enabled: cfg.enabled,
+      pinLength: cfg.pinLength,
+      useBiometrics: cfg.useBiometrics,
+    });
+  };
+
+  useEffect(() => {
+    loadAppLockConfig();
+  }, []);
+
+  const handleToggleAppLock = async (enable: boolean) => {
+    if (enable) {
+      setShowSetupPinModal(true);
+    } else {
+      Alert.alert(
+        language === 'ne' ? 'एप लक बन्द गर्ने?' : 'Disable App Lock?',
+        language === 'ne' ? 'के तपाईं एप लक निष्क्रिय गर्न चाहनुहुन्छ?' : 'Are you sure you want to disable PIN lock?',
+        [
+          { text: language === 'ne' ? 'रद्द' : 'Cancel', style: 'cancel' },
+          {
+            text: language === 'ne' ? 'बन्द गर्नुहोस्' : 'Disable',
+            style: 'destructive',
+            onPress: async () => {
+              await appLockService.disableLock();
+              loadAppLockConfig();
+            },
+          },
+        ]
+      );
+    }
+  };
+
+  const handleToggleBiometrics = async (val: boolean) => {
+    if (val) {
+      const { hasHardware, isEnrolled } = await appLockService.checkBiometricsSupport();
+      if (!hasHardware) {
+        Alert.alert(
+          language === 'ne' ? 'सुविधा उपलब्ध छैन' : 'Biometrics Unavailable',
+          language === 'ne'
+            ? 'तपाईंको डिभाइसमा फिंगरप्रिन्ट हार्डवेयर भेटिएन।'
+            : 'Your device does not have a fingerprint sensor.'
+        );
+        return;
+      }
+      if (!isEnrolled) {
+        Alert.alert(
+          language === 'ne' ? 'फिंगरप्रिन्ट दर्ता छैन' : 'No Fingerprint Enrolled',
+          language === 'ne'
+            ? 'कृपया आफ्नो फोनको सेटिङ्सबाट कम्तिमा एक फिंगरप्रिन्ट दर्ता गर्नुहोस्।'
+            : 'Please register at least one fingerprint in your device Settings first.'
+        );
+        return;
+      }
+
+      // Prompt actual native hardware fingerprint dialog to confirm match with system
+      const auth = await appLockService.authenticateWithBiometrics(
+        language === 'ne'
+          ? 'फिंगरप्रिन्ट सक्रिय गर्न सेन्सर छुनुहोस्'
+          : 'Confirm fingerprint to enable biometric unlock'
+      );
+
+      if (auth.success) {
+        await appLockService.setBiometrics(true);
+        setAppLockConfig((prev) => ({ ...prev, useBiometrics: true }));
+        Alert.alert(
+          language === 'ne' ? 'फिंगरप्रिन्ट सफल' : 'Fingerprint Enabled',
+          language === 'ne'
+            ? 'बायोमेट्रिक फिंगरप्रिन्ट लक सक्रिय गरियो।'
+            : 'Fingerprint biometric lock has been successfully enabled.'
+        );
+      } else {
+        Alert.alert(
+          language === 'ne' ? 'प्रमाणीकरण असफल' : 'Verification Cancelled',
+          language === 'ne'
+            ? 'फिंगरप्रिन्ट मिलेन वा रद्द गरियो।'
+            : 'Fingerprint match failed or was cancelled.'
+        );
+      }
+    } else {
+      await appLockService.setBiometrics(false);
+      setAppLockConfig((prev) => ({ ...prev, useBiometrics: false }));
+    }
+  };
 
   const handlePickQrImage = async () => {
     try {
@@ -413,10 +524,101 @@ export const SettingsScreen: React.FC = () => {
         )}
       </View>
 
+      {/* CLOUD SYNC & NETWORK STATUS CARD */}
+      <View
+        style={[
+          styles.syncCard,
+          { backgroundColor: theme.colors.card, borderColor: theme.colors.borderGlass },
+        ]}
+      >
+        <View style={styles.syncCardHeader}>
+          <View style={styles.syncCardLeft}>
+            <View
+              style={[
+                styles.syncPulseDot,
+                !syncStatus.isOnline
+                  ? { backgroundColor: '#F59E0B' }
+                  : syncStatus.isSyncing
+                  ? { backgroundColor: '#3B82F6' }
+                  : { backgroundColor: '#10B981' },
+              ]}
+            />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.syncCardTitle, { color: theme.colors.textPrimary }]}>
+                {!syncStatus.isOnline
+                  ? (language === 'ne' ? 'अफलाइन मोड (स्थानीय डेटा)' : 'Offline Mode (Local Storage)')
+                  : syncStatus.isSyncing
+                  ? (language === 'ne' ? 'क्लाउड सिंक हुँदैछ...' : 'Syncing with Byapar Cloud...')
+                  : (language === 'ne' ? 'क्लाउड सिंक सक्रिय (अनलाइन)' : 'Cloud Sync Active (Online)')}
+              </Text>
+              <Text style={[styles.syncCardSubtitle, { color: theme.colors.textMuted }]}>
+                {syncStatus.pendingCount > 0
+                  ? (language === 'ne'
+                      ? `${syncStatus.pendingCount} कारोबारहरू सिंक हुन बाँकी`
+                      : `${syncStatus.pendingCount} pending transaction(s) queued`)
+                  : (language === 'ne'
+                      ? 'सबै कारोबारहरू सुरक्षित रूपमा सुरक्षित छन्'
+                      : 'All records backed up to cloud')}
+              </Text>
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={[
+              styles.syncNowBtn,
+              {
+                backgroundColor:
+                  syncStatus.isSyncing
+                    ? 'rgba(59, 130, 246, 0.12)'
+                    : syncStatus.isOnline
+                    ? 'rgba(255, 69, 0, 0.12)'
+                    : 'rgba(150, 150, 150, 0.12)',
+              },
+            ]}
+            onPress={() => {
+              if (syncStatus.isOnline && !syncStatus.isSyncing) {
+                offlineSyncService.processQueue();
+              }
+            }}
+            disabled={!syncStatus.isOnline || syncStatus.isSyncing}
+            activeOpacity={0.7}
+          >
+            <Feather
+              name={syncStatus.isSyncing ? 'refresh-cw' : 'cloud'}
+              size={13}
+              color={
+                syncStatus.isSyncing
+                  ? '#3B82F6'
+                  : syncStatus.isOnline
+                  ? theme.colors.primary
+                  : theme.colors.textMuted
+              }
+            />
+            <Text
+              style={[
+                styles.syncNowBtnText,
+                {
+                  color:
+                    syncStatus.isSyncing
+                      ? '#3B82F6'
+                      : syncStatus.isOnline
+                      ? theme.colors.primary
+                      : theme.colors.textMuted,
+                },
+              ]}
+            >
+              {syncStatus.isSyncing
+                ? (language === 'ne' ? 'सिंक...' : 'Syncing')
+                : (language === 'ne' ? 'अहिले सिंक' : 'Sync Now')}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
       {/* 2. ACCOUNT & SECURITY */}
       <View style={styles.categoryBlock}>
         <Text style={[styles.categoryTitle, { color: theme.colors.textMuted }]}>
-          ACCOUNT & SECURITY
+          {language === 'ne' ? 'खाता तथा सुरक्षा' : 'ACCOUNT & SECURITY'}
         </Text>
         <View
           style={[
@@ -425,43 +627,27 @@ export const SettingsScreen: React.FC = () => {
           ]}
         >
           {user ? (
-            <>
-              <TouchableOpacity
-                style={styles.settingRow}
-                onPress={() => {
-                  setOldPassword('');
-                  setNewPassword('');
-                  setConfirmPassword('');
-                  setPasswordError(null);
-                  setShowPasswordModal(true);
-                }}
-                activeOpacity={0.7}
-              >
-                <View style={styles.rowLeft}>
-                  <View style={styles.iconContainer}>
-                    <Feather name="lock" size={18} color={theme.colors.textPrimary} />
-                  </View>
-                  <Text style={[styles.rowLabel, { color: theme.colors.textPrimary }]}>
-                    Change Password
-                  </Text>
+            <TouchableOpacity
+              style={styles.settingRow}
+              onPress={() => {
+                setOldPassword('');
+                setNewPassword('');
+                setConfirmPassword('');
+                setPasswordError(null);
+                setShowPasswordModal(true);
+              }}
+              activeOpacity={0.7}
+            >
+              <View style={styles.rowLeft}>
+                <View style={styles.iconContainer}>
+                  <Feather name="lock" size={18} color={theme.colors.textPrimary} />
                 </View>
-                <Feather name="chevron-right" size={17} color={theme.colors.textMuted} />
-              </TouchableOpacity>
-
-              <View style={[styles.rowSeparator, { backgroundColor: theme.colors.borderGlass }]} />
-
-              <TouchableOpacity style={styles.settingRow} onPress={handleLogout} activeOpacity={0.7}>
-                <View style={styles.rowLeft}>
-                  <View style={styles.iconContainer}>
-                    <Feather name="log-out" size={18} color="#EF4444" />
-                  </View>
-                  <Text style={[styles.rowLabel, { color: '#EF4444', fontWeight: '600' }]}>
-                    Sign Out
-                  </Text>
-                </View>
-                <Feather name="chevron-right" size={17} color={theme.colors.textMuted} />
-              </TouchableOpacity>
-            </>
+                <Text style={[styles.rowLabel, { color: theme.colors.textPrimary }]}>
+                  {language === 'ne' ? 'पासवर्ड परिवर्तन गर्नुहोस्' : 'Change Password'}
+                </Text>
+              </View>
+              <Feather name="chevron-right" size={17} color={theme.colors.textMuted} />
+            </TouchableOpacity>
           ) : (
             <TouchableOpacity
               style={styles.settingRow}
@@ -473,11 +659,108 @@ export const SettingsScreen: React.FC = () => {
                   <Feather name="log-in" size={18} color={theme.colors.primary} />
                 </View>
                 <Text style={[styles.rowLabel, { color: theme.colors.primary, fontWeight: '600' }]}>
-                  Sign In to Cloud Account
+                  {language === 'ne' ? 'क्लाउड खातामा साइन इन गर्नुहोस्' : 'Sign In to Cloud Account'}
                 </Text>
               </View>
               <Feather name="chevron-right" size={17} color={theme.colors.textMuted} />
             </TouchableOpacity>
+          )}
+
+          {/* Master App Lock (PIN Code) */}
+          <View style={[styles.rowSeparator, { backgroundColor: theme.colors.borderGlass }]} />
+          <View style={styles.settingRow}>
+            <View style={styles.rowLeft}>
+              <View style={styles.iconContainer}>
+                <Feather name="shield" size={18} color={theme.colors.textPrimary} />
+              </View>
+              <View>
+                <Text style={[styles.rowLabel, { color: theme.colors.textPrimary }]}>
+                  {language === 'ne' ? 'एप लक (पिन कोड)' : 'App Lock (PIN Code)'}
+                </Text>
+                <Text style={[styles.rowSubLabel, { color: theme.colors.textMuted }]}>
+                  {appLockConfig.enabled
+                    ? `${appLockConfig.pinLength}-Digit PIN Active`
+                    : (language === 'ne' ? 'एप खोल्दा ४ वा ६-अङ्के पिन माग्ने' : 'Require 4 or 6-digit PIN on app open')}
+                </Text>
+              </View>
+            </View>
+            <Switch
+              value={appLockConfig.enabled}
+              onValueChange={handleToggleAppLock}
+              trackColor={{ false: theme.colors.borderGlass, true: '#EF4444' }}
+              thumbColor="#FFFFFF"
+            />
+          </View>
+
+          {/* Change PIN option if enabled */}
+          {appLockConfig.enabled && (
+            <>
+              <View style={[styles.rowSeparator, { backgroundColor: theme.colors.borderGlass }]} />
+              <TouchableOpacity
+                style={styles.settingRow}
+                onPress={() => setShowSetupPinModal(true)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.rowLeft}>
+                  <View style={styles.iconContainer}>
+                    <Feather name="key" size={18} color={theme.colors.textPrimary} />
+                  </View>
+                  <View>
+                    <Text style={[styles.rowLabel, { color: theme.colors.textPrimary }]}>
+                      {language === 'ne' ? 'सुरक्षा पिन परिवर्तन गर्नुहोस्' : 'Change Security PIN'}
+                    </Text>
+                    <Text style={[styles.rowSubLabel, { color: theme.colors.textMuted }]}>
+                      {language === 'ne' ? 'नयाँ ४ वा ६-अङ्के गोप्य पिन सेट गर्नुहोस्' : 'Update your 4 or 6-digit security code'}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.rowRight}>
+                  <Feather name="chevron-right" size={17} color={theme.colors.textMuted} />
+                </View>
+              </TouchableOpacity>
+
+              {/* Biometric Fingerprint Toggle */}
+              <View style={[styles.rowSeparator, { backgroundColor: theme.colors.borderGlass }]} />
+              <View style={styles.settingRow}>
+                <View style={styles.rowLeft}>
+                  <View style={styles.iconContainer}>
+                    <MaterialCommunityIcons name="fingerprint" size={20} color={theme.colors.primary} />
+                  </View>
+                  <View>
+                    <Text style={[styles.rowLabel, { color: theme.colors.textPrimary }]}>
+                      {language === 'ne' ? 'बायोमेट्रिक फिंगरप्रिन्ट' : 'Biometric Fingerprint'}
+                    </Text>
+                    <Text style={[styles.rowSubLabel, { color: theme.colors.textMuted }]}>
+                      {language === 'ne' ? 'द्रुत पहुँचको लागि फिंगरप्रिन्ट सेन्सर प्रयोग गर्नुहोस्' : 'Instant unlock with fingerprint sensor'}
+                    </Text>
+                  </View>
+                </View>
+                <Switch
+                  value={appLockConfig.useBiometrics}
+                  onValueChange={handleToggleBiometrics}
+                  trackColor={{ false: theme.colors.borderGlass, true: theme.colors.primary }}
+                  thumbColor="#FFFFFF"
+                />
+              </View>
+            </>
+          )}
+
+          {/* Sign Out placed at the bottom of Account & Security */}
+          {user && (
+            <>
+              <View style={[styles.rowSeparator, { backgroundColor: theme.colors.borderGlass }]} />
+              <TouchableOpacity style={styles.settingRow} onPress={handleLogout} activeOpacity={0.7}>
+                <View style={styles.rowLeft}>
+                  <View style={styles.iconContainer}>
+                    <Feather name="log-out" size={18} color="#EF4444" />
+                  </View>
+                  <Text style={[styles.rowLabel, { color: '#EF4444', fontWeight: '600' }]}>
+                    {language === 'ne' ? 'साइन आउट गर्नुहोस्' : 'Sign Out'}
+                  </Text>
+                </View>
+                <Feather name="chevron-right" size={17} color={theme.colors.textMuted} />
+              </TouchableOpacity>
+            </>
           )}
         </View>
       </View>
@@ -623,7 +906,7 @@ export const SettingsScreen: React.FC = () => {
 
           <TouchableOpacity
             style={styles.settingRow}
-            onPress={toggleLanguage}
+            onPress={() => setShowLanguageModal(true)}
             activeOpacity={0.7}
           >
             <View style={styles.rowLeft}>
@@ -948,6 +1231,8 @@ export const SettingsScreen: React.FC = () => {
           </View>
         </View>
       </View>
+
+
 
       {/* 7. APP INFORMATION */}
       <View style={styles.categoryBlock}>
@@ -1715,6 +2000,132 @@ export const SettingsScreen: React.FC = () => {
           </View>
         </View>
       </Modal>
+
+      {/* SETUP PIN MODAL */}
+      <SetupPinModal
+        visible={showSetupPinModal}
+        onClose={() => setShowSetupPinModal(false)}
+        onSuccess={() => {
+          setShowSetupPinModal(false);
+          loadAppLockConfig();
+        }}
+      />
+
+      {/* LANGUAGE SELECTION SHIFT-UP MODAL */}
+      <Modal
+        visible={showLanguageModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowLanguageModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.bottomSheetOverlay}
+          activeOpacity={1}
+          onPress={() => setShowLanguageModal(false)}
+        >
+          <View
+            style={[
+              styles.bottomSheetContainer,
+              { backgroundColor: theme.colors.card, borderColor: theme.colors.borderGlass },
+            ]}
+          >
+            <View style={styles.sheetHandle} />
+
+            <View style={styles.sheetHeaderRow}>
+              <View>
+                <Text style={[styles.sheetTitle, { color: theme.colors.textPrimary }]}>
+                  {language === 'ne' ? 'भाषा छनोट गर्नुहोस्' : 'Select Language'}
+                </Text>
+                <Text style={[styles.sheetSubtitle, { color: theme.colors.textMuted }]}>
+                  {language === 'ne'
+                    ? 'ब्यापार एपको मुख्य प्रदर्शन भाषा रोज्नुहोस्'
+                    : 'Choose your preferred display language for Byapar'}
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setShowLanguageModal(false)}
+                style={styles.sheetCloseBtn}
+              >
+                <Feather name="x" size={20} color={theme.colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.languageOptionsList}>
+              {/* English Option */}
+              <TouchableOpacity
+                style={[
+                  styles.languageOptionCard,
+                  {
+                    backgroundColor: language === 'en' ? 'rgba(255, 69, 0, 0.08)' : theme.colors.surface,
+                    borderColor: language === 'en' ? theme.colors.primary : theme.colors.borderGlass,
+                  },
+                ]}
+                onPress={() => {
+                  setLanguage('en');
+                  setShowLanguageModal(false);
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={styles.languageOptionLeft}>
+                  <View style={[styles.langBadgeCircle, { backgroundColor: language === 'en' ? theme.colors.primary : theme.colors.borderGlass }]}>
+                    <Text style={styles.langBadgeText}>EN</Text>
+                  </View>
+                  <View>
+                    <Text style={[styles.languageOptionTitle, { color: theme.colors.textPrimary }]}>
+                      English
+                    </Text>
+                    <Text style={[styles.languageOptionSub, { color: theme.colors.textMuted }]}>
+                      Default system language
+                    </Text>
+                  </View>
+                </View>
+                {language === 'en' && (
+                  <View style={[styles.checkCircle, { backgroundColor: theme.colors.primary }]}>
+                    <Feather name="check" size={14} color="#FFFFFF" />
+                  </View>
+                )}
+              </TouchableOpacity>
+
+              {/* Nepali Option */}
+              <TouchableOpacity
+                style={[
+                  styles.languageOptionCard,
+                  {
+                    backgroundColor: language === 'ne' ? 'rgba(255, 69, 0, 0.08)' : theme.colors.surface,
+                    borderColor: language === 'ne' ? theme.colors.primary : theme.colors.borderGlass,
+                  },
+                ]}
+                onPress={() => {
+                  setLanguage('ne');
+                  setShowLanguageModal(false);
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={styles.languageOptionLeft}>
+                  <View style={[styles.langBadgeCircle, { backgroundColor: language === 'ne' ? theme.colors.primary : theme.colors.borderGlass }]}>
+                    <Text style={styles.langBadgeText}>ने</Text>
+                  </View>
+                  <View>
+                    <Text style={[styles.languageOptionTitle, { color: theme.colors.textPrimary }]}>
+                      नेपाली
+                    </Text>
+                    <Text style={[styles.languageOptionSub, { color: theme.colors.textMuted }]}>
+                      नेपाली भाषा (खाता, बिल तथा रिपोर्टहरू)
+                    </Text>
+                  </View>
+                </View>
+                {language === 'ne' && (
+                  <View style={[styles.checkCircle, { backgroundColor: theme.colors.primary }]}>
+                    <Feather name="check" size={14} color="#FFFFFF" />
+                  </View>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+
     </ScrollView>
   );
 };
@@ -2082,5 +2493,169 @@ const styles = StyleSheet.create({
   qrUploadHint: {
     fontSize: 11,
     marginTop: 2,
+  },
+
+  // Cloud Sync & Network Card
+  syncCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 14,
+    marginBottom: 20,
+  },
+  syncCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  syncCardLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  syncPulseDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  syncCardTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: -0.2,
+  },
+  syncCardSubtitle: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  syncNowBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 10,
+  },
+  syncNowBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+
+  // Bottom Sheet Modal (Language & Biometrics)
+  bottomSheetOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    justifyContent: 'flex-end',
+  },
+  bottomSheetContainer: {
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    borderTopWidth: 1,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 40,
+  },
+  sheetHandle: {
+    width: 44,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: 'rgba(150, 150, 150, 0.4)',
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  sheetHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+  },
+  sheetTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+  },
+  sheetSubtitle: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  sheetCloseBtn: {
+    padding: 6,
+  },
+  languageOptionsList: {
+    gap: 12,
+  },
+  languageOptionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1.5,
+  },
+  languageOptionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    flex: 1,
+  },
+  langBadgeCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  langBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  languageOptionTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  languageOptionSub: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  checkCircle: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // Biometrics Sheet
+  fpIconAura: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 10,
+  },
+  bioConfirmActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    width: '100%',
+    paddingVertical: 14,
+    borderRadius: 14,
+    marginTop: 24,
+  },
+  bioConfirmActionBtnText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  bioCancelBtn: {
+    paddingVertical: 12,
+    marginTop: 6,
+  },
+  bioCancelBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

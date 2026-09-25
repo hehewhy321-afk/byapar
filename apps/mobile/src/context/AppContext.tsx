@@ -21,6 +21,8 @@ import {
   BusinessType,
   ExpenseRecord,
   IncomeRecord,
+  ReminderItem,
+  NoteItem,
 } from '../types';
 import { generateUUID } from '../utils/uuid';
 import { getDefaultRolePermissions, StaffRole } from '../db/permissions';
@@ -176,10 +178,32 @@ interface AppContextType {
   // Expenses & Income
   expenses: ExpenseRecord[];
   addExpense: (expense: Omit<ExpenseRecord, 'id'>) => Promise<ExpenseRecord>;
+  editExpense: (id: string, updates: Partial<ExpenseRecord>) => Promise<void>;
   deleteExpense: (id: string) => Promise<void>;
   incomes: IncomeRecord[];
   addIncome: (income: Omit<IncomeRecord, 'id'>) => Promise<IncomeRecord>;
+  editIncome: (id: string, updates: Partial<IncomeRecord>) => Promise<void>;
   deleteIncome: (id: string) => Promise<void>;
+  customExpenseCategories: string[];
+  addExpenseCategory: (name: string) => Promise<void>;
+  deleteExpenseCategory: (name: string) => Promise<void>;
+  customIncomeCategories: string[];
+  addIncomeCategory: (name: string) => Promise<void>;
+  deleteIncomeCategory: (name: string) => Promise<void>;
+
+  // Reminders
+  reminders: ReminderItem[];
+  addReminder: (reminder: Omit<ReminderItem, 'id' | 'createdAt'>) => Promise<ReminderItem>;
+  editReminder: (id: string, updates: Partial<ReminderItem>) => Promise<void>;
+  deleteReminder: (id: string) => Promise<void>;
+  toggleReminderStatus: (id: string) => Promise<void>;
+
+  // Notes
+  notes: NoteItem[];
+  addNote: (note: Omit<NoteItem, 'id' | 'createdAt' | 'updatedAt'>) => Promise<NoteItem>;
+  editNote: (id: string, updates: Partial<NoteItem>) => Promise<void>;
+  deleteNote: (id: string) => Promise<void>;
+  togglePinNote: (id: string) => Promise<void>;
 
   // Reset
   resetAllData: () => Promise<void>;
@@ -435,8 +459,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return false;
   };
 
-  const [themeMode, setThemeModeState] = useState<ThemeMode>('dark');
-  const [language, setLanguageState] = useState<Language>('ne');
+  const [themeMode, setThemeModeState] = useState<ThemeMode>('light');
+  const [language, setLanguageState] = useState<Language>('en');
 
   // Cloud Auth
   const [user, setUser] = useState<User | null>(null);
@@ -473,6 +497,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Expenses & Income
   const [expenses, setExpenses] = useState<ExpenseRecord[]>([]);
   const [incomes, setIncomes] = useState<IncomeRecord[]>([]);
+  const [customExpenseCategories, setCustomExpenseCategories] = useState<string[]>([]);
+  const [customIncomeCategories, setCustomIncomeCategories] = useState<string[]>([]);
+
+  // Reminders & Notes
+  const [reminders, setReminders] = useState<ReminderItem[]>([]);
+  const [notes, setNotes] = useState<NoteItem[]>([]);
 
   const [activeBizId, setActiveBizId] = useState<string>(DEFAULT_BIZ_ID);
   const [userStores, setUserStores] = useState<UserStoreItem[]>([]);
@@ -1107,6 +1137,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const storedStaff = await storage.get<StaffMember[]>('staff_list', []);
       const storedExpenses = await storage.get<ExpenseRecord[]>('expenses', []);
       const storedIncomes = await storage.get<IncomeRecord[]>('incomes', []);
+      const storedReminders = await storage.get<ReminderItem[]>('reminders', []);
+      const storedNotes = await storage.get<NoteItem[]>('notes', []);
+      const storedCustomExpCats = await storage.get<string[]>('custom_expense_cats', []);
+      const storedCustomIncCats = await storage.get<string[]>('custom_income_cats', []);
 
       const storedActiveTab = await storage.get<ActiveTab>('active_tab', 'dashboard');
       if (storedActiveTab && storedActiveTab !== 'dashboard') {
@@ -1115,8 +1149,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
 
       setIsOnboarded(storedOnboarded);
-      setThemeModeState(storedTheme === 'light' ? 'light' : 'dark');
-      setLanguageState(storedLang === 'en' ? 'en' : 'ne');
+      setThemeModeState(storedTheme === 'dark' ? 'dark' : 'light');
+      setLanguageState(storedLang === 'ne' ? 'ne' : 'en');
       setStore(storedStore);
       setActiveBizId(storedBizId);
       if (storedStores && storedStores.length > 0) {
@@ -1138,6 +1172,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setPaymentOutRecords(storedPayOut);
       setExpenses(storedExpenses);
       setIncomes(storedIncomes);
+      setReminders(storedReminders);
+      setNotes(storedNotes);
+      setCustomExpenseCategories(storedCustomExpCats);
+      setCustomIncomeCategories(storedCustomIncCats);
       if (storedStaff && storedStaff.length > 0) {
         setStaffList(storedStaff);
       }
@@ -2577,6 +2615,219 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const editExpense = async (id: string, updates: Partial<ExpenseRecord>): Promise<void> => {
+    const updated = expenses.map((e) => (e.id === id ? { ...e, ...updates, updatedAt: new Date().toISOString() } : e));
+    setExpenses(updated);
+    await storage.set('expenses', updated);
+
+    try {
+      const payload: any = { updated_at: new Date().toISOString() };
+      if (updates.category !== undefined) payload.category = updates.category;
+      if (updates.amount !== undefined) payload.amount = updates.amount;
+      if (updates.paymentMode !== undefined) payload.payment_mode = updates.paymentMode;
+      if (updates.recipientName !== undefined) payload.recipient_name = updates.recipientName;
+      if (updates.note !== undefined) payload.notes = updates.note;
+      if (updates.receiptUrl !== undefined) payload.receipt_url = updates.receiptUrl;
+      if (updates.date !== undefined) {
+        payload.date_ad = updates.date;
+        payload.date_bs = adToBs(new Date(updates.date)).formatted;
+      }
+      await supabase.from('expenses').update(payload).eq('id', id);
+    } catch (err) {
+      console.warn('Failed to update expense in cloud:', err);
+    }
+  };
+
+  const editIncome = async (id: string, updates: Partial<IncomeRecord>): Promise<void> => {
+    const updated = incomes.map((i) => (i.id === id ? { ...i, ...updates, updatedAt: new Date().toISOString() } : i));
+    setIncomes(updated);
+    await storage.set('incomes', updated);
+
+    try {
+      const payload: any = { updated_at: new Date().toISOString() };
+      if (updates.category !== undefined) payload.category = updates.category;
+      if (updates.amount !== undefined) payload.amount = updates.amount;
+      if (updates.paymentMode !== undefined) payload.payment_mode = updates.paymentMode;
+      if (updates.payerName !== undefined) payload.payer_name = updates.payerName;
+      if (updates.note !== undefined) payload.notes = updates.note;
+      if (updates.receiptUrl !== undefined) payload.receipt_url = updates.receiptUrl;
+      if (updates.date !== undefined) {
+        payload.date_ad = updates.date;
+        payload.date_bs = adToBs(new Date(updates.date)).formatted;
+      }
+      await supabase.from('incomes').update(payload).eq('id', id);
+    } catch (err) {
+      console.warn('Failed to update income in cloud:', err);
+    }
+  };
+
+  const addExpenseCategory = async (name: string): Promise<void> => {
+    const trimmed = name.trim();
+    if (!trimmed || customExpenseCategories.includes(trimmed)) return;
+    const updated = [...customExpenseCategories, trimmed];
+    setCustomExpenseCategories(updated);
+    await storage.set('custom_expense_cats', updated);
+  };
+
+  const deleteExpenseCategory = async (name: string): Promise<void> => {
+    const updated = customExpenseCategories.filter((c) => c !== name);
+    setCustomExpenseCategories(updated);
+    await storage.set('custom_expense_cats', updated);
+  };
+
+  const addIncomeCategory = async (name: string): Promise<void> => {
+    const trimmed = name.trim();
+    if (!trimmed || customIncomeCategories.includes(trimmed)) return;
+    const updated = [...customIncomeCategories, trimmed];
+    setCustomIncomeCategories(updated);
+    await storage.set('custom_income_cats', updated);
+  };
+
+  const deleteIncomeCategory = async (name: string): Promise<void> => {
+    const updated = customIncomeCategories.filter((c) => c !== name);
+    setCustomIncomeCategories(updated);
+    await storage.set('custom_income_cats', updated);
+  };
+
+  // Reminders Management
+  const addReminder = async (rem: Omit<ReminderItem, 'id' | 'createdAt'>): Promise<ReminderItem> => {
+    const newRem: ReminderItem = {
+      ...rem,
+      id: generateUUID(),
+      status: 'upcoming',
+      createdAt: new Date().toISOString(),
+    };
+    const updated = [newRem, ...reminders];
+    setReminders(updated);
+    await storage.set('reminders', updated);
+
+    try {
+      const bs = adToBs(new Date(newRem.dueDate));
+      await supabase.from('reminders').insert({
+        id: newRem.id,
+        business_id: activeBizId,
+        party_id: newRem.partyId && newRem.partyId.length === 36 ? newRem.partyId : null,
+        title: newRem.title,
+        amount: newRem.amount || 0,
+        due_date_ad: newRem.dueDate,
+        due_date_bs: bs.formatted,
+        due_time: newRem.dueTime || null,
+        reminder_type: newRem.reminderType,
+        frequency: newRem.frequency || 'once',
+        notes: newRem.note || null,
+        status: newRem.status,
+      });
+    } catch (err) {
+      console.warn('Failed to insert reminder to cloud:', err);
+    }
+    return newRem;
+  };
+
+  const editReminder = async (id: string, updates: Partial<ReminderItem>): Promise<void> => {
+    const updated = reminders.map((r) => (r.id === id ? { ...r, ...updates, updatedAt: new Date().toISOString() } : r));
+    setReminders(updated);
+    await storage.set('reminders', updated);
+
+    try {
+      const payload: any = { updated_at: new Date().toISOString() };
+      if (updates.title !== undefined) payload.title = updates.title;
+      if (updates.amount !== undefined) payload.amount = updates.amount;
+      if (updates.dueDate !== undefined) {
+        payload.due_date_ad = updates.dueDate;
+        payload.due_date_bs = adToBs(new Date(updates.dueDate)).formatted;
+      }
+      if (updates.dueTime !== undefined) payload.due_time = updates.dueTime;
+      if (updates.status !== undefined) payload.status = updates.status;
+      if (updates.note !== undefined) payload.notes = updates.note;
+      if (updates.reminderType !== undefined) payload.reminder_type = updates.reminderType;
+      await supabase.from('reminders').update(payload).eq('id', id);
+    } catch (err) {
+      console.warn('Failed to update reminder in cloud:', err);
+    }
+  };
+
+  const deleteReminder = async (id: string): Promise<void> => {
+    const updated = reminders.filter((r) => r.id !== id);
+    setReminders(updated);
+    await storage.set('reminders', updated);
+    try {
+      await supabase.from('reminders').delete().eq('id', id);
+    } catch (err) {
+      console.warn('Failed to delete reminder from cloud:', err);
+    }
+  };
+
+  const toggleReminderStatus = async (id: string): Promise<void> => {
+    const target = reminders.find((r) => r.id === id);
+    if (!target) return;
+    const nextStatus = target.status === 'upcoming' ? 'completed' : 'upcoming';
+    await editReminder(id, { status: nextStatus });
+  };
+
+  // Notes Management
+  const addNote = async (note: Omit<NoteItem, 'id' | 'createdAt' | 'updatedAt'>): Promise<NoteItem> => {
+    const now = new Date().toISOString();
+    const newNote: NoteItem = {
+      ...note,
+      id: generateUUID(),
+      createdAt: now,
+      updatedAt: now,
+    };
+    const updated = [newNote, ...notes];
+    setNotes(updated);
+    await storage.set('notes', updated);
+
+    try {
+      await supabase.from('notes').insert({
+        id: newNote.id,
+        business_id: activeBizId,
+        title: newNote.title,
+        content: newNote.content,
+        category: newNote.category,
+        color: newNote.color || 'emerald',
+        is_pinned: newNote.isPinned ?? false,
+      });
+    } catch (err) {
+      console.warn('Failed to insert note to cloud:', err);
+    }
+    return newNote;
+  };
+
+  const editNote = async (id: string, updates: Partial<NoteItem>): Promise<void> => {
+    const updated = notes.map((n) => (n.id === id ? { ...n, ...updates, updatedAt: new Date().toISOString() } : n));
+    setNotes(updated);
+    await storage.set('notes', updated);
+
+    try {
+      const payload: any = { updated_at: new Date().toISOString() };
+      if (updates.title !== undefined) payload.title = updates.title;
+      if (updates.content !== undefined) payload.content = updates.content;
+      if (updates.category !== undefined) payload.category = updates.category;
+      if (updates.color !== undefined) payload.color = updates.color;
+      if (updates.isPinned !== undefined) payload.is_pinned = updates.isPinned;
+      await supabase.from('notes').update(payload).eq('id', id);
+    } catch (err) {
+      console.warn('Failed to update note in cloud:', err);
+    }
+  };
+
+  const deleteNote = async (id: string): Promise<void> => {
+    const updated = notes.filter((n) => n.id !== id);
+    setNotes(updated);
+    await storage.set('notes', updated);
+    try {
+      await supabase.from('notes').delete().eq('id', id);
+    } catch (err) {
+      console.warn('Failed to delete note from cloud:', err);
+    }
+  };
+
+  const togglePinNote = async (id: string): Promise<void> => {
+    const target = notes.find((n) => n.id === id);
+    if (!target) return;
+    await editNote(id, { isPinned: !target.isPinned });
+  };
+
   const resetAllData = async () => {
     await storage.remove('products');
     await storage.remove('parties');
@@ -2699,10 +2950,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deleteStaffMember,
         expenses,
         addExpense,
+        editExpense,
         deleteExpense,
         incomes,
         addIncome,
+        editIncome,
         deleteIncome,
+        customExpenseCategories,
+        addExpenseCategory,
+        deleteExpenseCategory,
+        customIncomeCategories,
+        addIncomeCategory,
+        deleteIncomeCategory,
+        reminders,
+        addReminder,
+        editReminder,
+        deleteReminder,
+        toggleReminderStatus,
+        notes,
+        addNote,
+        editNote,
+        deleteNote,
+        togglePinNote,
         resetAllData,
       }}
     >

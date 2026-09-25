@@ -56,9 +56,12 @@ export interface Reminder {
   partyName?: string;
   amount?: number;
   dueDate: string;
+  dueTime?: string;
+  reminderType?: 'payment_reminder' | 'task_reminder' | 'event_reminder' | 'inventory_alert' | 'custom';
   note?: string;
   status: 'upcoming' | 'completed';
   createdAt: string;
+  updatedAt?: string;
 }
 
 // Expense / Income types
@@ -70,7 +73,9 @@ export interface ExpenseRecord {
   date: string;
   recipientName?: string;
   note?: string;
+  receiptUrl?: string;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface IncomeRecord {
@@ -81,7 +86,9 @@ export interface IncomeRecord {
   date: string;
   payerName?: string;
   note?: string;
+  receiptUrl?: string;
   createdAt: string;
+  updatedAt?: string;
 }
 
 // Bank Account & Transaction Ledger types
@@ -192,6 +199,7 @@ export interface PurchaseBill {
   paymentMode: PaymentMode;
   status: 'paid' | 'unpaid' | 'partial';
   notes?: string;
+  receiptUrl?: string;
   items: {
     id: string;
     itemId?: string;
@@ -260,6 +268,7 @@ export type ActiveTab =
   | 'notebook'
   | 'business-cards'
   | 'greeting-cards'
+  | 'utilities'
   | 'notifications';
 
 // Valid tabs list
@@ -282,6 +291,7 @@ export const VALID_TABS: ActiveTab[] = [
   'notebook',
   'business-cards',
   'greeting-cards',
+  'utilities',
 ];
 
 function getInitialTab(): ActiveTab {
@@ -385,6 +395,7 @@ export interface NoteItem {
   title: string;
   content: string;
   category: string;
+  createdAt?: string;
   updatedAt: string;
   color?: string;
   isPinned?: boolean;
@@ -406,6 +417,8 @@ export const [paymentRecords, setPaymentRecords] = createStore<PaymentRecord[]>(
 
 export const [bills, setBills] = createStore<BillItem[]>(loadStored('bills', []));
 export const [notes, setNotes] = createStore<NoteItem[]>(loadStored('notes', []));
+export const [customExpenseCategories, setCustomExpenseCategories] = createStore<string[]>(loadStored('custom_expense_cats', []));
+export const [customIncomeCategories, setCustomIncomeCategories] = createStore<string[]>(loadStored('custom_income_cats', []));
 
 // Page routing for unauthenticated users
 export type AppPage = 'landing' | 'auth' | 'about' | 'faq' | 'privacy' | 'terms';
@@ -973,7 +986,8 @@ function mapDbNote(n: any): NoteItem {
     category: n.category || 'General',
     color: n.color || 'emerald',
     isPinned: n.is_pinned ?? false,
-    updatedAt: n.updated_at ? new Date(n.updated_at).toLocaleDateString() : new Date().toLocaleDateString(),
+    createdAt: n.created_at || new Date().toISOString(),
+    updatedAt: n.updated_at || n.created_at || new Date().toISOString(),
   };
 }
 
@@ -2213,6 +2227,7 @@ export async function createPurchaseBill(bill: Omit<PurchaseBill, 'id' | 'busine
       bill_type: 'purchase',
       amount: bill.totalAmount,
       bill_date: bill.date,
+      image_url: newBill.receiptUrl,
       tags: ['purchase'],
     })
     .then(({ error }) => {
@@ -2525,6 +2540,7 @@ export async function addKhataEntry(params: {
   entryType: 'liyo' | 'diyo';
   amount: number;
   notes?: string;
+  receiptImageUrl?: string;
 }) {
   const now = new Date();
   const bs = adToBs(now);
@@ -2543,6 +2559,7 @@ export async function addKhataEntry(params: {
     dateAd: now.toISOString().split('T')[0],
     dateBs: bs.formatted,
     notes: params.notes,
+    receiptImageUrl: params.receiptImageUrl,
     createdAt: now.toISOString(),
     updatedAt: now.toISOString(),
   };
@@ -2557,16 +2574,21 @@ export async function addKhataEntry(params: {
   });
   persistState();
 
-  await supabase.from('khata_entries').insert({
-    id: newEntry.id,
-    business_id: newEntry.businessId,
-    party_id: newEntry.partyId,
-    entry_type: newEntry.entryType,
-    amount: newEntry.amount,
-    date_ad: newEntry.dateAd,
-    date_bs: newEntry.dateBs,
-    notes: newEntry.notes,
-  });
+  try {
+    await supabase.from('khata_entries').insert({
+      id: newEntry.id,
+      business_id: newEntry.businessId,
+      party_id: newEntry.partyId,
+      entry_type: newEntry.entryType,
+      amount: newEntry.amount,
+      date_ad: newEntry.dateAd,
+      date_bs: newEntry.dateBs,
+      notes: newEntry.notes,
+      receipt_image_url: newEntry.receiptImageUrl,
+    });
+  } catch (e) {
+    console.warn('Failed to insert khata entry to cloud:', e);
+  }
 
   await supabase
     .from('parties')
@@ -2878,6 +2900,78 @@ export async function deleteIncome(id: string) {
   await supabase.from('incomes').delete().eq('id', id);
 }
 
+export async function updateExpense(id: string, updates: Partial<ExpenseRecord>) {
+  setExpenses((draft) => {
+    const idx = draft.findIndex((e) => e.id === id);
+    if (idx >= 0) {
+      Object.assign(draft[idx], updates, { updatedAt: new Date().toISOString() });
+    }
+  });
+  persistState();
+
+  const payload: any = { updated_at: new Date().toISOString() };
+  if (updates.category !== undefined) payload.category = updates.category;
+  if (updates.amount !== undefined) payload.amount = updates.amount;
+  if (updates.paymentMode !== undefined) payload.payment_mode = updates.paymentMode;
+  if (updates.recipientName !== undefined) payload.recipient_name = updates.recipientName;
+  if (updates.note !== undefined) payload.notes = updates.note;
+  if (updates.receiptUrl !== undefined) payload.receipt_url = updates.receiptUrl;
+  if (updates.date !== undefined) {
+    payload.date_ad = updates.date;
+    payload.date_bs = adToBs(new Date(updates.date)).formatted;
+  }
+
+  await supabase.from('expenses').update(payload).eq('id', id);
+}
+
+export async function updateIncome(id: string, updates: Partial<IncomeRecord>) {
+  setIncomes((draft) => {
+    const idx = draft.findIndex((i) => i.id === id);
+    if (idx >= 0) {
+      Object.assign(draft[idx], updates, { updatedAt: new Date().toISOString() });
+    }
+  });
+  persistState();
+
+  const payload: any = { updated_at: new Date().toISOString() };
+  if (updates.source !== undefined) payload.category = updates.source;
+  if (updates.amount !== undefined) payload.amount = updates.amount;
+  if (updates.paymentMode !== undefined) payload.payment_mode = updates.paymentMode;
+  if (updates.payerName !== undefined) payload.payer_name = updates.payerName;
+  if (updates.note !== undefined) payload.notes = updates.note;
+  if (updates.receiptUrl !== undefined) payload.receipt_url = updates.receiptUrl;
+  if (updates.date !== undefined) {
+    payload.date_ad = updates.date;
+    payload.date_bs = adToBs(new Date(updates.date)).formatted;
+  }
+
+  await supabase.from('incomes').update(payload).eq('id', id);
+}
+
+export function addExpenseCategory(name: string) {
+  const trimmed = name.trim();
+  if (!trimmed || customExpenseCategories.includes(trimmed)) return;
+  setCustomExpenseCategories((prev) => [...prev, trimmed]);
+  persistState();
+}
+
+export function deleteExpenseCategory(name: string) {
+  setCustomExpenseCategories((prev) => prev.filter((c) => c !== name));
+  persistState();
+}
+
+export function addIncomeCategory(name: string) {
+  const trimmed = name.trim();
+  if (!trimmed || customIncomeCategories.includes(trimmed)) return;
+  setCustomIncomeCategories((prev) => [...prev, trimmed]);
+  persistState();
+}
+
+export function deleteIncomeCategory(name: string) {
+  setCustomIncomeCategories((prev) => prev.filter((c) => c !== name));
+  persistState();
+}
+
 export async function addReminder(reminder: Omit<Reminder, 'id' | 'createdAt'>) {
   const newRem: Reminder = {
     ...reminder,
@@ -2963,46 +3057,63 @@ export async function deleteBill(id: string) {
   await supabase.from('bills').delete().eq('id', id);
 }
 
-export async function addNote(note: Omit<NoteItem, 'id' | 'updatedAt'>) {
+export async function addNote(note: Omit<NoteItem, 'id' | 'createdAt' | 'updatedAt'>) {
+  const now = new Date().toISOString();
   const newNote: NoteItem = {
     ...note,
     id: crypto.randomUUID(),
-    updatedAt: new Date().toLocaleDateString(),
+    createdAt: now,
+    updatedAt: now,
   };
   setNotes((draft) => {
     draft.unshift(newNote);
   });
   persistState();
 
-  await supabase.from('notes').insert({
-    id: newNote.id,
-    business_id: currentBusiness.id,
-    title: newNote.title,
-    content: newNote.content,
-    category: newNote.category,
-  });
+  try {
+    await supabase.from('notes').insert({
+      id: newNote.id,
+      business_id: currentBusiness.id,
+      title: newNote.title,
+      content: newNote.content,
+      category: newNote.category,
+      color: newNote.color || 'emerald',
+      is_pinned: newNote.isPinned ?? false,
+      created_at: newNote.createdAt,
+    });
+  } catch (e) {
+    console.warn('Failed to sync note insert:', e);
+  }
 
   return newNote;
 }
 
 export async function updateNote(id: string, updates: Partial<NoteItem>) {
+  const { createdAt, id: _id, ...safeUpdates } = updates;
+  const now = new Date().toISOString();
   setNotes((draft) => {
     const idx = draft.findIndex((n) => n.id === id);
     if (idx >= 0) {
-      Object.assign(draft[idx], updates, { updatedAt: new Date().toLocaleDateString() });
+      Object.assign(draft[idx], safeUpdates, { updatedAt: now });
     }
   });
   persistState();
 
-  await supabase
-    .from('notes')
-    .update({
-      title: updates.title,
-      content: updates.content,
-      category: updates.category,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', id);
+  try {
+    const payload: any = { updated_at: now };
+    if (safeUpdates.title !== undefined) payload.title = safeUpdates.title;
+    if (safeUpdates.content !== undefined) payload.content = safeUpdates.content;
+    if (safeUpdates.category !== undefined) payload.category = safeUpdates.category;
+    if (safeUpdates.color !== undefined) payload.color = safeUpdates.color;
+    if (safeUpdates.isPinned !== undefined) payload.is_pinned = safeUpdates.isPinned;
+
+    await supabase
+      .from('notes')
+      .update(payload)
+      .eq('id', id);
+  } catch (e) {
+    console.warn('Failed to sync note update:', e);
+  }
 }
 
 export async function deleteNote(id: string) {
@@ -3034,5 +3145,7 @@ export function persistState() {
   localStorage.setItem('byapar_payment_records', JSON.stringify(paymentRecords));
   localStorage.setItem('byapar_bills', JSON.stringify(bills));
   localStorage.setItem('byapar_notes', JSON.stringify(notes));
+  localStorage.setItem('byapar_custom_expense_cats', JSON.stringify(customExpenseCategories));
+  localStorage.setItem('byapar_custom_income_cats', JSON.stringify(customIncomeCategories));
   localStorage.setItem('byapar_current_business', JSON.stringify(currentBusiness));
 }

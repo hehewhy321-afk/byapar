@@ -10,6 +10,7 @@ import {
   initMobileNotifications,
   subscribeNotificationUpdates,
 } from '../../services/notificationService';
+import { offlineSyncService, OfflineSyncStatus } from '../../services/offlineSyncService';
 
 const TAB_TITLES: Record<string, string> = {
   sales: 'Sales Hub',
@@ -27,7 +28,7 @@ const TAB_TITLES: Record<string, string> = {
 };
 
 export const AppHeader: React.FC = () => {
-  const { store, activeBizId, setActiveTab, activeTab, theme, t } = useApp();
+  const { store, activeBizId, setActiveTab, activeTab, theme, t, language } = useApp();
   const [unreadCount, setUnreadCount] = useState(0);
   const [showBranchModal, setShowBranchModal] = useState(false);
   const [showSubModal, setShowSubModal] = useState(false);
@@ -59,6 +60,14 @@ export const AppHeader: React.FC = () => {
         return t('settings');
       case 'notifications':
         return t('notifications');
+      case 'reminders':
+        return language === 'ne' ? 'रिमाइन्डरहरू' : 'Reminders';
+      case 'notes':
+        return language === 'ne' ? 'दैनिक टिपोट (Notes)' : 'Daily Notes';
+      case 'business_card':
+        return language === 'ne' ? 'डिजिटल भिजिटिङ कार्ड' : 'Business Card';
+      case 'utilities':
+        return language === 'ne' ? 'क्याल्कुलेटर र औजार' : 'Calculators & Tools';
       default:
         return 'Byapar';
     }
@@ -90,6 +99,18 @@ export const AppHeader: React.FC = () => {
     return () => unsubscribe();
   }, [activeBizId, store.id]);
 
+  const [syncStatus, setSyncStatus] = useState<OfflineSyncStatus>({
+    isOnline: true,
+    isSyncing: false,
+    pendingCount: 0,
+    lastSyncTime: null,
+  });
+
+  useEffect(() => {
+    const unsub = offlineSyncService.subscribe(setSyncStatus);
+    return () => unsub();
+  }, []);
+
   const isPaid =
     subState?.planTier &&
     subState?.planTier !== 'free' &&
@@ -98,131 +119,163 @@ export const AppHeader: React.FC = () => {
   const isDashboard = activeTab === 'dashboard';
 
   return (
-    <View
-      style={[
-        styles.container,
-        {
-          backgroundColor: theme.colors.bg,
-          borderBottomColor: theme.colors.borderGlass,
-        },
-      ]}
-    >
-      {/* LEFT SECTION */}
-      {isDashboard ? (
-        // Homescreen: Direct Store Switcher / Creator button
-        <TouchableOpacity
-          style={[
-            styles.storeSwitcherBtn,
-            {
-              backgroundColor: theme.colors.card,
-              borderColor: theme.colors.borderGlass,
-            },
-          ]}
-          onPress={() => setShowBranchModal(true)}
-          activeOpacity={0.7}
-        >
-          <View style={styles.storeIconBox}>
-            <Feather name="briefcase" size={14} color={theme.colors.primary} />
-          </View>
-          <Text
-            style={[styles.storeNameText, { color: theme.colors.textPrimary }]}
-            numberOfLines={1}
+    <View style={{ backgroundColor: theme.colors.bg }}>
+      <View
+        style={[
+          styles.container,
+          {
+            backgroundColor: theme.colors.bg,
+            borderBottomColor: theme.colors.borderGlass,
+          },
+        ]}
+      >
+        {/* LEFT SECTION */}
+        {isDashboard ? (
+          // Homescreen: Direct Store Switcher / Creator button
+          <TouchableOpacity
+            style={[
+              styles.storeSwitcherBtn,
+              {
+                backgroundColor: theme.colors.card,
+                borderColor: theme.colors.borderGlass,
+              },
+            ]}
+            onPress={() => setShowBranchModal(true)}
+            activeOpacity={0.7}
           >
-            {store.name || 'My Store'}
-          </Text>
-          {isPaid && (
-            <View style={styles.proBadge}>
-              <Feather name="zap" size={9} color="#FFFFFF" />
-              <Text style={styles.proBadgeText}>PRO</Text>
+            <View style={styles.storeIconBox}>
+              <Feather name="briefcase" size={14} color={theme.colors.primary} />
             </View>
-          )}
-          <Feather name="chevron-down" size={14} color={theme.colors.textMuted} />
-        </TouchableOpacity>
-      ) : (
-        // Other screens: Clean, uncluttered screen title (no back arrow, no logo, no store name)
-        <View style={styles.titleContainer}>
-          <Text
-            style={[styles.screenTitle, { color: theme.colors.textPrimary }]}
-            numberOfLines={1}
-          >
-            {getScreenTitle(activeTab)}
-          </Text>
-        </View>
-      )}
-
-      {/* RIGHT ACTIONS */}
-      <View style={styles.headerRightActions}>
-        {/* On homescreen, show Upgrade pill ONLY if on free plan */}
-        {isDashboard && !isPaid && (
-          <AnimatedPressable
-            style={styles.upgradePill}
-            onPress={() => setShowSubModal(true)}
-            activeScale={0.92}
-          >
-            <Feather name="zap" size={13} color="#FFFFFF" />
-            <Text style={styles.upgradePillText}>{t('upgrade')}</Text>
-          </AnimatedPressable>
+            <Text
+              style={[styles.storeNameText, { color: theme.colors.textPrimary }]}
+              numberOfLines={1}
+            >
+              {store.name || 'My Store'}
+            </Text>
+            {isPaid && (
+              <View style={styles.proBadge}>
+                <Feather name="zap" size={9} color="#FFFFFF" />
+                <Text style={styles.proBadgeText}>PRO</Text>
+              </View>
+            )}
+            <Feather name="chevron-down" size={14} color={theme.colors.textMuted} />
+          </TouchableOpacity>
+        ) : (
+          // Other screens: Clean, uncluttered screen title (no back arrow, no logo, no store name)
+          <View style={styles.titleContainer}>
+            <Text
+              style={[styles.screenTitle, { color: theme.colors.textPrimary }]}
+              numberOfLines={1}
+            >
+              {getScreenTitle(activeTab)}
+            </Text>
+          </View>
         )}
 
-        <AnimatedPressable
-          style={[
-            styles.settingsBtn,
-            {
-              backgroundColor: theme.colors.card,
-              borderColor:
+        {/* RIGHT ACTIONS */}
+        <View style={styles.headerRightActions}>
+          {/* On homescreen, show Upgrade pill ONLY if on free plan */}
+          {isDashboard && !isPaid && (
+            <AnimatedPressable
+              style={styles.upgradePill}
+              onPress={() => setShowSubModal(true)}
+              activeScale={0.92}
+            >
+              <Feather name="zap" size={13} color="#FFFFFF" />
+              <Text style={styles.upgradePillText}>{t('upgrade')}</Text>
+            </AnimatedPressable>
+          )}
+
+          <AnimatedPressable
+            style={[
+              styles.settingsBtn,
+              {
+                backgroundColor: theme.colors.card,
+                borderColor:
+                  activeTab === 'notifications'
+                    ? theme.colors.primary
+                    : theme.colors.borderGlass,
+              },
+              activeTab === 'notifications' && styles.settingsBtnActive,
+            ]}
+            onPress={() => setActiveTab('notifications')}
+            activeScale={0.9}
+          >
+            <Feather
+              name="bell"
+              size={18}
+              color={
                 activeTab === 'notifications'
                   ? theme.colors.primary
-                  : theme.colors.borderGlass,
-            },
-            activeTab === 'notifications' && styles.settingsBtnActive,
-          ]}
-          onPress={() => setActiveTab('notifications')}
-          activeScale={0.9}
-        >
-          <Feather
-            name="bell"
-            size={18}
-            color={
-              activeTab === 'notifications'
-                ? theme.colors.primary
-                : theme.colors.textSecondary
-            }
-          />
-          {unreadCount > 0 && (
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>
-                {unreadCount > 99 ? '99+' : unreadCount}
+                  : theme.colors.textSecondary
+              }
+            />
+            {unreadCount > 0 && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </Text>
+              </View>
+            )}
+          </AnimatedPressable>
+
+          <AnimatedPressable
+            style={[
+              styles.settingsBtn,
+              {
+                backgroundColor: theme.colors.card,
+                borderColor:
+                  activeTab === 'settings'
+                    ? theme.colors.primary
+                    : theme.colors.borderGlass,
+              },
+              activeTab === 'settings' && styles.settingsBtnActive,
+            ]}
+            onPress={() => setActiveTab('settings')}
+            activeScale={0.9}
+          >
+            <Feather
+              name="settings"
+              size={18}
+              color={
+                activeTab === 'settings'
+                  ? theme.colors.primary
+                  : theme.colors.textSecondary
+              }
+            />
+          </AnimatedPressable>
+        </View>
+      </View>
+
+      {/* OFFLINE / SYNC STATUS RIBBON */}
+      {!syncStatus.isOnline && (
+        <View style={styles.offlineBanner}>
+          <View style={styles.offlineDot} />
+          <Text style={styles.offlineBannerText}>
+            {language === 'ne'
+              ? 'अफलाइन मोड • सबै कारोबार सुरक्षित छन्'
+              : 'Offline Mode • Changes saved locally'}
+          </Text>
+          {syncStatus.pendingCount > 0 && (
+            <View style={styles.pendingBadge}>
+              <Text style={styles.pendingBadgeText}>
+                {syncStatus.pendingCount} {language === 'ne' ? 'बाँकी' : 'queued'}
               </Text>
             </View>
           )}
-        </AnimatedPressable>
+        </View>
+      )}
 
-        <AnimatedPressable
-          style={[
-            styles.settingsBtn,
-            {
-              backgroundColor: theme.colors.card,
-              borderColor:
-                activeTab === 'settings'
-                  ? theme.colors.primary
-                  : theme.colors.borderGlass,
-            },
-            activeTab === 'settings' && styles.settingsBtnActive,
-          ]}
-          onPress={() => setActiveTab('settings')}
-          activeScale={0.9}
-        >
-          <Feather
-            name="settings"
-            size={18}
-            color={
-              activeTab === 'settings'
-                ? theme.colors.primary
-                : theme.colors.textSecondary
-            }
-          />
-        </AnimatedPressable>
-      </View>
+      {syncStatus.isOnline && syncStatus.isSyncing && (
+        <View style={[styles.offlineBanner, { backgroundColor: '#3B82F618', borderColor: '#3B82F635' }]}>
+          <Feather name="refresh-cw" size={11} color="#3B82F6" />
+          <Text style={[styles.offlineBannerText, { color: '#3B82F6' }]}>
+            {language === 'ne'
+              ? `अनलाइन • क्लाउड सिंक हुँदैछ (${syncStatus.pendingCount})...`
+              : `Online • Syncing changes (${syncStatus.pendingCount})...`}
+          </Text>
+        </View>
+      )}
 
       {/* MULTI-STORE BRANCH SWITCHER MODAL */}
       <BranchSwitcherModal
@@ -366,6 +419,70 @@ const styles = StyleSheet.create({
   badgeText: {
     color: '#FFFFFF',
     fontSize: 10,
+    fontWeight: '800',
+  },
+  netStatusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  netStatusPillOnline: {
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    borderColor: 'rgba(16, 185, 129, 0.3)',
+  },
+  netStatusPillSyncing: {
+    backgroundColor: 'rgba(59, 130, 246, 0.12)',
+    borderColor: 'rgba(59, 130, 246, 0.35)',
+  },
+  netStatusPillOffline: {
+    backgroundColor: 'rgba(245, 158, 11, 0.14)',
+    borderColor: 'rgba(245, 158, 11, 0.4)',
+  },
+  netStatusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  netStatusText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  offlineBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 5,
+    paddingHorizontal: 12,
+    backgroundColor: 'rgba(245, 158, 11, 0.12)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(245, 158, 11, 0.25)',
+  },
+  offlineDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#F59E0B',
+  },
+  offlineBannerText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#D97706',
+  },
+  pendingBadge: {
+    backgroundColor: '#F59E0B',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 6,
+    marginLeft: 4,
+  },
+  pendingBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 9,
     fontWeight: '800',
   },
 });

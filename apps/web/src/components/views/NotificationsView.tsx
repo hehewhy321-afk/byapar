@@ -126,7 +126,7 @@ export const NotificationsView: Component = () => {
       <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
         <div>
           <div class="flex items-center gap-2.5">
-            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-emerald-400 flex items-center justify-center text-white shadow-lg shadow-brand-500/20">
+            <div class="w-10 h-10 rounded-xl flex items-center justify-center text-brand-600">
               <IconBell class="w-5 h-5" />
             </div>
             <div>
@@ -509,18 +509,6 @@ export const NotificationsView: Component = () => {
                 <span class="text-xs font-bold text-emerald-500">8:00 PM</span>
               </div>
             </div>
-
-            <button
-              onClick={() => {
-                sendBrowserNotification('Test Notification', {
-                  body: 'This is a test notification from Byapar to confirm your alert settings are working perfectly!',
-                });
-                setShowSettingsModal(false);
-              }}
-              class="w-full btn-primary py-2.5 rounded-xl font-bold text-xs"
-            >
-              Test Notification Alert
-            </button>
           </div>
         </div>
       </Show>

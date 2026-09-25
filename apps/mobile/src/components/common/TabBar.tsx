@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, Dimensions, ScrollView } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useApp } from '../../context/AppContext';
 import { ActiveTab } from '../../types';
@@ -93,6 +93,30 @@ export const TabBar: React.FC = () => {
       bg: 'rgba(236, 72, 153, 0.14)',
     },
     {
+      key: 'notes',
+      label: language === 'ne' ? 'दैनिक टिपोट (Notes)' : 'Daily Notes',
+      sub: language === 'ne' ? 'अर्डर, चेक र पसलका नोटहरू' : 'Quick notes & memos',
+      icon: 'file-text',
+      color: '#10B981',
+      bg: 'rgba(16, 185, 129, 0.14)',
+    },
+    {
+      key: 'business_card',
+      label: language === 'ne' ? 'डिजिटल भिजिटिङ कार्ड' : 'Business Card',
+      sub: language === 'ne' ? 'पसलको ब्रान्डेड कार्ड सेयर' : 'Share digital shop card',
+      icon: 'award',
+      color: '#F59E0B',
+      bg: 'rgba(245, 158, 11, 0.14)',
+    },
+    {
+      key: 'utilities',
+      label: language === 'ne' ? 'क्याल्कुलेटर र औजार' : 'Calculators & Tools',
+      sub: language === 'ne' ? 'EMI, ब्याज, VAT, मार्जिन र क्यास' : 'EMI, Interest, VAT & Margins',
+      icon: 'percent',
+      color: '#06B6D4',
+      bg: 'rgba(6, 182, 212, 0.14)',
+    },
+    {
       key: 'settings',
       label: t('settings'),
       sub: language === 'ne' ? 'पसल विवरण, भाषा र प्रिन्ट' : 'Store profile, language & print',
@@ -111,8 +135,13 @@ export const TabBar: React.FC = () => {
     'staff',
     'reports',
     'settings',
+    'reminders',
+    'notes',
+    'business_card',
+    'utilities',
     'more',
   ].includes(activeTab);
+
 
   const handleTabPress = (key: ActiveTab) => {
     if (key === 'more') {
@@ -232,53 +261,59 @@ export const TabBar: React.FC = () => {
               </TouchableOpacity>
             </View>
 
-            <View style={styles.modulesGrid}>
-              {moreModules.map((item) => {
-                const isCurrent = activeTab === item.key;
-                return (
-                  <TouchableOpacity
-                    key={item.key}
-                    style={[
-                      styles.moduleCard,
-                      {
-                        backgroundColor: isCurrent
-                          ? theme.colors.primaryBg
-                          : isDark
-                          ? '#1A1A1A'
-                          : '#F8FAFC',
-                        borderColor: isCurrent ? theme.colors.primary : isDark ? '#262626' : '#E2E8F0',
-                      },
-                    ]}
-                    onPress={() => handleSelectMoreModule(item.key)}
-                  >
-                    <View style={[styles.moduleIconBox, { backgroundColor: item.bg }]}>
-                      <Feather name={item.icon} size={20} color={item.color} />
-                    </View>
-                    <View style={styles.moduleTextCol}>
-                      <Text
-                        style={[
-                          styles.moduleTitle,
-                          {
-                            color: isCurrent ? theme.colors.primary : theme.colors.textPrimary,
-                            fontWeight: isCurrent ? '800' : '700',
-                          },
-                        ]}
-                      >
-                        {item.label}
-                      </Text>
-                      <Text style={[styles.moduleSub, { color: theme.colors.textSecondary }]}>
-                        {item.sub}
-                      </Text>
-                    </View>
-                    <Feather
-                      name="chevron-right"
-                      size={16}
-                      color={isCurrent ? theme.colors.primary : theme.colors.textMuted}
-                    />
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
+            <ScrollView
+              style={{ maxHeight: 420 }}
+              contentContainerStyle={{ paddingBottom: 20 }}
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.modulesGrid}>
+                {moreModules.map((item) => {
+                  const isCurrent = activeTab === item.key;
+                  return (
+                    <TouchableOpacity
+                      key={item.key}
+                      style={[
+                        styles.moduleCard,
+                        {
+                          backgroundColor: isCurrent
+                            ? theme.colors.primaryBg
+                            : isDark
+                            ? '#1A1A1A'
+                            : '#F8FAFC',
+                          borderColor: isCurrent ? theme.colors.primary : isDark ? '#262626' : '#E2E8F0',
+                        },
+                      ]}
+                      onPress={() => handleSelectMoreModule(item.key)}
+                    >
+                      <View style={[styles.moduleIconBox, { backgroundColor: item.bg }]}>
+                        <Feather name={item.icon} size={20} color={item.color} />
+                      </View>
+                      <View style={styles.moduleTextCol}>
+                        <Text
+                          style={[
+                            styles.moduleTitle,
+                            {
+                              color: isCurrent ? theme.colors.primary : theme.colors.textPrimary,
+                              fontWeight: isCurrent ? '800' : '700',
+                            },
+                          ]}
+                        >
+                          {item.label}
+                        </Text>
+                        <Text style={[styles.moduleSub, { color: theme.colors.textSecondary }]}>
+                          {item.sub}
+                        </Text>
+                      </View>
+                      <Feather
+                        name="chevron-right"
+                        size={16}
+                        color={isCurrent ? theme.colors.primary : theme.colors.textMuted}
+                      />
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </ScrollView>
           </View>
         </View>
       </Modal>
