@@ -8,13 +8,16 @@ import {
   Modal,
   TextInput,
   Alert,
+  Image,
+  Pressable,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { useApp } from '../context/AppContext';
+import { ExpenseRecord, IncomeRecord } from '../types';
 import { formatNepaliCurrency } from '@byapar/core';
-import { AnimatedPressable } from '../components/common/AnimatedPressable';
 
-const EXPENSE_CATEGORIES = [
+const DEFAULT_EXPENSE_CATEGORIES = [
   'Rent',
   'Salary',
   'Utilities',
@@ -23,54 +26,128 @@ const EXPENSE_CATEGORIES = [
   'Food',
   'Marketing',
   'Packaging',
+  'Maintenance',
+  'Tax / License',
   'Other',
 ];
 
-const INCOME_CATEGORIES = [
+const DEFAULT_INCOME_CATEGORIES = [
   'Sales',
   'Service Fee',
   'Commission',
   'Interest',
   'Rental Income',
   'Cashback / Discount',
+  'Asset Sale',
   'Other',
 ];
 
 const PAYMENT_MODES = ['Cash', 'Fonepay QR', 'Bank Transfer', 'eSewa / Khalti', 'Cheque'];
+
+type DateFilterType = 'all' | 'today' | 'yesterday' | 'week' | 'month' | 'year' | 'custom';
 
 export const ExpenseIncomeScreen: React.FC = () => {
   const {
     expenses,
     incomes,
     addExpense,
+    editExpense,
     deleteExpense,
     addIncome,
+    editIncome,
     deleteIncome,
+    customExpenseCategories,
+    addExpenseCategory,
+    deleteExpenseCategory,
+    customIncomeCategories,
+    addIncomeCategory,
+    deleteIncomeCategory,
     theme,
     themeMode,
     language,
-    t,
   } = useApp();
 
   const ne = language === 'ne';
-
   const isDark = themeMode === 'dark';
 
   const [activeTab, setActiveTab] = useState<'expense' | 'income'>('expense');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
-  const [showAddModal, setShowAddModal] = useState(false);
 
-  // Form State
+  // Date Filter State
+  const [dateFilter, setDateFilter] = useState<DateFilterType>('month');
+  const [customStartDate, setCustomStartDate] = useState('');
+  const [customEndDate, setCustomEndDate] = useState('');
+  const [showCustomDateModal, setShowCustomDateModal] = useState(false);
+  const [showDateFilterSheet, setShowDateFilterSheet] = useState(false);
+
+  // Form / Modal State
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [editingRecord, setEditingRecord] = useState<(ExpenseRecord | IncomeRecord) | null>(null);
   const [formAmount, setFormAmount] = useState('');
-  const [formCategory, setFormCategory] = useState(EXPENSE_CATEGORIES[0]);
+  const [formCategory, setFormCategory] = useState('');
   const [formPaymentMode, setFormPaymentMode] = useState(PAYMENT_MODES[0]);
   const [formParty, setFormParty] = useState('');
   const [formDate, setFormDate] = useState(new Date().toISOString().split('T')[0]);
   const [formNote, setFormNote] = useState('');
+  const [formReceiptUrl, setFormReceiptUrl] = useState('');
+
+  // Category Manager modal
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+
+  // Image Preview modal
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
 
   const isExpense = activeTab === 'expense';
-  const categoriesList = isExpense ? EXPENSE_CATEGORIES : INCOME_CATEGORIES;
+
+  // Categories list merging defaults + user custom categories
+  const categoriesList = useMemo(() => {
+    if (isExpense) {
+      return [...DEFAULT_EXPENSE_CATEGORIES, ...(customExpenseCategories || [])];
+    } else {
+      return [...DEFAULT_INCOME_CATEGORIES, ...(customIncomeCategories || [])];
+    }
+  }, [isExpense, customExpenseCategories, customIncomeCategories]);
+
+  // Date filter evaluation
+  const isDateInFilter = (dateStr: string) => {
+    if (!dateStr || dateFilter === 'all') return true;
+    const itemDate = new Date(dateStr);
+    itemDate.setHours(0, 0, 0, 0);
+
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    if (dateFilter === 'today') {
+      return itemDate.getTime() === today.getTime();
+    }
+    if (dateFilter === 'yesterday') {
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      return itemDate.getTime() === yesterday.getTime();
+    }
+    if (dateFilter === 'week') {
+      const startOfWeek = new Date(today);
+      startOfWeek.setDate(today.getDate() - today.getDay());
+      return itemDate >= startOfWeek && itemDate <= today;
+    }
+    if (dateFilter === 'month') {
+      return itemDate.getFullYear() === today.getFullYear() && itemDate.getMonth() === today.getMonth();
+    }
+    if (dateFilter === 'year') {
+      return itemDate.getFullYear() === today.getFullYear();
+    }
+    if (dateFilter === 'custom') {
+      if (!customStartDate) return true;
+      const start = new Date(customStartDate);
+      start.setHours(0, 0, 0, 0);
+      const end = customEndDate ? new Date(customEndDate) : new Date();
+      end.setHours(23, 59, 59, 999);
+      return itemDate >= start && itemDate <= end;
+    }
+    return true;
+  };
 
   // Filtered Records
   const filteredRecords = useMemo(() => {
@@ -78,6 +155,8 @@ export const ExpenseIncomeScreen: React.FC = () => {
     const q = searchQuery.toLowerCase().trim();
 
     return list.filter((r) => {
+      if (!isDateInFilter(r.date)) return false;
+
       const matchCat = selectedCategory === 'All' || r.category === selectedCategory;
       const party = isExpense
         ? (r as any).recipientName || ''
@@ -86,13 +165,18 @@ export const ExpenseIncomeScreen: React.FC = () => {
         !q ||
         r.category.toLowerCase().includes(q) ||
         (r.note && r.note.toLowerCase().includes(q)) ||
-        party.toLowerCase().includes(q);
+        party.toLowerCase().includes(q) ||
+        (r.paymentMode && r.paymentMode.toLowerCase().includes(q));
 
       return matchCat && matchSearch;
     });
-  }, [isExpense, expenses, incomes, searchQuery, selectedCategory]);
+  }, [isExpense, expenses, incomes, searchQuery, selectedCategory, dateFilter, customStartDate, customEndDate]);
 
-  // Totals
+  // Totals for active filtered view
+  const periodTotal = useMemo(() => {
+    return filteredRecords.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+  }, [filteredRecords]);
+
   const totalExpenses = useMemo(() => {
     return expenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
   }, [expenses]);
@@ -104,13 +188,51 @@ export const ExpenseIncomeScreen: React.FC = () => {
   const netBalance = totalIncomes - totalExpenses;
 
   const handleOpenAdd = () => {
+    setEditingRecord(null);
     setFormAmount('');
-    setFormCategory(categoriesList[0]);
+    setFormCategory(categoriesList[0] || 'Other');
     setFormPaymentMode(PAYMENT_MODES[0]);
     setFormParty('');
     setFormDate(new Date().toISOString().split('T')[0]);
     setFormNote('');
+    setFormReceiptUrl('');
     setShowAddModal(true);
+  };
+
+  const handleOpenEdit = (rec: ExpenseRecord | IncomeRecord) => {
+    setEditingRecord(rec);
+    setFormAmount(String(rec.amount));
+    setFormCategory(rec.category);
+    setFormPaymentMode(rec.paymentMode || PAYMENT_MODES[0]);
+    setFormParty(isExpense ? (rec as ExpenseRecord).recipientName || '' : (rec as IncomeRecord).payerName || '');
+    setFormDate(rec.date);
+    setFormNote(rec.note || '');
+    setFormReceiptUrl(rec.receiptUrl || '');
+    setShowAddModal(true);
+  };
+
+  const handlePickImage = async (useCamera = false) => {
+    try {
+      const res = useCamera
+        ? await ImagePicker.launchCameraAsync({
+            allowsEditing: true,
+            quality: 0.6,
+            base64: true,
+          })
+        : await ImagePicker.launchImageLibraryAsync({
+            allowsEditing: true,
+            quality: 0.6,
+            base64: true,
+          });
+
+      if (!res.canceled && res.assets && res.assets[0]) {
+        const asset = res.assets[0];
+        const uri = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
+        setFormReceiptUrl(uri);
+      }
+    } catch (err) {
+      console.warn('Image picker error:', err);
+    }
   };
 
   const handleSave = async () => {
@@ -124,24 +246,52 @@ export const ExpenseIncomeScreen: React.FC = () => {
       return;
     }
 
-    if (isExpense) {
-      await addExpense({
-        category: formCategory,
-        amount: amt,
-        paymentMode: formPaymentMode,
-        date: formDate,
-        recipientName: formParty.trim() || undefined,
-        note: formNote.trim() || undefined,
-      });
+    if (editingRecord) {
+      // Update existing
+      if (isExpense) {
+        await editExpense(editingRecord.id, {
+          category: formCategory,
+          amount: amt,
+          paymentMode: formPaymentMode,
+          date: formDate,
+          recipientName: formParty.trim() || undefined,
+          note: formNote.trim() || undefined,
+          receiptUrl: formReceiptUrl || undefined,
+        });
+      } else {
+        await editIncome(editingRecord.id, {
+          category: formCategory,
+          amount: amt,
+          paymentMode: formPaymentMode,
+          date: formDate,
+          payerName: formParty.trim() || undefined,
+          note: formNote.trim() || undefined,
+          receiptUrl: formReceiptUrl || undefined,
+        });
+      }
     } else {
-      await addIncome({
-        category: formCategory,
-        amount: amt,
-        paymentMode: formPaymentMode,
-        date: formDate,
-        payerName: formParty.trim() || undefined,
-        note: formNote.trim() || undefined,
-      });
+      // Add new
+      if (isExpense) {
+        await addExpense({
+          category: formCategory,
+          amount: amt,
+          paymentMode: formPaymentMode,
+          date: formDate,
+          recipientName: formParty.trim() || undefined,
+          note: formNote.trim() || undefined,
+          receiptUrl: formReceiptUrl || undefined,
+        });
+      } else {
+        await addIncome({
+          category: formCategory,
+          amount: amt,
+          paymentMode: formPaymentMode,
+          date: formDate,
+          payerName: formParty.trim() || undefined,
+          note: formNote.trim() || undefined,
+          receiptUrl: formReceiptUrl || undefined,
+        });
+      }
     }
 
     setShowAddModal(false);
@@ -149,12 +299,14 @@ export const ExpenseIncomeScreen: React.FC = () => {
 
   const handleDelete = (id: string, name: string) => {
     Alert.alert(
-      'Confirm Deletion',
-      `Are you sure you want to delete this ${isExpense ? 'expense' : 'income'} entry (${name})?`,
+      ne ? 'मेटाउने निश्चित गर्नुहोस्' : 'Confirm Deletion',
+      ne
+        ? `के तपाईं यो ${isExpense ? 'खर्च' : 'आम्दानी'} प्रविष्टि (${name}) मेटाउन निश्चित हुनुहुन्छ?`
+        : `Are you sure you want to delete this ${isExpense ? 'expense' : 'income'} entry (${name})?`,
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: ne ? 'रद्द' : 'Cancel', style: 'cancel' },
         {
-          text: 'Delete',
+          text: ne ? 'मेटाउनुहोस्' : 'Delete',
           style: 'destructive',
           onPress: async () => {
             if (isExpense) {
@@ -168,9 +320,30 @@ export const ExpenseIncomeScreen: React.FC = () => {
     );
   };
 
+  const handleAddCustomCat = async () => {
+    const trimmed = newCategoryName.trim();
+    if (!trimmed) return;
+    if (isExpense) {
+      await addExpenseCategory(trimmed);
+    } else {
+      await addIncomeCategory(trimmed);
+    }
+    setNewCategoryName('');
+  };
+
+  const dateFilterLabels: Record<DateFilterType, { en: string; ne: string }> = {
+    today: { en: 'Today', ne: 'आज' },
+    yesterday: { en: 'Yesterday', ne: 'हिजो' },
+    week: { en: 'This Week', ne: 'यो हप्ता' },
+    month: { en: 'This Month', ne: 'यो महिना' },
+    year: { en: 'This Year', ne: 'यो वर्ष' },
+    all: { en: 'All Time', ne: 'सबै' },
+    custom: { en: 'Custom Date', ne: 'आफ्नो मिति' },
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.bg }]}>
-      {/* Top Header Strip with Segment Switcher & Add Button */}
+      {/* Top Header Segment Strip */}
       <View
         style={[
           styles.headerBar,
@@ -180,7 +353,6 @@ export const ExpenseIncomeScreen: React.FC = () => {
           },
         ]}
       >
-        {/* Toggle Segments - Full Width */}
         <View style={[styles.segmentContainer, { backgroundColor: theme.colors.surface }]}>
           <TouchableOpacity
             style={[
@@ -208,7 +380,7 @@ export const ExpenseIncomeScreen: React.FC = () => {
                 { color: activeTab === 'expense' ? '#FFFFFF' : theme.colors.textMuted },
               ]}
             >
-              {ne ? 'खर्च' : 'Expenses'}
+              {ne ? 'खर्च (Expenses)' : 'Expenses'}
             </Text>
           </TouchableOpacity>
 
@@ -238,7 +410,7 @@ export const ExpenseIncomeScreen: React.FC = () => {
                 { color: activeTab === 'income' ? '#FFFFFF' : theme.colors.textMuted },
               ]}
             >
-              {ne ? 'आम्दानी' : 'Income'}
+              {ne ? 'आम्दानी (Income)' : 'Income'}
             </Text>
           </TouchableOpacity>
         </View>
@@ -248,53 +420,61 @@ export const ExpenseIncomeScreen: React.FC = () => {
       <View style={styles.kpiContainer}>
         <View
           style={[
-            styles.kpiCard,
+            styles.kpiSummaryCard,
             { backgroundColor: theme.colors.card, borderColor: theme.colors.borderGlass },
           ]}
         >
-          <Text style={[styles.kpiLabel, { color: theme.colors.textMuted }]}>
-            {ne ? 'जम्मा खर्च' : 'Total Expenses'}
-          </Text>
-          <Text style={[styles.kpiValue, { color: '#EF4444' }]}>
-            Rs. {totalExpenses.toLocaleString()}
-          </Text>
-        </View>
+          {/* Main highlight */}
+          <View style={styles.kpiMainCol}>
+            <View style={styles.kpiTagRow}>
+              <View
+                style={[
+                  styles.kpiStatusDot,
+                  { backgroundColor: isExpense ? '#EF4444' : '#10B981' },
+                ]}
+              />
+              <Text style={[styles.kpiLabel, { color: theme.colors.textMuted }]}>
+                {isExpense
+                  ? (ne ? 'अवधि खर्च' : 'PERIOD EXPENSE')
+                  : (ne ? 'अवधि आम्दानी' : 'PERIOD INCOME')}
+              </Text>
+            </View>
+            <Text style={[styles.kpiMainValue, { color: isExpense ? '#EF4444' : '#10B981' }]}>
+              Rs. {periodTotal.toLocaleString()}
+            </Text>
+          </View>
 
-        <View
-          style={[
-            styles.kpiCard,
-            { backgroundColor: theme.colors.card, borderColor: theme.colors.borderGlass },
-          ]}
-        >
-          <Text style={[styles.kpiLabel, { color: theme.colors.textMuted }]}>
-            {ne ? 'जम्मा आम्दानी' : 'Total Income'}
-          </Text>
-          <Text style={[styles.kpiValue, { color: '#10B981' }]}>
-            Rs. {totalIncomes.toLocaleString()}
-          </Text>
-        </View>
+          {/* Divider */}
+          <View style={[styles.kpiDivider, { backgroundColor: theme.colors.borderGlass }]} />
 
-        <View
-          style={[
-            styles.kpiCard,
-            { backgroundColor: theme.colors.card, borderColor: theme.colors.borderGlass },
-          ]}
-        >
-          <Text style={[styles.kpiLabel, { color: theme.colors.textMuted }]}>
-            {ne ? 'कुल नगद' : 'Net Cash Flow'}
-          </Text>
-          <Text
-            style={[
-              styles.kpiValue,
-              { color: netBalance >= 0 ? '#10B981' : '#EF4444' },
-            ]}
-          >
-            Rs. {netBalance.toLocaleString()}
-          </Text>
+          {/* Secondary stats */}
+          <View style={styles.kpiSubCol}>
+            <View style={styles.kpiSubRow}>
+              <Text style={[styles.kpiSubLabel, { color: theme.colors.textMuted }]}>
+                {ne ? 'जम्मा आम्दानी' : 'Total Inflow'}
+              </Text>
+              <Text style={[styles.kpiSubValue, { color: '#10B981' }]}>
+                Rs. {totalIncomes.toLocaleString()}
+              </Text>
+            </View>
+            <View style={styles.kpiSubRow}>
+              <Text style={[styles.kpiSubLabel, { color: theme.colors.textMuted }]}>
+                {ne ? 'कुल बचत' : 'Net Balance'}
+              </Text>
+              <Text
+                style={[
+                  styles.kpiSubValue,
+                  { color: netBalance >= 0 ? '#10B981' : '#EF4444' },
+                ]}
+              >
+                {netBalance >= 0 ? '+ ' : '- '}Rs. {Math.abs(netBalance).toLocaleString()}
+              </Text>
+            </View>
+          </View>
         </View>
       </View>
 
-      {/* Search Input Bar */}
+      {/* Consolidated Compact Utility Bar: Search, Date Filter & Categories */}
       <View style={styles.searchRow}>
         <View
           style={[
@@ -302,20 +482,83 @@ export const ExpenseIncomeScreen: React.FC = () => {
             { backgroundColor: theme.colors.card, borderColor: theme.colors.borderGlass },
           ]}
         >
-          <Feather name="search" size={15} color={theme.colors.textMuted} />
+          <Feather name="search" size={14} color={theme.colors.textMuted} />
           <TextInput
             style={[styles.searchInput, { color: theme.colors.textPrimary }]}
-            placeholder={ne ? (isExpense ? 'खर्च खोज्नुहोस्...' : 'आम्दानी खोज्नुहोस्...') : `Search ${isExpense ? 'expenses' : 'incomes'} or recipient...`}
+            placeholder={ne ? (isExpense ? 'खर्च वा नाम खोज्नुहोस्...' : 'आम्दानी खोज्नुहोस्...') : `Search ${isExpense ? 'expenses' : 'incomes'}...`}
             placeholderTextColor={theme.colors.textMuted}
             value={searchQuery}
             onChangeText={setSearchQuery}
           />
           {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <Feather name="x" size={15} color={theme.colors.textMuted} />
+            <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+              <Feather name="x" size={14} color={theme.colors.textMuted} />
             </TouchableOpacity>
           )}
         </View>
+
+        {/* Compact Date Filter Button - Saves full screen row */}
+        <TouchableOpacity
+          style={[
+            styles.compactDateBtn,
+            {
+              backgroundColor: dateFilter !== 'month'
+                ? isExpense ? 'rgba(239, 68, 68, 0.14)' : 'rgba(16, 185, 129, 0.14)'
+                : theme.colors.card,
+              borderColor: dateFilter !== 'month'
+                ? isExpense ? '#EF4444' : '#10B981'
+                : theme.colors.borderGlass,
+            },
+          ]}
+          onPress={() => setShowDateFilterSheet(true)}
+          activeOpacity={0.8}
+        >
+          <Feather
+            name="calendar"
+            size={12}
+            color={
+              dateFilter !== 'month'
+                ? isExpense ? '#EF4444' : '#10B981'
+                : theme.colors.primary
+            }
+          />
+          <Text
+            style={[
+              styles.compactDateBtnText,
+              {
+                color:
+                  dateFilter !== 'month'
+                    ? isExpense ? '#EF4444' : '#10B981'
+                    : theme.colors.textPrimary,
+                fontWeight: dateFilter !== 'month' ? '800' : '600',
+              },
+            ]}
+            numberOfLines={1}
+          >
+            {dateFilterLabels[dateFilter][ne ? 'ne' : 'en']}
+          </Text>
+          <Feather
+            name="chevron-down"
+            size={11}
+            color={
+              dateFilter !== 'month'
+                ? isExpense ? '#EF4444' : '#10B981'
+                : theme.colors.textMuted
+            }
+          />
+        </TouchableOpacity>
+
+        {/* Manage Categories Shortcut */}
+        <TouchableOpacity
+          style={[styles.manageCatBtn, { backgroundColor: theme.colors.surface, borderColor: theme.colors.borderGlass }]}
+          onPress={() => setShowCategoryModal(true)}
+          activeOpacity={0.8}
+        >
+          <Feather name="tag" size={13} color={theme.colors.textPrimary} />
+          <Text style={[styles.manageCatText, { color: theme.colors.textPrimary }]}>
+            {ne ? 'शीर्षक' : 'Cats'}
+          </Text>
+        </TouchableOpacity>
       </View>
 
       {/* Category Filter Pills */}
@@ -393,10 +636,10 @@ export const ExpenseIncomeScreen: React.FC = () => {
               />
             </View>
             <Text style={[styles.emptyTitle, { color: theme.colors.textPrimary }]}>
-              {ne ? (isExpense ? 'कुनै खर्च दर्ता छैन' : 'कुनै आम्दानी दर्ता छैन') : (isExpense ? 'No expenses recorded yet' : 'No incomes recorded yet')}
+              {ne ? (isExpense ? 'कुनै खर्च दर्ता छैन' : 'कुनै आम्दानी दर्ता छैन') : (isExpense ? 'No expenses recorded in this period' : 'No incomes recorded in this period')}
             </Text>
             <Text style={[styles.emptySub, { color: theme.colors.textMuted }]}>
-              {ne ? `"+ ${isExpense ? 'खर्च' : 'आम्दानी'}" थिच्नुहोस्` : `Tap the "+ ${isExpense ? 'Expense' : 'Income'}" button above to record your store finances.`}
+              {ne ? `"+ ${isExpense ? 'खर्च' : 'आम्दानी'}" थिच्नुहोस् वा मिति परिवर्तन गर्नुहोस्` : `Tap the "+ ${isExpense ? 'Expense' : 'Income'}" button to record entries.`}
             </Text>
           </View>
         ) : (
@@ -439,7 +682,7 @@ export const ExpenseIncomeScreen: React.FC = () => {
                     </Text>
                     {party && (
                       <Text style={[styles.recordParty, { color: theme.colors.textSecondary }]}>
-                        {ne ? (isExpense ? 'प्राप्तकर्ता: ' : 'प्रेषक: ') : (isExpense ? 'To: ' : 'From: ')}{party}
+                        {ne ? (isExpense ? 'पाउने: ' : 'दिने: ') : (isExpense ? 'To: ' : 'From: ')}{party}
                       </Text>
                     )}
                     {item.note && (
@@ -466,20 +709,44 @@ export const ExpenseIncomeScreen: React.FC = () => {
                 </View>
 
                 <View style={styles.recordRight}>
+                  {/* Receipt thumbnail */}
+                  {item.receiptUrl ? (
+                    <TouchableOpacity
+                      onPress={() => setPreviewImageUrl(item.receiptUrl!)}
+                      style={styles.receiptThumb}
+                    >
+                      <Image source={{ uri: item.receiptUrl }} style={styles.receiptThumbImg} />
+                    </TouchableOpacity>
+                  ) : null}
+
                   <Text
                     style={[
                       styles.recordAmount,
                       { color: isExpense ? '#EF4444' : '#10B981' },
                     ]}
                   >
-                    {isExpense ? '-' : '+'}Rs. {Number(item.amount).toLocaleString()}
+                    {isExpense ? '−' : '+'}Rs. {Number(item.amount).toLocaleString()}
                   </Text>
-                  <TouchableOpacity
-                    style={styles.deleteBtn}
-                    onPress={() => handleDelete(item.id, item.category)}
-                  >
-                    <Feather name="trash-2" size={14} color={theme.colors.textMuted} />
-                  </TouchableOpacity>
+
+                  <View style={styles.actionButtonsRow}>
+                    {/* Edit Button */}
+                    <TouchableOpacity
+                      style={styles.editBtn}
+                      onPress={() => handleOpenEdit(item)}
+                      activeOpacity={0.7}
+                    >
+                      <Feather name="edit-2" size={14} color={theme.colors.primary} />
+                    </TouchableOpacity>
+
+                    {/* Delete Button */}
+                    <TouchableOpacity
+                      style={styles.deleteBtn}
+                      onPress={() => handleDelete(item.id, item.category)}
+                      activeOpacity={0.7}
+                    >
+                      <Feather name="trash-2" size={14} color="#EF4444" />
+                    </TouchableOpacity>
+                  </View>
                 </View>
               </View>
             );
@@ -487,7 +754,7 @@ export const ExpenseIncomeScreen: React.FC = () => {
         )}
       </ScrollView>
 
-      {/* Floating Action Buttons for Expense & Income */}
+      {/* Floating Action Buttons */}
       <View style={styles.fabContainer} pointerEvents="box-none">
         <TouchableOpacity
           style={[styles.fabBtn, styles.fabExpenseBtn]}
@@ -497,7 +764,7 @@ export const ExpenseIncomeScreen: React.FC = () => {
           }}
           activeOpacity={0.88}
         >
-          <Feather name="arrow-up-right" size={15} color="#FFFFFF" />
+          <Feather name="plus" size={15} color="#FFFFFF" />
           <Text style={styles.fabBtnText}>{ne ? 'खर्च' : 'Expense'}</Text>
         </TouchableOpacity>
 
@@ -509,12 +776,12 @@ export const ExpenseIncomeScreen: React.FC = () => {
           }}
           activeOpacity={0.88}
         >
-          <Feather name="arrow-down-left" size={15} color="#FFFFFF" />
+          <Feather name="plus" size={15} color="#FFFFFF" />
           <Text style={styles.fabBtnText}>{ne ? 'आम्दानी' : 'Income'}</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Add Record Modal */}
+      {/* Add / Edit Transaction Modal */}
       <Modal
         visible={showAddModal}
         animationType="slide"
@@ -522,124 +789,87 @@ export const ExpenseIncomeScreen: React.FC = () => {
         onRequestClose={() => setShowAddModal(false)}
       >
         <View style={styles.modalOverlay}>
-          <TouchableOpacity
-            style={StyleSheet.absoluteFill}
-            activeOpacity={1}
-            onPress={() => setShowAddModal(false)}
-          />
-          <View
-            style={[
-              styles.modalCard,
-              { backgroundColor: theme.colors.surface, borderColor: theme.colors.borderGlass },
-            ]}
-          >
-            {/* Modal Header */}
+          <View style={[styles.modalCard, { backgroundColor: theme.colors.card }]}>
             <View style={styles.modalHeader}>
-              <View style={styles.modalTitleRow}>
-                <View
-                  style={[
-                    styles.modalIconBox,
-                    {
-                      backgroundColor: isExpense
-                        ? 'rgba(239, 68, 68, 0.15)'
-                        : 'rgba(16, 185, 129, 0.15)',
-                    },
-                  ]}
-                >
-                  <Feather
-                    name={isExpense ? 'arrow-up-right' : 'arrow-down-left'}
-                    size={18}
-                    color={isExpense ? '#EF4444' : '#10B981'}
-                  />
-                </View>
-                <Text style={[styles.modalTitle, { color: theme.colors.textPrimary }]}>
-                  {ne ? (isExpense ? 'खर्च थप्नुहोस्' : 'आम्दानी थप्नुहोस्') : (isExpense ? 'Add Store Expense' : 'Add Other Income')}
-                </Text>
-              </View>
+              <Text style={[styles.modalTitle, { color: theme.colors.textPrimary }]}>
+                {editingRecord
+                  ? (ne ? 'प्रविष्टि सम्पादन' : 'Edit Entry')
+                  : (isExpense ? (ne ? 'खर्च थप्नुहोस्' : 'Add Expense') : (ne ? 'आम्दानी थप्नुहोस्' : 'Add Income'))}
+              </Text>
               <TouchableOpacity onPress={() => setShowAddModal(false)}>
                 <Feather name="x" size={20} color={theme.colors.textMuted} />
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false}>
-              {/* Amount Input */}
-              <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>
-                  {ne ? 'रकम (रु.) *' : 'Amount (NPR) *'}
-                </Text>
-                <View
-                  style={[
-                    styles.amountBox,
-                    { backgroundColor: theme.colors.card, borderColor: theme.colors.borderGlass },
-                  ]}
-                >
-                  <Text style={[styles.currencyPrefix, { color: theme.colors.primary }]}>Rs.</Text>
-                  <TextInput
-                    style={[styles.amountInput, { color: theme.colors.textPrimary }]}
-                    keyboardType="numeric"
-                    placeholder="0.00"
-                    placeholderTextColor={theme.colors.textMuted}
-                    value={formAmount}
-                    onChangeText={setFormAmount}
-                    autoFocus
-                  />
+            <ScrollView contentContainerStyle={styles.modalBody}>
+              {/* Category Picker */}
+              <View style={styles.formGroup}>
+                <View style={styles.labelRow}>
+                  <Text style={[styles.formLabel, { color: theme.colors.textSecondary }]}>
+                    {isExpense ? (ne ? 'खर्च शीर्षक *' : 'Category *') : (ne ? 'आम्दानी स्रोत *' : 'Source *')}
+                  </Text>
+                  <TouchableOpacity onPress={() => setShowCategoryModal(true)}>
+                    <Text style={styles.addCatLink}>+ {ne ? 'नयाँ शीर्षक' : 'New Cat'}</Text>
+                  </TouchableOpacity>
                 </View>
-              </View>
-
-              {/* Category Selector */}
-              <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>
-                  {ne ? 'शीर्षक *' : 'Category *'}
-                </Text>
-                <View style={styles.chipGrid}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.catPickerScroll}>
                   {categoriesList.map((cat) => (
                     <TouchableOpacity
                       key={cat}
                       style={[
-                        styles.modalChip,
-                        formCategory === cat
-                          ? {
-                              backgroundColor: theme.colors.primary,
-                              borderColor: theme.colors.primary,
-                            }
-                          : {
-                              backgroundColor: theme.colors.card,
-                              borderColor: theme.colors.borderGlass,
-                            },
+                        styles.catPickerChip,
+                        formCategory === cat && {
+                          backgroundColor: isExpense ? '#EF4444' : '#10B981',
+                          borderColor: isExpense ? '#EF4444' : '#10B981',
+                        },
                       ]}
                       onPress={() => setFormCategory(cat)}
                     >
                       <Text
                         style={[
-                          styles.modalChipText,
-                          {
-                            color: formCategory === cat ? '#FFFFFF' : theme.colors.textSecondary,
-                            fontWeight: formCategory === cat ? '700' : '500',
-                          },
+                          styles.catPickerText,
+                          { color: formCategory === cat ? '#FFFFFF' : theme.colors.textSecondary },
                         ]}
                       >
                         {cat}
                       </Text>
                     </TouchableOpacity>
                   ))}
-                </View>
+                </ScrollView>
               </View>
 
-              {/* Recipient / Payer */}
-              <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>
-                  {ne ? (isExpense ? 'भुक्तानी पाउने व्यक्ति' : 'दिने व्यक्ति') : (isExpense ? 'Recipient / Paid To' : 'Payer / Received From')}
+              {/* Amount Input */}
+              <View style={styles.formGroup}>
+                <Text style={[styles.formLabel, { color: theme.colors.textSecondary }]}>
+                  {ne ? 'रकम (रु.) *' : 'Amount (NPR) *'}
                 </Text>
                 <TextInput
                   style={[
-                    styles.textInput,
-                    {
-                      backgroundColor: theme.colors.card,
-                      borderColor: theme.colors.borderGlass,
-                      color: theme.colors.textPrimary,
-                    },
+                    styles.formInput,
+                    styles.amountInput,
+                    { color: theme.colors.textPrimary, borderColor: theme.colors.borderGlass },
                   ]}
-                  placeholder={ne ? (isExpense ? 'जस्तै: घरधनी, कर्मचारी' : 'जस्तै: आपूर्तिकर्ता') : (isExpense ? 'e.g. Landlord, Staff, Delivery Rider' : 'e.g. Supplier Rebate, Cash Customer')}
+                  placeholder="0.00"
+                  placeholderTextColor={theme.colors.textMuted}
+                  keyboardType="numeric"
+                  value={formAmount}
+                  onChangeText={setFormAmount}
+                />
+              </View>
+
+              {/* Recipient / Payer */}
+              <View style={styles.formGroup}>
+                <Text style={[styles.formLabel, { color: theme.colors.textSecondary }]}>
+                  {isExpense
+                    ? (ne ? 'पाउने व्यक्ति / फर्म' : 'Paid To (Recipient)')
+                    : (ne ? 'दिने व्यक्ति / फर्म' : 'Received From (Payer)')}
+                </Text>
+                <TextInput
+                  style={[
+                    styles.formInput,
+                    { color: theme.colors.textPrimary, borderColor: theme.colors.borderGlass },
+                  ]}
+                  placeholder={ne ? 'जस्तै: घरबेटी, ड्राइभर, विक्रेता...' : 'e.g. Landlord, Staff, Supplier...'}
                   placeholderTextColor={theme.colors.textMuted}
                   value={formParty}
                   onChangeText={setFormParty}
@@ -647,57 +877,44 @@ export const ExpenseIncomeScreen: React.FC = () => {
               </View>
 
               {/* Payment Mode */}
-              <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>
+              <View style={styles.formGroup}>
+                <Text style={[styles.formLabel, { color: theme.colors.textSecondary }]}>
                   {ne ? 'भुक्तानी माध्यम' : 'Payment Mode'}
                 </Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.modeRow}>
+                <View style={styles.paymentModesGrid}>
                   {PAYMENT_MODES.map((mode) => (
                     <TouchableOpacity
                       key={mode}
                       style={[
-                        styles.modeChip,
+                        styles.payModeBtn,
                         formPaymentMode === mode
-                          ? {
-                              backgroundColor: theme.colors.primary,
-                              borderColor: theme.colors.primary,
-                            }
-                          : {
-                              backgroundColor: theme.colors.card,
-                              borderColor: theme.colors.borderGlass,
-                            },
+                          ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }
+                          : { backgroundColor: theme.colors.surface, borderColor: theme.colors.borderGlass },
                       ]}
                       onPress={() => setFormPaymentMode(mode)}
                     >
                       <Text
                         style={[
-                          styles.modeChipText,
-                          {
-                            color: formPaymentMode === mode ? '#FFFFFF' : theme.colors.textSecondary,
-                            fontWeight: formPaymentMode === mode ? '700' : '500',
-                          },
+                          styles.payModeText,
+                          { color: formPaymentMode === mode ? '#FFFFFF' : theme.colors.textSecondary },
                         ]}
                       >
                         {mode}
                       </Text>
                     </TouchableOpacity>
                   ))}
-                </ScrollView>
+                </View>
               </View>
 
               {/* Date */}
-              <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>
-                  {ne ? 'मिति (YYYY-MM-DD)' : 'Date (YYYY-MM-DD)'}
+              <View style={styles.formGroup}>
+                <Text style={[styles.formLabel, { color: theme.colors.textSecondary }]}>
+                  {ne ? 'मिति *' : 'Date *'}
                 </Text>
                 <TextInput
                   style={[
-                    styles.textInput,
-                    {
-                      backgroundColor: theme.colors.card,
-                      borderColor: theme.colors.borderGlass,
-                      color: theme.colors.textPrimary,
-                    },
+                    styles.formInput,
+                    { color: theme.colors.textPrimary, borderColor: theme.colors.borderGlass },
                   ]}
                   value={formDate}
                   onChangeText={setFormDate}
@@ -705,52 +922,356 @@ export const ExpenseIncomeScreen: React.FC = () => {
               </View>
 
               {/* Notes */}
-              <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: theme.colors.textSecondary }]}>
-                  {ne ? 'कैफियत' : 'Notes / Description'}
+              <View style={styles.formGroup}>
+                <Text style={[styles.formLabel, { color: theme.colors.textSecondary }]}>
+                  {ne ? 'कैफियत / टिप्पणी (वैकल्पिक)' : 'Notes / Remarks (Optional)'}
                 </Text>
                 <TextInput
                   style={[
-                    styles.textInput,
-                    styles.textArea,
-                    {
-                      backgroundColor: theme.colors.card,
-                      borderColor: theme.colors.borderGlass,
-                      color: theme.colors.textPrimary,
-                    },
+                    styles.formInput,
+                    { color: theme.colors.textPrimary, borderColor: theme.colors.borderGlass },
                   ]}
-                  placeholder="Optional details or bill references..."
+                  placeholder={ne ? 'थप विवरण लेख्नुहोस्...' : 'Add additional details...'}
                   placeholderTextColor={theme.colors.textMuted}
                   value={formNote}
                   onChangeText={setFormNote}
-                  multiline
-                  numberOfLines={2}
                 />
+              </View>
+
+              {/* Receipt Attachment */}
+              <View style={styles.formGroup}>
+                <Text style={[styles.formLabel, { color: theme.colors.textSecondary }]}>
+                  {ne ? 'बिल वा रसिदको फोटो (वैकल्पिक)' : 'Receipt / Bill Photo (Optional)'}
+                </Text>
+                <View style={styles.imagePickerRow}>
+                  <TouchableOpacity
+                    style={[styles.imgActionBtn, { backgroundColor: theme.colors.surface }]}
+                    onPress={() => handlePickImage(true)}
+                  >
+                    <Feather name="camera" size={16} color={theme.colors.textPrimary} />
+                    <Text style={[styles.imgActionText, { color: theme.colors.textPrimary }]}>Camera</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.imgActionBtn, { backgroundColor: theme.colors.surface }]}
+                    onPress={() => handlePickImage(false)}
+                  >
+                    <Feather name="image" size={16} color={theme.colors.textPrimary} />
+                    <Text style={[styles.imgActionText, { color: theme.colors.textPrimary }]}>Gallery</Text>
+                  </TouchableOpacity>
+
+                  {formReceiptUrl ? (
+                    <View style={styles.previewContainer}>
+                      <Image source={{ uri: formReceiptUrl }} style={styles.receiptPreviewImg} />
+                      <TouchableOpacity
+                        style={styles.removeImgBtn}
+                        onPress={() => setFormReceiptUrl('')}
+                      >
+                        <Feather name="x" size={12} color="#FFFFFF" />
+                      </TouchableOpacity>
+                    </View>
+                  ) : null}
+                </View>
               </View>
             </ScrollView>
 
-            {/* Actions */}
-            <View style={styles.modalActionRow}>
+            <View style={styles.modalFooter}>
               <TouchableOpacity
-                style={[styles.cancelBtn, { borderColor: theme.colors.borderGlass }]}
+                style={[styles.modalBtn, styles.cancelBtn, { borderColor: theme.colors.borderGlass }]}
                 onPress={() => setShowAddModal(false)}
               >
                 <Text style={[styles.cancelBtnText, { color: theme.colors.textSecondary }]}>
-                  {ne ? 'रद्द गर्नुहोस्' : 'Cancel'}
+                  {ne ? 'रद्द' : 'Cancel'}
                 </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[
-                  styles.saveBtn,
-                  { backgroundColor: isExpense ? '#EF4444' : '#10B981' },
-                ]}
+                style={[styles.modalBtn, isExpense ? styles.saveExpenseBtn : styles.saveIncomeBtn]}
                 onPress={handleSave}
               >
-                <Text style={styles.saveBtnText}>{ne ? 'सेभ गर्नुहोस्' : `Save ${isExpense ? 'Expense' : 'Income'}`}</Text>
+                <Text style={styles.saveBtnText}>
+                  {editingRecord
+                    ? (ne ? 'अपडेट गर्नुहोस्' : 'Update Record')
+                    : (isExpense ? (ne ? 'खर्च सेभ गर्नुहोस्' : 'Save Expense') : (ne ? 'आम्दानी सेभ गर्नुहोस्' : 'Save Income'))}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
+        </View>
+      </Modal>
+
+      {/* Date Filter Selection Sheet Modal */}
+      <Modal
+        visible={showDateFilterSheet}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setShowDateFilterSheet(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => setShowDateFilterSheet(false)}
+          />
+          <View style={[styles.modalCard, styles.dateFilterCard, { backgroundColor: theme.colors.card }]}>
+            <View style={styles.modalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <View style={[styles.dateFilterIconCircle, { backgroundColor: isExpense ? 'rgba(239, 68, 68, 0.12)' : 'rgba(16, 185, 129, 0.12)' }]}>
+                  <Feather name="calendar" size={16} color={isExpense ? '#EF4444' : '#10B981'} />
+                </View>
+                <View>
+                  <Text style={[styles.modalTitle, { color: theme.colors.textPrimary }]}>
+                    {ne ? 'समय अवधि छनोट' : 'Select Time Period'}
+                  </Text>
+                  <Text style={[styles.dateFilterSubtitle, { color: theme.colors.textMuted }]}>
+                    {ne ? 'कारोबार फिल्टर गर्न दायरा रोज्नुहोस्' : 'Filter records by date range'}
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                style={styles.modalCloseBtn}
+                onPress={() => setShowDateFilterSheet(false)}
+              >
+                <Feather name="x" size={18} color={theme.colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.dateFilterList}>
+              {(['today', 'yesterday', 'week', 'month', 'year', 'all', 'custom'] as DateFilterType[]).map((f) => {
+                const isSelected = dateFilter === f;
+                const iconName: keyof typeof Feather.glyphMap =
+                  f === 'today' ? 'clock' :
+                  f === 'yesterday' ? 'rotate-ccw' :
+                  f === 'week' ? 'calendar' :
+                  f === 'month' ? 'calendar' :
+                  f === 'year' ? 'activity' :
+                  f === 'all' ? 'layers' : 'sliders';
+
+                return (
+                  <TouchableOpacity
+                    key={f}
+                    style={[
+                      styles.dateFilterOptionItem,
+                      {
+                        backgroundColor: isSelected
+                          ? isExpense
+                            ? 'rgba(239, 68, 68, 0.12)'
+                            : 'rgba(16, 185, 129, 0.12)'
+                          : isDark
+                          ? '#18181A'
+                          : '#F8FAFC',
+                        borderColor: isSelected
+                          ? isExpense ? '#EF4444' : '#10B981'
+                          : theme.colors.borderGlass,
+                      },
+                    ]}
+                    onPress={() => {
+                      setDateFilter(f);
+                      setShowDateFilterSheet(false);
+                      if (f === 'custom') {
+                        setTimeout(() => setShowCustomDateModal(true), 200);
+                      }
+                    }}
+                    activeOpacity={0.75}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                      <Feather
+                        name={iconName}
+                        size={15}
+                        color={
+                          isSelected
+                            ? isExpense ? '#EF4444' : '#10B981'
+                            : theme.colors.textSecondary
+                        }
+                      />
+                      <Text
+                        style={[
+                          styles.dateFilterOptionText,
+                          {
+                            color: isSelected
+                              ? isExpense ? '#EF4444' : '#10B981'
+                              : theme.colors.textPrimary,
+                            fontWeight: isSelected ? '800' : '600',
+                          },
+                        ]}
+                      >
+                        {dateFilterLabels[f][ne ? 'ne' : 'en']}
+                      </Text>
+                    </View>
+                    {isSelected && (
+                      <Feather
+                        name="check"
+                        size={16}
+                        color={isExpense ? '#EF4444' : '#10B981'}
+                      />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Custom Date Modal */}
+      <Modal
+        visible={showCustomDateModal}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setShowCustomDateModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, styles.customDateCard, { backgroundColor: theme.colors.card }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: theme.colors.textPrimary }]}>
+                {ne ? 'आफ्नो मिति छान्नुहोस्' : 'Custom Date Range'}
+              </Text>
+              <TouchableOpacity onPress={() => setShowCustomDateModal(false)}>
+                <Feather name="x" size={20} color={theme.colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.customDateBody}>
+              <View style={styles.formGroup}>
+                <Text style={[styles.formLabel, { color: theme.colors.textSecondary }]}>
+                  {ne ? 'सुरु मिति (From Date):' : 'Start Date (YYYY-MM-DD):'}
+                </Text>
+                <TextInput
+                  style={[styles.formInput, { color: theme.colors.textPrimary, borderColor: theme.colors.borderGlass }]}
+                  placeholder="YYYY-MM-DD"
+                  placeholderTextColor={theme.colors.textMuted}
+                  value={customStartDate}
+                  onChangeText={setCustomStartDate}
+                />
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={[styles.formLabel, { color: theme.colors.textSecondary }]}>
+                  {ne ? 'अन्तिम मिति (To Date):' : 'End Date (YYYY-MM-DD):'}
+                </Text>
+                <TextInput
+                  style={[styles.formInput, { color: theme.colors.textPrimary, borderColor: theme.colors.borderGlass }]}
+                  placeholder="YYYY-MM-DD"
+                  placeholderTextColor={theme.colors.textMuted}
+                  value={customEndDate}
+                  onChangeText={setCustomEndDate}
+                />
+              </View>
+
+              <TouchableOpacity
+                style={[styles.applyFilterBtn, { backgroundColor: theme.colors.primary }]}
+                onPress={() => {
+                  setDateFilter('custom');
+                  setShowCustomDateModal(false);
+                }}
+              >
+                <Text style={styles.applyFilterText}>{ne ? 'लागू गर्नुहोस्' : 'Apply Filter'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Category Manager Modal */}
+      <Modal
+        visible={showCategoryModal}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowCategoryModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, { backgroundColor: theme.colors.card }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: theme.colors.textPrimary }]}>
+                {isExpense
+                  ? (ne ? 'खर्च शीर्षकहरू व्यवस्थापन' : 'Manage Expense Categories')
+                  : (ne ? 'आम्दानी स्रोतहरू व्यवस्थापन' : 'Manage Income Categories')}
+              </Text>
+              <TouchableOpacity onPress={() => setShowCategoryModal(false)}>
+                <Feather name="x" size={20} color={theme.colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.catManagerBody}>
+              {/* Add Input */}
+              <View style={styles.addCatRow}>
+                <TextInput
+                  style={[styles.addCatInput, { color: theme.colors.textPrimary, borderColor: theme.colors.borderGlass }]}
+                  placeholder={ne ? 'नयाँ शीर्षकको नाम...' : 'New category name...'}
+                  placeholderTextColor={theme.colors.textMuted}
+                  value={newCategoryName}
+                  onChangeText={setNewCategoryName}
+                />
+                <TouchableOpacity
+                  style={[styles.addCatSubmitBtn, { backgroundColor: theme.colors.primary }]}
+                  onPress={handleAddCustomCat}
+                >
+                  <Feather name="plus" size={16} color="#FFFFFF" />
+                  <Text style={styles.addCatSubmitText}>{ne ? 'थप्नुहोस्' : 'Add'}</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Custom categories list */}
+              <Text style={[styles.catSectionTitle, { color: theme.colors.textMuted }]}>
+                {ne ? 'तपाईंले थपेका शीर्षकहरू' : 'Custom Defined Categories'}
+              </Text>
+              <ScrollView style={styles.catListScroll}>
+                {(isExpense ? customExpenseCategories : customIncomeCategories).length === 0 ? (
+                  <Text style={[styles.emptyCatText, { color: theme.colors.textMuted }]}>
+                    {ne ? 'कुनै पनि आफ्नै शीर्षक थपिएको छैन।' : 'No custom categories yet.'}
+                  </Text>
+                ) : (
+                  (isExpense ? customExpenseCategories : customIncomeCategories).map((c) => (
+                    <View key={c} style={[styles.catItemRow, { backgroundColor: theme.colors.surface }]}>
+                      <Text style={[styles.catItemName, { color: theme.colors.textPrimary }]}>{c}</Text>
+                      <TouchableOpacity
+                        onPress={() => {
+                          if (isExpense) deleteExpenseCategory(c);
+                          else deleteIncomeCategory(c);
+                        }}
+                      >
+                        <Feather name="trash-2" size={14} color="#EF4444" />
+                      </TouchableOpacity>
+                    </View>
+                  ))
+                )}
+
+                <Text style={[styles.catSectionTitle, { color: theme.colors.textMuted, marginTop: 16 }]}>
+                  {ne ? 'प्रणालीका डिफल्ट शीर्षकहरू' : 'Default System Categories'}
+                </Text>
+                <View style={styles.defaultChipsWrap}>
+                  {(isExpense ? DEFAULT_EXPENSE_CATEGORIES : DEFAULT_INCOME_CATEGORIES).map((c) => (
+                    <View key={c} style={[styles.defaultChip, { backgroundColor: theme.colors.surface }]}>
+                      <Text style={[styles.defaultChipText, { color: theme.colors.textSecondary }]}>{c}</Text>
+                    </View>
+                  ))}
+                </View>
+              </ScrollView>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Image Preview Modal */}
+      <Modal
+        visible={!!previewImageUrl}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPreviewImageUrl(null)}
+      >
+        <View style={styles.imageModalOverlay}>
+          <TouchableOpacity
+            style={styles.closeImageBtn}
+            onPress={() => setPreviewImageUrl(null)}
+          >
+            <Feather name="x" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+          {previewImageUrl ? (
+            <Image
+              source={{ uri: previewImageUrl }}
+              style={styles.fullPreviewImage}
+              resizeMode="contain"
+            />
+          ) : null}
         </View>
       </Modal>
     </View>
@@ -762,17 +1283,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerBar: {
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     paddingVertical: 10,
     borderBottomWidth: 1,
-    width: '100%',
   },
   segmentContainer: {
     flexDirection: 'row',
     borderRadius: 12,
     padding: 3,
-    gap: 4,
-    width: '100%',
   },
   segmentBtn: {
     flex: 1,
@@ -788,119 +1306,199 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   kpiContainer: {
-    flexDirection: 'row',
-    paddingHorizontal: 14,
-    paddingTop: 10,
-    gap: 8,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 2,
   },
-  kpiCard: {
-    flex: 1,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 10,
+  kpiSummaryCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 11,
+    borderRadius: 16,
     borderWidth: 1,
   },
-  kpiLabel: {
-    fontSize: 9,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.3,
+  kpiMainCol: {
+    flex: 1.25,
+    justifyContent: 'center',
+  },
+  kpiTagRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
     marginBottom: 2,
   },
-  kpiValue: {
-    fontSize: 13,
+  kpiStatusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  kpiLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  kpiMainValue: {
+    fontSize: 18,
+    fontWeight: '900',
+    letterSpacing: -0.3,
+  },
+  kpiDivider: {
+    width: 1,
+    height: 34,
+    marginHorizontal: 12,
+  },
+  kpiSubCol: {
+    flex: 1,
+    gap: 4,
+    justifyContent: 'center',
+  },
+  kpiSubRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  kpiSubLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  kpiSubValue: {
+    fontSize: 11,
     fontWeight: '800',
   },
-  searchRow: {
-    paddingHorizontal: 14,
-    paddingTop: 8,
-  },
-  searchBox: {
+  compactDateBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
-    height: 38,
-    borderRadius: 10,
+    height: 36,
+    borderRadius: 999,
+    borderWidth: 1,
+    gap: 5,
+  },
+  compactDateBtnText: {
+    fontSize: 11.5,
+  },
+  dateFilterCard: {
+    maxWidth: 380,
+    width: '92%',
+    padding: 18,
+    borderRadius: 22,
+    borderWidth: 1,
+  },
+  dateFilterIconCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dateFilterSubtitle: {
+    fontSize: 11.5,
+    marginTop: 2,
+  },
+  dateFilterList: {
+    gap: 7,
+    marginTop: 14,
+  },
+  dateFilterOptionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  dateFilterOptionText: {
+    fontSize: 12.5,
+  },
+  searchRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    gap: 8,
+  },
+  searchBox: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    height: 36,
+    borderRadius: 999,
     borderWidth: 1,
     gap: 8,
   },
   searchInput: {
     flex: 1,
-    fontSize: 12,
-    padding: 0,
+    fontSize: 12.5,
+  },
+  manageCatBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    height: 36,
+    borderRadius: 999,
+    borderWidth: 1,
+    gap: 4,
+  },
+  manageCatText: {
+    fontSize: 11.5,
+    fontWeight: '600',
   },
   categoryRow: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 5,
     gap: 6,
-    alignItems: 'center',
   },
   catChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 13,
-    height: 28,
-    borderRadius: 14,
+    paddingHorizontal: 15,
+    paddingVertical: 5,
+    height: 30,
+    borderRadius: 999,
     borderWidth: 1,
   },
   catChipActive: {
     backgroundColor: '#FF4500',
     borderColor: '#FF4500',
-    shadowColor: '#FF4500',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-    elevation: 2,
   },
   catChipText: {
-    fontSize: 11,
-    fontWeight: '600',
+    fontSize: 11.5,
+    fontWeight: '700',
     lineHeight: 14,
   },
   catChipTextActive: {
-    fontWeight: '700',
     color: '#FFFFFF',
   },
   listContainer: {
-    paddingHorizontal: 14,
-    paddingBottom: 95,
-    gap: 8,
+    paddingHorizontal: 16,
+    paddingBottom: 90,
+    gap: 10,
   },
-  fabContainer: {
-    position: 'absolute',
-    bottom: 20,
-    right: 14,
-    flexDirection: 'row',
-    gap: 8,
-    alignItems: 'center',
-    zIndex: 99,
-  },
-  fabBtn: {
-    flexDirection: 'row',
+  emptyContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 14,
-    height: 36,
-    borderRadius: 18,
-    gap: 5,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 4,
+    paddingVertical: 48,
   },
-  fabExpenseBtn: {
-    backgroundColor: '#EF4444',
-    shadowColor: '#EF4444',
+  emptyIconBox: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
   },
-  fabIncomeBtn: {
-    backgroundColor: '#10B981',
-    shadowColor: '#10B981',
-  },
-  fabBtnText: {
-    color: '#FFFFFF',
-    fontSize: 12,
+  emptyTitle: {
+    fontSize: 15,
     fontWeight: '700',
+    marginBottom: 4,
+  },
+  emptySub: {
+    fontSize: 12,
+    textAlign: 'center',
+    paddingHorizontal: 32,
   },
   recordCard: {
     flexDirection: 'row',
@@ -913,8 +1511,8 @@ const styles = StyleSheet.create({
   recordLeft: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 10,
     flex: 1,
-    gap: 12,
   },
   iconCircle: {
     width: 38,
@@ -932,22 +1530,23 @@ const styles = StyleSheet.create({
   },
   recordParty: {
     fontSize: 12,
+    marginTop: 2,
     fontWeight: '500',
-    marginTop: 1,
   },
   recordNote: {
     fontSize: 11,
-    marginTop: 1,
+    marginTop: 2,
+    fontStyle: 'italic',
   },
   recordMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
     marginTop: 4,
   },
   recordDate: {
-    fontSize: 10,
-    fontFamily: 'monospace',
+    fontSize: 11,
+    fontFamily: 'System',
   },
   modeBadge: {
     paddingHorizontal: 6,
@@ -956,175 +1555,342 @@ const styles = StyleSheet.create({
   },
   modeBadgeText: {
     fontSize: 9,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   recordRight: {
     alignItems: 'flex-end',
-    gap: 8,
-    paddingLeft: 8,
+    gap: 4,
   },
   recordAmount: {
     fontSize: 14,
     fontWeight: '800',
-    fontFamily: 'monospace',
+    fontFamily: 'System',
+  },
+  receiptThumb: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#666',
+  },
+  receiptThumbImg: {
+    width: '100%',
+    height: '100%',
+  },
+  actionButtonsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  editBtn: {
+    padding: 4,
   },
   deleteBtn: {
     padding: 4,
   },
-  emptyContainer: {
+  fabContainer: {
+    position: 'absolute',
+    bottom: 24,
+    right: 16,
+    flexDirection: 'row',
+    gap: 10,
+  },
+  fabBtn: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 50,
-    paddingHorizontal: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 24,
+    gap: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 6,
   },
-  emptyIconBox: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
+  fabExpenseBtn: {
+    backgroundColor: '#EF4444',
   },
-  emptyTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    marginBottom: 4,
+  fabIncomeBtn: {
+    backgroundColor: '#10B981',
   },
-  emptySub: {
+  fabBtnText: {
+    color: '#FFFFFF',
     fontSize: 12,
-    textAlign: 'center',
-    lineHeight: 18,
+    fontWeight: '700',
   },
-
-  // Modal Styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'flex-end',
   },
   modalCard: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    borderWidth: 1,
-    padding: 18,
-    maxHeight: '85%',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '90%',
   },
   modalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.08)',
   },
-  modalTitleRow: {
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  modalCloseBtn: {
+    padding: 4,
+  },
+  modalBody: {
+    padding: 16,
+    gap: 14,
+  },
+  formGroup: {
+    gap: 6,
+  },
+  labelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  formLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  addCatLink: {
+    fontSize: 11,
+    color: '#FF4500',
+    fontWeight: '600',
+  },
+  formInput: {
+    height: 44,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    fontSize: 13,
+  },
+  amountInput: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  catPickerScroll: {
+    flexDirection: 'row',
+  },
+  catPickerChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 15,
+    paddingVertical: 5,
+    height: 30,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    marginRight: 6,
+  },
+  catPickerText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    lineHeight: 14,
+  },
+  paymentModesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  payModeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 15,
+    paddingVertical: 5,
+    height: 30,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  payModeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    lineHeight: 14,
+  },
+  imagePickerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
   },
-  modalIconBox: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+  imgActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    gap: 6,
+  },
+  imgActionText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  previewContainer: {
+    position: 'relative',
+    width: 36,
+    height: 36,
+    borderRadius: 6,
+    overflow: 'hidden',
+  },
+  receiptPreviewImg: {
+    width: '100%',
+    height: '100%',
+  },
+  removeImgBtn: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    backgroundColor: '#EF4444',
+    padding: 2,
+    borderRadius: 4,
+  },
+  modalFooter: {
+    flexDirection: 'row',
+    padding: 16,
+    gap: 10,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.08)',
+  },
+  modalBtn: {
+    flex: 1,
+    height: 44,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  modalTitle: {
-    fontSize: 16,
-    fontWeight: '800',
+  cancelBtn: {
+    borderWidth: 1,
   },
-  inputGroup: {
-    marginBottom: 14,
-  },
-  inputLabel: {
-    fontSize: 12,
+  cancelBtnText: {
+    fontSize: 13,
     fontWeight: '600',
-    marginBottom: 6,
   },
-  amountBox: {
+  saveExpenseBtn: {
+    backgroundColor: '#EF4444',
+  },
+  saveIncomeBtn: {
+    backgroundColor: '#10B981',
+  },
+  saveBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  customDateCard: {
+    marginHorizontal: 20,
+    marginBottom: 'auto',
+    marginTop: 'auto',
+    borderRadius: 16,
+  },
+  customDateBody: {
+    padding: 16,
+    gap: 12,
+  },
+  applyFilterBtn: {
+    height: 40,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+  },
+  applyFilterText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  catManagerBody: {
+    padding: 16,
+  },
+  addCatRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 16,
+  },
+  addCatInput: {
+    flex: 1,
+    height: 40,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    fontSize: 13,
+  },
+  addCatSubmitBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    gap: 4,
   },
-  currencyPrefix: {
-    fontSize: 18,
-    fontWeight: '800',
-    marginRight: 6,
+  addCatSubmitText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
   },
-  amountInput: {
-    flex: 1,
-    fontSize: 18,
-    fontWeight: '800',
-    padding: 0,
+  catSectionTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 8,
   },
-  chipGrid: {
+  catListScroll: {
+    maxHeight: 250,
+  },
+  emptyCatText: {
+    fontSize: 12,
+    fontStyle: 'italic',
+    marginBottom: 8,
+  },
+  catItemRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 6,
+  },
+  catItemName: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  defaultChipsWrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
   },
-  modalChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 10,
-    borderWidth: 1,
+  defaultChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
   },
-  modalChipText: {
-    fontSize: 12,
+  defaultChipText: {
+    fontSize: 11,
+    fontWeight: '500',
   },
-  textInput: {
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-    fontSize: 13,
-  },
-  textArea: {
-    height: 60,
-    textAlignVertical: 'top',
-  },
-  modeRow: {
-    flexDirection: 'row',
-  },
-  modeChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 10,
-    borderWidth: 1,
-    marginRight: 8,
-  },
-  modeChipText: {
-    fontSize: 12,
-  },
-  modalActionRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 10,
-    paddingTop: 10,
-  },
-  cancelBtn: {
+  imageModalOverlay: {
     flex: 1,
-    paddingVertical: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.92)',
     justifyContent: 'center',
-  },
-  cancelBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  saveBtn: {
-    flex: 2,
-    paddingVertical: 12,
-    borderRadius: 12,
     alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 2,
   },
-  saveBtnText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '800',
+  closeImageBtn: {
+    position: 'absolute',
+    top: 50,
+    right: 20,
+    zIndex: 10,
+    padding: 8,
+  },
+  fullPreviewImage: {
+    width: '90%',
+    height: '75%',
   },
 });

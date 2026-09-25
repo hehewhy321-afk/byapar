@@ -8,8 +8,10 @@ import {
   Modal,
   TextInput,
   Alert,
+  Image,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { useApp } from '../context/AppContext';
 import { PaymentMode } from '../types';
 import { AnimatedPressable } from '../components/common/AnimatedPressable';
@@ -46,6 +48,32 @@ export const PurchaseHubScreen: React.FC = () => {
   const [billCost, setBillCost] = useState('');
   const [billPaid, setBillPaid] = useState('');
   const [billMode, setBillMode] = useState<PaymentMode>('cash');
+  const [billReceiptUri, setBillReceiptUri] = useState('');
+  const [previewImageUri, setPreviewImageUri] = useState<string | null>(null);
+
+  const handlePickReceipt = async (useCamera = false) => {
+    try {
+      const res = useCamera
+        ? await ImagePicker.launchCameraAsync({
+            allowsEditing: true,
+            quality: 0.6,
+            base64: true,
+          })
+        : await ImagePicker.launchImageLibraryAsync({
+            allowsEditing: true,
+            quality: 0.6,
+            base64: true,
+          });
+
+      if (!res.canceled && res.assets && res.assets[0]) {
+        const asset = res.assets[0];
+        const uri = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
+        setBillReceiptUri(uri);
+      }
+    } catch (err) {
+      console.warn('Image picker error:', err);
+    }
+  };
 
   // Payment Out Form
   const [outPartyId, setOutPartyId] = useState('');
@@ -112,6 +140,7 @@ export const PurchaseHubScreen: React.FC = () => {
       dueAmount: Math.max(0, total - paid),
       status: paid >= total ? 'paid' : paid > 0 ? 'partial' : 'unpaid',
       paymentMode: billMode,
+      receiptUrl: billReceiptUri || undefined,
       items: [
         {
           id: Math.random().toString(),
@@ -124,6 +153,7 @@ export const PurchaseHubScreen: React.FC = () => {
     });
 
     setShowBillModal(false);
+    setBillReceiptUri('');
     setBillSupplierName('');
     setBillSupplierPhone('');
     setBillItemName('');
@@ -366,40 +396,52 @@ export const PurchaseHubScreen: React.FC = () => {
                 ]}
               >
                 <View style={styles.cardTop}>
-                  <View>
-                    <Text style={[styles.cardTitle, { color: theme.colors.textPrimary }]}>
+                  <View style={{ flex: 1, marginRight: 8 }}>
+                    <Text style={[styles.cardTitle, { color: theme.colors.textPrimary }]} numberOfLines={1}>
                       {b.billNumber}
                     </Text>
-                    <Text style={[styles.cardSub, { color: theme.colors.textMuted }]}>
+                    <Text style={[styles.cardSub, { color: theme.colors.textMuted }]} numberOfLines={1}>
                       {b.supplierName} • {b.date}
                     </Text>
                   </View>
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={[styles.cardAmount, { color: '#EF4444' }]}>
-                      Rs. {Number(b.totalAmount).toLocaleString()}
-                    </Text>
-                    <View
-                      style={[
-                        styles.badge,
-                        {
-                          backgroundColor:
-                            b.paidAmount >= b.totalAmount
-                              ? 'rgba(16, 185, 129, 0.15)'
-                              : 'rgba(239, 68, 68, 0.15)',
-                        },
-                      ]}
-                    >
-                      <Text
+                  <View style={{ alignItems: 'flex-end', gap: 3 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={[styles.cardAmount, { color: '#EF4444' }]}>
+                        Rs. {Number(b.totalAmount).toLocaleString()}
+                      </Text>
+                      <View
                         style={[
-                          styles.badgeText,
+                          styles.badge,
                           {
-                            color: b.paidAmount >= b.totalAmount ? '#10B981' : '#EF4444',
+                            backgroundColor:
+                              b.paidAmount >= b.totalAmount
+                                ? 'rgba(16, 185, 129, 0.15)'
+                                : 'rgba(239, 68, 68, 0.15)',
                           },
                         ]}
                       >
-                        {b.paidAmount >= b.totalAmount ? 'PAID' : 'PENDING'}
-                      </Text>
+                        <Text
+                          style={[
+                            styles.badgeText,
+                            {
+                              color: b.paidAmount >= b.totalAmount ? '#10B981' : '#EF4444',
+                            },
+                          ]}
+                        >
+                          {b.paidAmount >= b.totalAmount ? 'PAID' : 'PENDING'}
+                        </Text>
+                      </View>
                     </View>
+                    {b.receiptUrl ? (
+                      <TouchableOpacity
+                        style={styles.cardReceiptBtn}
+                        onPress={() => setPreviewImageUri(b.receiptUrl!)}
+                        activeOpacity={0.8}
+                      >
+                        <Feather name="file-text" size={10} color={theme.colors.primary} />
+                        <Text style={[styles.cardReceiptText, { color: theme.colors.primary }]}>View Slip</Text>
+                      </TouchableOpacity>
+                    ) : null}
                   </View>
                 </View>
               </View>
@@ -430,23 +472,18 @@ export const PurchaseHubScreen: React.FC = () => {
                 ]}
               >
                 <View style={styles.cardTop}>
-                  <View>
-                    <Text style={[styles.cardTitle, { color: theme.colors.textPrimary }]}>
+                  <View style={{ flex: 1, marginRight: 8 }}>
+                    <Text style={[styles.cardTitle, { color: theme.colors.textPrimary }]} numberOfLines={1}>
                       {pay.partyName}
                     </Text>
-                    <Text style={[styles.cardSub, { color: theme.colors.textMuted }]}>
-                      {pay.date} • Mode: {pay.paymentMode.toUpperCase()}
+                    <Text style={[styles.cardSub, { color: theme.colors.textMuted }]} numberOfLines={1}>
+                      {pay.date} • Mode: {pay.paymentMode.toUpperCase()}{pay.notes ? ` • ${pay.notes}` : ''}
                     </Text>
                   </View>
                   <Text style={[styles.cardAmount, { color: '#EF4444' }]}>
                     - Rs. {Number(pay.amount).toLocaleString()}
                   </Text>
                 </View>
-                {pay.notes && (
-                  <Text style={[styles.cardNote, { color: theme.colors.textSecondary }]}>
-                    Note: {pay.notes}
-                  </Text>
-                )}
               </View>
             ))}
             {filteredPaymentsOut.length === 0 && (
@@ -475,23 +512,18 @@ export const PurchaseHubScreen: React.FC = () => {
                 ]}
               >
                 <View style={styles.cardTop}>
-                  <View>
-                    <Text style={[styles.cardTitle, { color: theme.colors.textPrimary }]}>
+                  <View style={{ flex: 1, marginRight: 8 }}>
+                    <Text style={[styles.cardTitle, { color: theme.colors.textPrimary }]} numberOfLines={1}>
                       {pr.returnNumber}
                     </Text>
-                    <Text style={[styles.cardSub, { color: theme.colors.textMuted }]}>
-                      {pr.supplierName} • {pr.date}
+                    <Text style={[styles.cardSub, { color: theme.colors.textMuted }]} numberOfLines={1}>
+                      {pr.supplierName} • {pr.date}{pr.reason ? ` • ${pr.reason}` : ''}
                     </Text>
                   </View>
                   <Text style={[styles.cardAmount, { color: '#10B981' }]}>
                     + Rs. {Number(pr.totalAmount).toLocaleString()}
                   </Text>
                 </View>
-                {pr.reason && (
-                  <Text style={[styles.cardNote, { color: theme.colors.textSecondary }]}>
-                    Reason: {pr.reason}
-                  </Text>
-                )}
               </View>
             ))}
             {filteredReturns.length === 0 && (
@@ -633,6 +665,43 @@ export const PurchaseHubScreen: React.FC = () => {
                 value={billPaid}
                 onChangeText={setBillPaid}
               />
+
+              <Text style={[styles.modalLabel, { color: theme.colors.textSecondary, marginTop: 10 }]}>
+                Attach Bill / Receipt Photo (Optional)
+              </Text>
+              <View style={styles.receiptContainer}>
+                {billReceiptUri ? (
+                  <View style={styles.receiptThumbWrapper}>
+                    <Image source={{ uri: billReceiptUri }} style={styles.receiptThumb} />
+                    <TouchableOpacity
+                      style={styles.receiptRemoveBtn}
+                      onPress={() => setBillReceiptUri('')}
+                      activeOpacity={0.8}
+                    >
+                      <Feather name="x" size={12} color="#FFFFFF" />
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <View style={styles.receiptPickerBtns}>
+                    <TouchableOpacity
+                      style={[styles.pickerBtn, { backgroundColor: theme.colors.surface, borderColor: theme.colors.borderGlass }]}
+                      onPress={() => handlePickReceipt(true)}
+                      activeOpacity={0.8}
+                    >
+                      <Feather name="camera" size={14} color={theme.colors.primary} />
+                      <Text style={[styles.pickerBtnText, { color: theme.colors.textPrimary }]}>Camera</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.pickerBtn, { backgroundColor: theme.colors.surface, borderColor: theme.colors.borderGlass }]}
+                      onPress={() => handlePickReceipt(false)}
+                      activeOpacity={0.8}
+                    >
+                      <Feather name="image" size={14} color={theme.colors.primary} />
+                      <Text style={[styles.pickerBtnText, { color: theme.colors.textPrimary }]}>Gallery</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
 
               <AnimatedPressable
                 style={[styles.modalSubmitBtn, { backgroundColor: theme.colors.primary, marginTop: 18 }]}
@@ -925,6 +994,31 @@ export const PurchaseHubScreen: React.FC = () => {
           </View>
         </View>
       </Modal>
+
+      {/* RECEIPT PREVIEW MODAL */}
+      <Modal
+        visible={!!previewImageUri}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPreviewImageUri(null)}
+      >
+        <View style={styles.imagePreviewOverlay}>
+          <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => setPreviewImageUri(null)} />
+          <View style={[styles.imagePreviewCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.borderGlass }]}>
+            <View style={[styles.imagePreviewHeader, { borderBottomColor: theme.colors.borderGlass }]}>
+              <Text style={[styles.imagePreviewTitle, { color: theme.colors.textPrimary }]}>Purchase Bill Slip</Text>
+              <TouchableOpacity onPress={() => setPreviewImageUri(null)}>
+                <Feather name="x" size={20} color={theme.colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
+            {previewImageUri ? (
+              <View style={[styles.imagePreviewWrapper, { backgroundColor: isDark ? '#000000' : '#F8FAFC' }]}>
+                <Image source={{ uri: previewImageUri }} style={styles.imagePreviewFull} resizeMode="contain" />
+              </View>
+            ) : null}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -947,9 +1041,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    height: 40,
+    borderRadius: 22,
+    paddingHorizontal: 14,
+    height: 42,
   },
   searchInput: {
     flex: 1,
@@ -959,43 +1053,50 @@ const styles = StyleSheet.create({
   headerBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    height: 40,
-    borderRadius: 8,
+    gap: 5,
+    paddingHorizontal: 14,
+    height: 34,
+    borderRadius: 999,
   },
   headerBtnText: {
     color: '#FFFFFF',
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: '800',
   },
   tabsRow: {
     paddingHorizontal: 16,
-    paddingVertical: 10,
-    gap: 8,
+    paddingVertical: 5,
+    gap: 6,
   },
   tab: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 5,
+    height: 30,
+    borderRadius: 999,
     borderWidth: 1,
   },
   tabText: {
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: '600',
+    lineHeight: 14,
   },
   tabTextActive: {
     fontWeight: '800',
   },
   listContainer: {
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingTop: 6,
     paddingBottom: 40,
-    gap: 10,
+    gap: 8,
   },
   card: {
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1,
-    padding: 14,
+    paddingVertical: 9,
+    paddingHorizontal: 13,
   },
   cardTop: {
     flexDirection: 'row',
@@ -1003,30 +1104,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   cardTitle: {
-    fontSize: 15,
-    fontWeight: '800',
+    fontSize: 13.5,
+    fontWeight: '700',
   },
   cardSub: {
-    fontSize: 12,
-    marginTop: 2,
+    fontSize: 11,
+    marginTop: 1,
   },
   cardAmount: {
-    fontSize: 15,
+    fontSize: 13.5,
     fontWeight: '800',
   },
   cardNote: {
-    fontSize: 12,
-    marginTop: 8,
+    fontSize: 11,
+    marginTop: 4,
     fontStyle: 'italic',
   },
   badge: {
     paddingHorizontal: 8,
     paddingVertical: 2,
-    borderRadius: 6,
-    marginTop: 4,
+    borderRadius: 999,
   },
   badgeText: {
-    fontSize: 10,
+    fontSize: 9.5,
     fontWeight: '800',
   },
   emptyState: {
@@ -1082,15 +1182,20 @@ const styles = StyleSheet.create({
     paddingBottom: 4,
   },
   partyChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 15,
+    paddingVertical: 5,
+    height: 30,
+    borderRadius: 999,
     borderWidth: 1,
     marginRight: 8,
   },
   partyChipText: {
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: '700',
+    lineHeight: 14,
   },
   modeRow: {
     flexDirection: 'row',
@@ -1100,20 +1205,23 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 8,
-    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 5,
+    height: 30,
+    borderRadius: 999,
     borderWidth: 1,
   },
   modeBtnText: {
     fontSize: 11,
     fontWeight: '800',
+    lineHeight: 14,
   },
   inputSplitRow: {
     flexDirection: 'row',
   },
   modalSubmitBtn: {
     height: 44,
-    borderRadius: 8,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1121,5 +1229,102 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '800',
+  },
+  cardReceiptBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 6,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 12,
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+  },
+  cardReceiptText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  receiptContainer: {
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  receiptThumbWrapper: {
+    position: 'relative',
+    width: 64,
+    height: 64,
+    borderRadius: 8,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(150, 150, 150, 0.3)',
+  },
+  receiptThumb: {
+    width: '100%',
+    height: '100%',
+  },
+  receiptRemoveBtn: {
+    position: 'absolute',
+    top: 3,
+    right: 3,
+    backgroundColor: '#EF4444',
+    borderRadius: 10,
+    width: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  receiptPickerBtns: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  pickerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 5,
+    paddingHorizontal: 15,
+    height: 30,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  pickerBtnText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    lineHeight: 14,
+  },
+  imagePreviewOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  imagePreviewCard: {
+    width: '100%',
+    maxHeight: '80%',
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 16,
+  },
+  imagePreviewHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+  },
+  imagePreviewTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  imagePreviewWrapper: {
+    width: '100%',
+    height: 350,
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+  imagePreviewFull: {
+    width: '100%',
+    height: '100%',
   },
 });
