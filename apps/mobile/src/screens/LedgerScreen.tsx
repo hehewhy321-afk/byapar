@@ -7,6 +7,9 @@ import {
   TextInput,
   Alert,
   TouchableOpacity,
+  Linking,
+  Image,
+  Modal,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { Theme } from '../theme';
@@ -15,9 +18,12 @@ import { Party, LedgerEntry } from '../types';
 import { PartyFormModal } from '../components/ledger/PartyFormModal';
 import { LedgerEntryModal } from '../components/ledger/LedgerEntryModal';
 import { WhatsAppReminderModal } from '../components/ledger/WhatsAppReminderModal';
+import { PartyReminderModal } from '../components/ledger/PartyReminderModal';
+import { PartyStatementReportModal } from '../components/ledger/PartyStatementReportModal';
 import { AnimatedPressable } from '../components/common/AnimatedPressable';
 import { FadeInView } from '../components/common/FadeInView';
 import { EmptyState } from '../components/common/EmptyState';
+
 
 export const LedgerScreen: React.FC = () => {
   const {
@@ -33,8 +39,10 @@ export const LedgerScreen: React.FC = () => {
     setSelectedPartyId,
     theme,
     themeMode,
+    language,
   } = useApp();
 
+  const ne = language === 'ne';
   const styles = useMemo(() => createStyles(theme, themeMode), [theme, themeMode]);
 
   const [search, setSearch] = useState('');
@@ -47,7 +55,10 @@ export const LedgerScreen: React.FC = () => {
   const [editingEntry, setEditingEntry] = useState<LedgerEntry | null>(null);
 
   const [whatsappModalVisible, setWhatsappModalVisible] = useState(false);
+  const [reminderModalVisible, setReminderModalVisible] = useState(false);
+  const [statementModalVisible, setStatementModalVisible] = useState(false);
   const [activeWaParty, setActiveWaParty] = useState<Party | null>(null);
+  const [previewImageUri, setPreviewImageUri] = useState<string | null>(null);
 
   const selectedParty = parties.find((p) => p.id === selectedPartyId) || null;
 
@@ -108,13 +119,14 @@ export const LedgerScreen: React.FC = () => {
     }
   };
 
-  const handleSaveEntry = async (data: { type: 'credit' | 'payment'; amount: number; note: string }) => {
+  const handleSaveEntry = async (data: { type: 'credit' | 'payment'; amount: number; note: string; billImageUri?: string }) => {
     if (!selectedParty) return;
     if (editingEntry) {
       await editLedgerEntry(editingEntry.id, {
         type: data.type,
         amount: data.amount,
         note: data.note,
+        billImageUri: data.billImageUri,
       });
       setEditingEntry(null);
     } else {
@@ -124,6 +136,7 @@ export const LedgerScreen: React.FC = () => {
         type: data.type,
         amount: data.amount,
         note: data.note,
+        billImageUri: data.billImageUri,
       });
     }
   };
@@ -149,6 +162,18 @@ export const LedgerScreen: React.FC = () => {
     setActiveWaParty(party);
     setWhatsappModalVisible(true);
   };
+
+  const handleCallParty = (phone?: string) => {
+    if (!phone) {
+      Alert.alert(
+        ne ? 'फोन नम्बर छैन' : 'No Phone Number',
+        ne ? 'यस सम्पर्कको फोन नम्बर दर्ता गरिएको छैन।' : 'No phone number available for this contact.'
+      );
+      return;
+    }
+    Linking.openURL(`tel:${phone}`);
+  };
+
 
   if (selectedParty) {
     const isReceivable = selectedParty.balance >= 0;
@@ -215,7 +240,7 @@ export const LedgerScreen: React.FC = () => {
           </View>
         </FadeInView>
 
-        {/* QUICK ACTIONS */}
+        {/* PRIMARY ACTIONS: GIVE CREDIT / GOT PAYMENT */}
         <View style={styles.actionRow}>
           <TouchableOpacity
             style={[styles.actionBtn, styles.creditBtn]}
@@ -227,7 +252,7 @@ export const LedgerScreen: React.FC = () => {
             activeOpacity={0.85}
           >
             <Feather name="plus-circle" size={16} color="#FFFFFF" />
-            <Text style={styles.creditBtnText}>Give Credit</Text>
+            <Text style={styles.creditBtnText}>{ne ? 'सामान उधारो दियो' : 'Give Credit'}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -240,18 +265,49 @@ export const LedgerScreen: React.FC = () => {
             activeOpacity={0.85}
           >
             <Feather name="check-circle" size={16} color="#FFFFFF" />
-            <Text style={styles.paymentBtnText}>Got Payment</Text>
+            <Text style={styles.paymentBtnText}>{ne ? 'भुक्तानी पाइयो' : 'Got Payment'}</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* UTILITY ACTIONS: CALL, REMINDER, WHATSAPP, REPORT */}
+        <View style={styles.utilityActionRow}>
+          <TouchableOpacity
+            style={[styles.utilityBtn, styles.callBtn]}
+            onPress={() => handleCallParty(selectedParty.phone)}
+            activeOpacity={0.85}
+          >
+            <Feather name="phone" size={13} color="#FFFFFF" />
+            <Text style={styles.utilityBtnText}>{ne ? 'कल' : 'Call'}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.actionBtn, styles.waBtn]}
+            style={[styles.utilityBtn, styles.reminderBtn]}
+            onPress={() => setReminderModalVisible(true)}
+            activeOpacity={0.85}
+          >
+            <Feather name="clock" size={13} color="#FFFFFF" />
+            <Text style={styles.utilityBtnText}>{ne ? 'रिमाइन्डर' : 'Reminder'}</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.utilityBtn, styles.waBtn]}
             onPress={() => openWhatsAppModal(selectedParty)}
             activeOpacity={0.85}
           >
-            <Feather name="message-circle" size={16} color="#FFFFFF" />
-            <Text style={styles.waBtnText}>WhatsApp</Text>
+            <Feather name="message-circle" size={13} color="#FFFFFF" />
+            <Text style={styles.utilityBtnText}>WhatsApp</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.utilityBtn, styles.reportBtn]}
+            onPress={() => setStatementModalVisible(true)}
+            activeOpacity={0.85}
+          >
+            <Feather name="file-text" size={13} color="#FFFFFF" />
+            <Text style={styles.utilityBtnText}>{ne ? 'रिपोर्ट (A4)' : 'Report'}</Text>
           </TouchableOpacity>
         </View>
+
 
         {/* TIMELINE */}
         <View style={styles.timelineHeader}>
@@ -280,6 +336,17 @@ export const LedgerScreen: React.FC = () => {
                   <Text style={styles.timelineDate}>{item.date}</Text>
                 </View>
                 {item.note ? <Text style={styles.timelineNote}>{item.note}</Text> : null}
+                {item.billImageUri ? (
+                  <TouchableOpacity
+                    style={styles.timelineReceiptBadge}
+                    onPress={() => setPreviewImageUri(item.billImageUri!)}
+                    activeOpacity={0.8}
+                  >
+                    <Image source={{ uri: item.billImageUri }} style={styles.timelineReceiptThumb} />
+                    <Feather name="file-text" size={11} color={theme.colors.primary} />
+                    <Text style={styles.timelineReceiptText}>{ne ? 'रसिद' : 'Slip'}</Text>
+                  </TouchableOpacity>
+                ) : null}
               </View>
 
               <View style={styles.timelineRight}>
@@ -341,6 +408,44 @@ export const LedgerScreen: React.FC = () => {
           onClose={() => setWhatsappModalVisible(false)}
         />
 
+        <PartyReminderModal
+          visible={reminderModalVisible}
+          party={selectedParty}
+          onClose={() => setReminderModalVisible(false)}
+        />
+
+        <PartyStatementReportModal
+          visible={statementModalVisible}
+          party={selectedParty}
+          entries={partyEntries}
+          onClose={() => setStatementModalVisible(false)}
+        />
+
+        {/* RECEIPT PREVIEW MODAL */}
+        <Modal
+          visible={!!previewImageUri}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setPreviewImageUri(null)}
+        >
+          <View style={styles.imagePreviewOverlay}>
+            <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => setPreviewImageUri(null)} />
+            <View style={styles.imagePreviewCard}>
+              <View style={styles.imagePreviewHeader}>
+                <Text style={styles.imagePreviewTitle}>{ne ? 'रसिद / भौचर प्रतिलिपि' : 'Transaction Receipt / Slip'}</Text>
+                <TouchableOpacity onPress={() => setPreviewImageUri(null)} style={styles.closeBtn}>
+                  <Feather name="x" size={18} color={theme.colors.textPrimary} />
+                </TouchableOpacity>
+              </View>
+              {previewImageUri ? (
+                <View style={styles.imagePreviewWrapper}>
+                  <Image source={{ uri: previewImageUri }} style={styles.imagePreviewFull} resizeMode="contain" />
+                </View>
+              ) : null}
+            </View>
+          </View>
+        </Modal>
+
         <PartyFormModal
           visible={partyModalVisible}
           party={editingParty}
@@ -350,6 +455,7 @@ export const LedgerScreen: React.FC = () => {
       </View>
     );
   }
+
 
   // ALL CONTACTS LIST VIEW
   return (
@@ -489,7 +595,11 @@ export const LedgerScreen: React.FC = () => {
 };
 
 const createStyles = (theme: Theme, themeMode: 'dark' | 'light') => {
+  const isDark = themeMode === 'dark';
   return StyleSheet.create({
+    closeBtn: {
+      padding: 4,
+    },
     container: {
       flex: 1,
     },
@@ -805,6 +915,41 @@ const createStyles = (theme: Theme, themeMode: 'dark' | 'light') => {
       fontWeight: '800',
       color: '#FFFFFF',
     },
+    utilityActionRow: {
+      flexDirection: 'row',
+      paddingHorizontal: theme.spacing.md,
+      gap: 6,
+      marginBottom: 14,
+    },
+    utilityBtn: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      minHeight: 36,
+      paddingVertical: 7,
+      borderRadius: theme.borderRadius.md,
+      borderWidth: 1,
+      gap: 4,
+    },
+    callBtn: {
+      backgroundColor: '#2563EB',
+      borderColor: '#1D4ED8',
+    },
+    reminderBtn: {
+      backgroundColor: '#8B5CF6',
+      borderColor: '#7C3AED',
+    },
+    reportBtn: {
+      backgroundColor: '#334155',
+      borderColor: '#1E293B',
+    },
+    utilityBtnText: {
+      fontSize: 11,
+      fontWeight: '800',
+      color: '#FFFFFF',
+    },
+
     timelineHeader: {
       flexDirection: 'row',
       justifyContent: 'space-between',
@@ -889,6 +1034,68 @@ const createStyles = (theme: Theme, themeMode: 'dark' | 'light') => {
     },
     timelineDeleteBtn: {
       backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    },
+    timelineReceiptBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+      marginTop: 4,
+      backgroundColor: isDark ? '#1C1C1E' : '#F1F5F9',
+      paddingHorizontal: 6,
+      paddingVertical: 3,
+      borderRadius: theme.borderRadius.sm,
+      alignSelf: 'flex-start',
+    },
+    timelineReceiptThumb: {
+      width: 18,
+      height: 18,
+      borderRadius: 3,
+    },
+    timelineReceiptText: {
+      fontSize: 10,
+      fontWeight: '600',
+      color: theme.colors.primary,
+    },
+    imagePreviewOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.85)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: theme.spacing.lg,
+    },
+    imagePreviewCard: {
+      width: '100%',
+      maxHeight: '80%',
+      backgroundColor: theme.colors.surface,
+      borderRadius: theme.borderRadius.xl,
+      borderWidth: 1,
+      borderColor: theme.colors.borderGlass,
+      padding: theme.spacing.md,
+    },
+    imagePreviewHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: theme.spacing.md,
+      paddingBottom: theme.spacing.sm,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.borderGlass,
+    },
+    imagePreviewTitle: {
+      fontSize: 15,
+      fontWeight: '700',
+      color: theme.colors.textPrimary,
+    },
+    imagePreviewWrapper: {
+      width: '100%',
+      height: 350,
+      backgroundColor: isDark ? '#000000' : '#F8FAFC',
+      borderRadius: theme.borderRadius.md,
+      overflow: 'hidden',
+    },
+    imagePreviewFull: {
+      width: '100%',
+      height: '100%',
     },
   });
 };

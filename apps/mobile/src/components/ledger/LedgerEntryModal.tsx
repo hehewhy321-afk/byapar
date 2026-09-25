@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, Modal, TextInput, Alert, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Modal, TextInput, Alert, TouchableOpacity, Image } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { Theme } from '../../theme';
 import { useApp } from '../../context/AppContext';
 import { Party, LedgerEntry } from '../../types';
@@ -13,7 +14,7 @@ interface Props {
   initialType?: 'credit' | 'payment';
   editingEntry?: LedgerEntry | null;
   onClose: () => void;
-  onSave: (data: { type: 'credit' | 'payment'; amount: number; note: string }) => void;
+  onSave: (data: { type: 'credit' | 'payment'; amount: number; note: string; billImageUri?: string }) => void;
 }
 
 export const LedgerEntryModal: React.FC<Props> = ({
@@ -29,6 +30,31 @@ export const LedgerEntryModal: React.FC<Props> = ({
   const [type, setType] = useState<'credit' | 'payment'>(initialType);
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
+  const [billImageUri, setBillImageUri] = useState<string>('');
+
+  const handlePickImage = async (useCamera = false) => {
+    try {
+      const res = useCamera
+        ? await ImagePicker.launchCameraAsync({
+            allowsEditing: true,
+            quality: 0.6,
+            base64: true,
+          })
+        : await ImagePicker.launchImageLibraryAsync({
+            allowsEditing: true,
+            quality: 0.6,
+            base64: true,
+          });
+
+      if (!res.canceled && res.assets && res.assets[0]) {
+        const asset = res.assets[0];
+        const uri = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
+        setBillImageUri(uri);
+      }
+    } catch (err) {
+      console.warn('Image picker error:', err);
+    }
+  };
 
   useEffect(() => {
     if (visible) {
@@ -36,10 +62,12 @@ export const LedgerEntryModal: React.FC<Props> = ({
         setType(editingEntry.type);
         setAmount(editingEntry.amount ? editingEntry.amount.toString() : '');
         setNote(editingEntry.note || '');
+        setBillImageUri(editingEntry.billImageUri || '');
       } else {
         setType(initialType);
         setAmount('');
         setNote('');
+        setBillImageUri('');
       }
     }
   }, [visible, editingEntry, initialType]);
@@ -57,6 +85,7 @@ export const LedgerEntryModal: React.FC<Props> = ({
       type,
       amount: amt,
       note: note.trim() || (type === 'credit' ? 'Credit recorded' : 'Payment received'),
+      billImageUri: billImageUri || undefined,
     });
 
     setAmount('');
@@ -143,6 +172,41 @@ export const LedgerEntryModal: React.FC<Props> = ({
             value={note}
             onChangeText={setNote}
           />
+
+          <Text style={styles.label}>Attach Bill / Slip (Optional)</Text>
+          <View style={styles.receiptContainer}>
+            {billImageUri ? (
+              <View style={styles.receiptThumbWrapper}>
+                <Image source={{ uri: billImageUri }} style={styles.receiptThumb} />
+                <TouchableOpacity
+                  style={styles.receiptRemoveBtn}
+                  onPress={() => setBillImageUri('')}
+                  activeOpacity={0.8}
+                >
+                  <Feather name="x" size={12} color="#FFFFFF" />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={styles.receiptPickerBtns}>
+                <TouchableOpacity
+                  style={styles.pickerBtn}
+                  onPress={() => handlePickImage(true)}
+                  activeOpacity={0.8}
+                >
+                  <Feather name="camera" size={14} color={theme.colors.primary} />
+                  <Text style={styles.pickerBtnText}>Camera</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.pickerBtn}
+                  onPress={() => handlePickImage(false)}
+                  activeOpacity={0.8}
+                >
+                  <Feather name="image" size={14} color={theme.colors.primary} />
+                  <Text style={styles.pickerBtnText}>Gallery</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
 
           <View style={styles.footer}>
             <TouchableOpacity style={styles.cancelBtn} onPress={onClose} activeOpacity={0.8}>
@@ -304,6 +368,53 @@ const createStyles = (theme: Theme, themeMode: 'dark' | 'light') => {
       color: '#FFFFFF',
       fontWeight: '800',
       fontSize: 13,
+    },
+    receiptContainer: {
+      marginBottom: 10,
+    },
+    receiptThumbWrapper: {
+      position: 'relative',
+      width: 64,
+      height: 64,
+      borderRadius: theme.borderRadius.md,
+      overflow: 'hidden',
+      borderWidth: 1,
+      borderColor: theme.colors.borderGlass,
+    },
+    receiptThumb: {
+      width: '100%',
+      height: '100%',
+    },
+    receiptRemoveBtn: {
+      position: 'absolute',
+      top: 3,
+      right: 3,
+      backgroundColor: '#EF4444',
+      borderRadius: 10,
+      width: 18,
+      height: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    receiptPickerBtns: {
+      flexDirection: 'row',
+      gap: 8,
+    },
+    pickerBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingVertical: 7,
+      paddingHorizontal: 12,
+      borderRadius: theme.borderRadius.md,
+      borderWidth: 1,
+      borderColor: theme.colors.borderGlass,
+      backgroundColor: isDark ? '#1C1C1E' : '#F1F5F9',
+    },
+    pickerBtnText: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: theme.colors.textPrimary,
     },
   });
 };
