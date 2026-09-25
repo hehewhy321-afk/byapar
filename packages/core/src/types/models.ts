@@ -76,6 +76,7 @@ export interface Party {
   phone?: string;
   email?: string;
   panVatNumber?: string;
+  pan?: string;
   partyType: PartyType;
   creditLimit: number;
   duePeriodDays: number;
@@ -159,6 +160,44 @@ export interface Expense {
   dateAd: string;
   dateBs: string;
   createdAt: string;
+  updatedAt?: string;
+}
+
+export interface Income {
+  id: string;
+  businessId: string;
+  source: string;
+  amount: number;
+  paymentMode: PaymentMode;
+  payerName?: string;
+  notes?: string;
+  receiptUrl?: string;
+  dateAd: string;
+  dateBs: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface CustomCategory {
+  id: string;
+  businessId: string;
+  type: 'expense' | 'income';
+  name: string;
+  colorCode?: string;
+  icon?: string;
+  createdAt: string;
+}
+
+export interface BusinessNote {
+  id: string;
+  businessId: string;
+  title: string;
+  content: string;
+  category: string;
+  color?: string;
+  isPinned?: boolean;
+  createdAt: string; // Immutable locked creation timestamp
+  updatedAt: string;
 }
 
 export interface CartItem extends Item {
@@ -205,7 +244,15 @@ export interface AppNotification {
   updatedAt?: string;
 }
 
-export type ReminderType = 'customer_due' | 'supplier_payment' | 'custom' | 'recurring_daily';
+export type ReminderType =
+  | 'payment_reminder'
+  | 'task_reminder'
+  | 'event_reminder'
+  | 'customer_due'
+  | 'supplier_payment'
+  | 'custom'
+  | 'recurring_daily';
+
 export type ReminderFrequency = 'once' | 'daily' | 'weekly' | 'monthly';
 
 export interface ReminderWithConfig {
@@ -217,6 +264,7 @@ export interface ReminderWithConfig {
   amount?: number;
   dueDateAd: string;
   dueDateBs?: string;
+  dueTime?: string; // HH:mm format (e.g. "10:30" or "17:00")
   reminderType: ReminderType;
   frequency: ReminderFrequency;
   notifyWeb: boolean;
