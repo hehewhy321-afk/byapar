@@ -9,7 +9,11 @@ import {
 } from '../services/adminApi';
 import { exportToCSV } from '../services/exportUtils';
 
-export const UsersView: Component = () => {
+interface UsersViewProps {
+  onNavigate?: (tab: string) => void;
+}
+
+export const UsersView: Component<UsersViewProps> = (props) => {
   const [overview, setOverview] = createSignal<UsersOverviewMetrics | null>(null);
   const [users, setUsers] = createSignal<UserProfile[]>([]);
   const [roles, setRoles] = createSignal<RoleCount[]>([]);
@@ -99,16 +103,27 @@ export const UsersView: Component = () => {
           <h2 class="text-xl font-bold font-heading text-gray-900">Users & Staff Analytics</h2>
           <p class="text-xs text-gray-500 mt-1">Platform-wide user directory, role distribution, and staff insights</p>
         </div>
-        <button
-          type="button"
-          onClick={handleExport}
-          class="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 text-xs font-semibold transition-all shadow-sm"
-        >
-          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-          </svg>
-          <span>Export Users CSV</span>
-        </button>
+        <div class="flex items-center gap-2">
+          <Show when={props.onNavigate}>
+            <button
+              type="button"
+              onClick={() => props.onNavigate!('leads')}
+              class="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg bg-orange-50 hover:bg-orange-100 text-[#FF4500] border border-orange-200 text-xs font-semibold transition shadow-sm"
+            >
+              <span>⚡ View Recent Signups & Leads</span>
+            </button>
+          </Show>
+          <button
+            type="button"
+            onClick={handleExport}
+            class="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 text-xs font-semibold transition-all shadow-sm"
+          >
+            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            <span>Export Users CSV</span>
+          </button>
+        </div>
       </div>
 
       {/* Summary Cards */}

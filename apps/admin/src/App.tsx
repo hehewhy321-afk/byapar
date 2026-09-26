@@ -22,6 +22,7 @@ import { WebhooksView } from './views/WebhooksView';
 import { MerchantBrandingView } from './views/MerchantBrandingView';
 import { ComplianceExportsView } from './views/ComplianceExportsView';
 import { AdminRolesView } from './views/AdminRolesView';
+import { NewUsersLeadsView } from './views/NewUsersLeadsView';
 
 export const App: Component = () => {
   const [activeTab, setActiveTab] = createSignal<AdminTab>('dashboard');
@@ -34,6 +35,8 @@ export const App: Component = () => {
     switch (activeTab()) {
       case 'dashboard':
         return { title: 'Platform Overview', subtitle: 'Real-time platform metrics and merchant activity' };
+      case 'leads':
+        return { title: 'Recent Signups & Client Leads', subtitle: 'Search, filter, and convert new retail signups into active clients' };
       case 'shops':
         return { title: 'Merchants & Tenant Directory', subtitle: 'Manage Kirana stores and subscription overrides' };
       case 'subscriptions':
@@ -116,6 +119,9 @@ export const App: Component = () => {
               <Match when={activeTab() === 'dashboard'}>
                 <DashboardView onNavigate={(tab) => setActiveTab(tab)} />
               </Match>
+              <Match when={activeTab() === 'leads'}>
+                <NewUsersLeadsView />
+              </Match>
               <Match when={activeTab() === 'shops'}>
                 <ShopsView />
               </Match>
@@ -141,7 +147,7 @@ export const App: Component = () => {
                 <KhataOverview />
               </Match>
               <Match when={activeTab() === 'users'}>
-                <UsersView />
+                <UsersView onNavigate={(tab) => setActiveTab(tab as AdminTab)} />
               </Match>
               <Match when={activeTab() === 'feature_flags'}>
                 <FeatureFlagsView />

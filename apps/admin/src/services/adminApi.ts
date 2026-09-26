@@ -2201,3 +2201,126 @@ export async function getAdminTeam(): Promise<AdminRoleMember[]> {
   }
 }
 
+// ------ RECENT USERS & CLIENT LEADS CONVERSION ------
+
+export type LeadStatus = 'new' | 'contacted' | 'interested' | 'converted' | 'not_interested';
+
+export interface RecentUserLead {
+  id: string;
+  fullName: string;
+  email?: string;
+  phone?: string;
+  storeName?: string;
+  businessId?: string;
+  businessType?: string;
+  address?: string;
+  roles: string[];
+  planTier: string;
+  subscriptionStatus: string;
+  createdAt: string;
+  leadStatus: LeadStatus;
+  notes?: string;
+  lastContactedAt?: string;
+}
+
+const LEADS_META_STORAGE_KEY = 'byapar_admin_leads_meta_v1';
+
+function getStoredLeadsMeta(): Record<string, { status?: LeadStatus; notes?: string; lastContactedAt?: string }> {
+  try {
+    const raw = localStorage.getItem(LEADS_META_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+export function updateLeadMetadata(userId: string, update: { status?: LeadStatus; notes?: string; lastContactedAt?: string }) {
+  try {
+    const current = getStoredLeadsMeta();
+    current[userId] = {
+      ...current[userId],
+      ...update,
+    };
+    localStorage.setItem(LEADS_META_STORAGE_KEY, JSON.stringify(current));
+  } catch (e) {
+    console.error('Failed to save lead metadata:', e);
+  }
+}
+
+export async function getRecentLeadsList(): Promise<RecentUserLead[]> {
+  try {
+    // 1. Fetch profiles
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, full_name, phone_number, email, created_at, is_admin')
+      .order('created_at', { ascending: false });
+
+    if (!profiles || profiles.length === 0) return [];
+
+    // 2. Fetch business memberships
+    const { data: members } = await supabase
+      .from('business_members')
+      .select('user_id, role, businesses(id, name, business_type, address_line, phone)');
+
+    const memberMap = new Map<string, { roles: Set<string>; business: any }>();
+    (members || []).forEach((m: any) => {
+      const existing = memberMap.get(m.user_id) || { roles: new Set(), business: m.businesses };
+      existing.roles.add(m.role);
+      if (m.businesses && !existing.business) {
+        existing.business = m.businesses;
+      }
+      memberMap.set(m.user_id, existing);
+    });
+
+    // 3. Fetch active subscriptions
+    const { data: subs } = await supabase
+      .from('subscriptions')
+      .select('business_id, plan_tier, status');
+
+    const subMap = new Map<string, { planTier: string; status: string }>();
+    (subs || []).forEach((s: any) => {
+      if (s.business_id) {
+        subMap.set(s.business_id, {
+          planTier: s.plan_tier || 'free',
+          status: s.status || 'active',
+        });
+      }
+    });
+
+    const meta = getStoredLeadsMeta();
+
+    return profiles.map((p: any) => {
+      const info = memberMap.get(p.id);
+      const biz = info?.business;
+      const subInfo = biz ? subMap.get(biz.id) : undefined;
+      const userMeta = meta[p.id] || {};
+
+      // Determine default lead status
+      let defaultStatus: LeadStatus = 'new';
+      if (subInfo && subInfo.planTier !== 'free' && subInfo.status === 'active') {
+        defaultStatus = 'converted';
+      }
+
+      return {
+        id: p.id,
+        fullName: p.full_name || 'New Retailer',
+        email: p.email || (biz?.email ? biz.email : undefined),
+        phone: p.phone_number || biz?.phone || undefined,
+        storeName: biz?.name || undefined,
+        businessId: biz?.id || undefined,
+        businessType: biz?.business_type || undefined,
+        address: biz?.address_line || undefined,
+        roles: info ? Array.from(info.roles) : [],
+        planTier: subInfo?.planTier || (biz ? 'free' : 'no_store'),
+        subscriptionStatus: subInfo?.status || (biz ? 'active' : 'unassigned'),
+        createdAt: p.created_at,
+        leadStatus: userMeta.status || defaultStatus,
+        notes: userMeta.notes || '',
+        lastContactedAt: userMeta.lastContactedAt || undefined,
+      };
+    });
+  } catch (err) {
+    console.error('getRecentLeadsList error:', err);
+    return [];
+  }
+}

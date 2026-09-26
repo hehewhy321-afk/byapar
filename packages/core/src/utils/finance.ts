@@ -14,6 +14,7 @@ export interface EmiResult {
   monthlyEmi: number;
   totalInterest: number;
   totalAmount: number;
+  totalPayment: number;
   schedule: EmiScheduleItem[];
 }
 
@@ -27,7 +28,7 @@ export function calculateEmi(
   tenureMonths: number
 ): EmiResult {
   if (principal <= 0 || tenureMonths <= 0) {
-    return { monthlyEmi: 0, totalInterest: 0, totalAmount: 0, schedule: [] };
+    return { monthlyEmi: 0, totalInterest: 0, totalAmount: 0, totalPayment: 0, schedule: [] };
   }
 
   if (annualRatePercent <= 0) {
@@ -47,6 +48,7 @@ export function calculateEmi(
       monthlyEmi: Math.round(monthlyEmi),
       totalInterest: 0,
       totalAmount: principal,
+      totalPayment: principal,
       schedule,
     };
   }
@@ -74,10 +76,12 @@ export function calculateEmi(
     });
   }
 
+  const roundedTotal = Math.round(totalAmount);
   return {
     monthlyEmi: Math.round(monthlyEmi),
     totalInterest: Math.round(totalInterest),
-    totalAmount: Math.round(totalAmount),
+    totalAmount: roundedTotal,
+    totalPayment: roundedTotal,
     schedule,
   };
 }
@@ -89,7 +93,9 @@ export interface InterestResult {
   monthsEquivalent: number;
   totalInterest: number;
   totalPayable: number;
+  totalAmount: number;
   dailyRate: number;
+  dailyInterest: number;
 }
 
 /**
@@ -117,7 +123,9 @@ export function calculateInterest(
       monthsEquivalent: Number((days / 30).toFixed(2)),
       totalInterest: 0,
       totalPayable: principal,
+      totalAmount: principal,
       dailyRate: 0,
+      dailyInterest: 0,
     };
   }
 
@@ -143,6 +151,8 @@ export function calculateInterest(
   }
 
   const totalPayable = principal + totalInterest;
+  const roundedPayable = Math.round(totalPayable * 100) / 100;
+  const roundedDaily = Math.round(principal * dailyRateFraction * 100) / 100;
 
   return {
     principal,
@@ -150,8 +160,10 @@ export function calculateInterest(
     days,
     monthsEquivalent: Number((days / 30).toFixed(2)),
     totalInterest: Math.round(totalInterest * 100) / 100,
-    totalPayable: Math.round(totalPayable * 100) / 100,
-    dailyRate: Math.round(principal * dailyRateFraction * 100) / 100,
+    totalPayable: roundedPayable,
+    totalAmount: roundedPayable,
+    dailyRate: roundedDaily,
+    dailyInterest: roundedDaily,
   };
 }
 
@@ -162,6 +174,7 @@ export interface TaxResult {
   baseAmount: number;
   taxAmount: number;
   grossAmount: number;
+  finalAmount: number;
 }
 
 /**
@@ -180,6 +193,7 @@ export function calculateTax(
       baseAmount: amount,
       taxAmount: 0,
       grossAmount: amount,
+      finalAmount: amount,
     };
   }
 
@@ -190,25 +204,29 @@ export function calculateTax(
     // Gross = Base * (1 + rate) => Base = Gross / (1 + rate)
     const baseAmount = amount / (1 + rate);
     const taxAmount = amount - baseAmount;
+    const roundedBase = Math.round(baseAmount * 100) / 100;
     return {
       inputAmount: amount,
       isInclusive: true,
       taxRatePercent,
-      baseAmount: Math.round(baseAmount * 100) / 100,
+      baseAmount: roundedBase,
       taxAmount: Math.round(taxAmount * 100) / 100,
       grossAmount: amount,
+      finalAmount: roundedBase,
     };
   } else {
     // Amount is Taxable Base (excludes VAT)
     const taxAmount = amount * rate;
     const grossAmount = amount + taxAmount;
+    const roundedGross = Math.round(grossAmount * 100) / 100;
     return {
       inputAmount: amount,
       isInclusive: false,
       taxRatePercent,
       baseAmount: amount,
       taxAmount: Math.round(taxAmount * 100) / 100,
-      grossAmount: Math.round(grossAmount * 100) / 100,
+      grossAmount: roundedGross,
+      finalAmount: roundedGross,
     };
   }
 }

@@ -8,8 +8,10 @@ import {
   TextInput,
   Switch,
   Platform,
+  Image,
+  Share,
 } from 'react-native';
-import { Feather } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useApp } from '../context/AppContext';
 import { Theme } from '../theme';
 import { FadeInView } from '../components/common/FadeInView';
@@ -22,1345 +24,840 @@ import {
   calculateDenominations,
   NEPAL_DENOMINATIONS,
   formatNepaliCurrency,
+  adToBs,
 } from '@byapar/core';
 
-type UtilityTab = 'emi' | 'interest' | 'vat' | 'margin' | 'cash';
+type UtilityTab =
+  | 'units'
+  | 'calendar'
+  | 'qr'
+  | 'fuel'
+  | 'discount'
+  | 'emi'
+  | 'interest'
+  | 'vat'
+  | 'margin'
+  | 'cash';
 
 export const UtilitiesScreen: React.FC = () => {
   const { theme, themeMode, language } = useApp();
-  const styles = useMemo(() => createStyles(theme, themeMode), [theme, themeMode]);
   const isDark = themeMode === 'dark';
   const ne = language === 'ne';
+  const styles = useMemo(() => createStyles(theme, themeMode), [theme, themeMode]);
 
-  const [activeTab, setActiveTab] = useState<UtilityTab>('emi');
+  const [categoryGroup, setCategoryGroup] = useState<'daily' | 'finance'>('daily');
+  const [activeTab, setActiveTab] = useState<UtilityTab>('units');
 
   // -------------------------------------------------------------
-  // 1. EMI Calculator State
+  // 1. UNIT & MEASURE CONVERTER
+  // -------------------------------------------------------------
+  const [unitType, setUnitType] = useState<'weight' | 'area' | 'volume'>('weight');
+  const [unitInput, setUnitInput] = useState('1');
+  const [selectedUnit, setSelectedUnit] = useState('kg');
+
+  const weightUnits: Record<string, { label: string; toBase: number }> = {
+    kg: { label: 'Kilogram (kg)', toBase: 1000 },
+    gram: { label: 'Gram (g)', toBase: 1 },
+    dharni: { label: 'Dharni (2.392 kg)', toBase: 2392 },
+    pau: { label: 'Standard Pau (200g)', toBase: 200 },
+    pau_kirana: { label: 'Kirana Pau (250g)', toBase: 250 },
+    tola: { label: 'Tola (11.66g)', toBase: 11.6638 },
+    quintal: { label: 'Quintal (100 kg)', toBase: 100000 },
+    muri: { label: 'Muri (~80 kg)', toBase: 80000 },
+    pathi: { label: 'Pathi (~4 kg)', toBase: 4000 },
+    mana: { label: 'Mana (~500g)', toBase: 500 },
+  };
+
+  const areaUnits: Record<string, { label: string; toBase: number }> = {
+    ropani: { label: 'Ropani (16 Aana)', toBase: 5476 },
+    aana: { label: 'Aana (4 Paisa)', toBase: 342.25 },
+    paisa: { label: 'Paisa (4 Daam)', toBase: 85.5625 },
+    daam: { label: 'Daam (1/4 Paisa)', toBase: 21.3906 },
+    bigha: { label: 'Bigha (20 Kattha)', toBase: 72900 },
+    kattha: { label: 'Kattha (20 Dhur)', toBase: 3645 },
+    dhur: { label: 'Dhur', toBase: 182.25 },
+    sqft: { label: 'Square Feet (sq ft)', toBase: 1 },
+  };
+
+  const volumeUnits: Record<string, { label: string; toBase: number }> = {
+    litre: { label: 'Litre (L)', toBase: 1000 },
+    ml: { label: 'Millilitre (mL)', toBase: 1 },
+    gallon: { label: 'Gallon (3.785 L)', toBase: 3785.41 },
+  };
+
+  const convertedUnits = useMemo(() => {
+    const val = parseFloat(unitInput) || 0;
+    const map = unitType === 'weight' ? weightUnits : unitType === 'area' ? areaUnits : volumeUnits;
+    const currentMeta = map[selectedUnit] || Object.values(map)[0];
+    const baseVal = val * currentMeta.toBase;
+
+    return Object.entries(map).map(([k, meta]) => {
+      const res = baseVal / meta.toBase;
+      const formatted = res >= 1000 ? res.toLocaleString('en-IN', { maximumFractionDigits: 3 }) : res.toFixed(3).replace(/\.?0+$/, '');
+      return { key: k, label: meta.label, value: formatted, isCurrent: k === selectedUnit };
+    });
+  }, [unitInput, unitType, selectedUnit, ne]);
+
+  // -------------------------------------------------------------
+  // 2. NEPALI BS ⇄ AD CALENDAR & DATE DIFFERENCE
+  // -------------------------------------------------------------
+  const [adDateInput, setAdDateInput] = useState(new Date().toISOString().split('T')[0]);
+  const [diffDate1, setDiffDate1] = useState(new Date().toISOString().split('T')[0]);
+  const [diffDate2, setDiffDate2] = useState('2025-04-13');
+
+  const adBsConverted = useMemo(() => {
+    try {
+      const d = new Date(adDateInput);
+      const bs = adToBs(d);
+      return {
+        formatted: bs.formatted,
+        formattedNp: bs.formattedNp,
+        monthName: ne ? bs.monthNameNp : bs.monthName,
+      };
+    } catch {
+      return null;
+    }
+  }, [adDateInput, ne]);
+
+  const daysDifference = useMemo(() => {
+    try {
+      const d1 = new Date(diffDate1);
+      const d2 = new Date(diffDate2);
+      const diffMs = Math.abs(d2.getTime() - d1.getTime());
+      const totalDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+      const months = Math.floor(totalDays / 30);
+      const remDays = totalDays % 30;
+      return { totalDays, months, remDays };
+    } catch {
+      return { totalDays: 0, months: 0, remDays: 0 };
+    }
+  }, [diffDate1, diffDate2]);
+
+  // -------------------------------------------------------------
+  // 3. COUNTER QR GENERATOR
+  // -------------------------------------------------------------
+  const [qrMode, setQrMode] = useState<'wifi' | 'whatsapp' | 'payment'>('wifi');
+  const [qrSsid, setQrSsid] = useState('Store_Guest_WiFi');
+  const [qrPass, setQrPass] = useState('Welcome@2081');
+  const [qrPhone, setQrPhone] = useState('9841234567');
+  const [qrMsg, setQrMsg] = useState('Namaste! Inquiring about store inventory.');
+  const [qrFonepay, setQrFonepay] = useState('9841234567');
+
+  const qrDataString = useMemo(() => {
+    if (qrMode === 'wifi') return `WIFI:S:${qrSsid};T:WPA;P:${qrPass};;`;
+    if (qrMode === 'whatsapp') {
+      let p = qrPhone.replace(/[^0-9]/g, '');
+      if (!p.startsWith('977') && p.length === 10) p = '977' + p;
+      return `https://wa.me/${p}?text=${encodeURIComponent(qrMsg)}`;
+    }
+    return `fonepay://pay?merchant=${qrFonepay}`;
+  }, [qrMode, qrSsid, qrPass, qrPhone, qrMsg, qrFonepay]);
+
+  const qrImageUrl = useMemo(() => {
+    return `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=6&data=${encodeURIComponent(qrDataString)}`;
+  }, [qrDataString]);
+
+  // -------------------------------------------------------------
+  // 4. FUEL & DELIVERY LOGISTICS
+  // -------------------------------------------------------------
+  const [distanceKm, setDistanceKm] = useState('15');
+  const [mileage, setMileage] = useState('35');
+  const [fuelPrice, setFuelPrice] = useState('170');
+  const [ordersCount, setOrdersCount] = useState('5');
+
+  const deliveryResult = useMemo(() => {
+    const dist = (parseFloat(distanceKm) || 0) * 2;
+    const mil = Math.max(1, parseFloat(mileage) || 1);
+    const price = parseFloat(fuelPrice) || 0;
+    const orders = Math.max(1, parseFloat(ordersCount) || 1);
+
+    const litres = dist / mil;
+    const fuelCost = litres * price;
+    const costPerOrder = fuelCost / orders;
+    const suggestedRate = Math.ceil((costPerOrder * 1.35) / 10) * 10;
+
+    return {
+      roundTripKm: dist,
+      litres: litres.toFixed(2),
+      fuelCost: Math.round(fuelCost),
+      costPerOrder: Math.round(costPerOrder),
+      suggestedRate,
+    };
+  }, [distanceKm, mileage, fuelPrice, ordersCount]);
+
+  // -------------------------------------------------------------
+  // 5. DISCOUNT & BILL SPLIT
+  // -------------------------------------------------------------
+  const [discountMode, setDiscountMode] = useState<'percent' | 'split'>('percent');
+  const [billPrice, setBillPrice] = useState('2000');
+  const [discPercent, setDiscPercent] = useState('15');
+  const [splitBill, setSplitBill] = useState('3200');
+  const [splitPeople, setSplitPeople] = useState('4');
+
+  const discountResult = useMemo(() => {
+    const p = parseFloat(billPrice) || 0;
+    const pct = parseFloat(discPercent) || 0;
+    const savings = p * (pct / 100);
+    const finalAmt = Math.max(0, p - savings);
+    return { finalAmt: Math.round(finalAmt), savings: Math.round(savings) };
+  }, [billPrice, discPercent]);
+
+  const splitResult = useMemo(() => {
+    const total = parseFloat(splitBill) || 0;
+    const count = Math.max(1, parseInt(splitPeople, 10) || 1);
+    const perPerson = total / count;
+    return { perPerson: Math.ceil(perPerson) };
+  }, [splitBill, splitPeople]);
+
+  // -------------------------------------------------------------
+  // 6. EMI, INTEREST, VAT, MARGIN, CASH
   // -------------------------------------------------------------
   const [emiPrincipal, setEmiPrincipal] = useState('500000');
   const [emiRate, setEmiRate] = useState('12');
-  const [emiTenureMonths, setEmiTenureMonths] = useState('24');
-  const [tenureUnit, setTenureUnit] = useState<'months' | 'years'>('months');
-  const [showSchedule, setShowSchedule] = useState(false);
-
+  const [emiMonths, setEmiMonths] = useState('24');
   const emiResult = useMemo(() => {
-    const p = parseFloat(emiPrincipal) || 0;
-    const r = parseFloat(emiRate) || 0;
-    const rawTenure = parseFloat(emiTenureMonths) || 0;
-    const months = tenureUnit === 'years' ? Math.round(rawTenure * 12) : Math.round(rawTenure);
-    return calculateEmi(p, r, months);
-  }, [emiPrincipal, emiRate, emiTenureMonths, tenureUnit]);
+    return calculateEmi(parseFloat(emiPrincipal) || 0, parseFloat(emiRate) || 0, parseInt(emiMonths, 10) || 1);
+  }, [emiPrincipal, emiRate, emiMonths]);
 
-  // -------------------------------------------------------------
-  // 2. Nepali Khata & Loan Interest State
-  // -------------------------------------------------------------
   const [interestPrincipal, setInterestPrincipal] = useState('100000');
-  const [interestRate, setInterestRate] = useState('2'); // 2% per month default (Nepali sanykda)
-  const [isMonthlyRate, setIsMonthlyRate] = useState(true);
+  const [interestRate, setInterestRate] = useState('2');
   const [interestDays, setInterestDays] = useState('90');
-  const [isCompound, setIsCompound] = useState(false);
-  const [compoundFreq, setCompoundFreq] = useState<'monthly' | 'quarterly' | 'annually'>('monthly');
-
   const interestResult = useMemo(() => {
-    const p = parseFloat(interestPrincipal) || 0;
-    const r = parseFloat(interestRate) || 0;
-    const d = parseFloat(interestDays) || 0;
-    return calculateInterest(p, r, d, {
-      isMonthlyRate,
-      isCompound,
-      compoundFrequency: compoundFreq,
+    return calculateInterest(parseFloat(interestPrincipal) || 0, parseFloat(interestRate) || 0, parseInt(interestDays, 10) || 1, {
+      isMonthlyRate: true,
     });
-  }, [interestPrincipal, interestRate, isMonthlyRate, interestDays, isCompound, compoundFreq]);
+  }, [interestPrincipal, interestRate, interestDays]);
 
-  // -------------------------------------------------------------
-  // 3. VAT & TDS State
-  // -------------------------------------------------------------
-  const [taxAmountInput, setTaxAmountInput] = useState('10000');
-  const [taxRate, setTaxRate] = useState('13');
-  const [isTaxInclusive, setIsTaxInclusive] = useState(false);
+  const [vatAmount, setVatAmount] = useState('10000');
+  const [isVatInclusive, setIsVatInclusive] = useState(false);
+  const vatResult = useMemo(() => {
+    return calculateTax(parseFloat(vatAmount) || 0, 13, isVatInclusive);
+  }, [vatAmount, isVatInclusive]);
 
-  const taxResult = useMemo(() => {
-    const amt = parseFloat(taxAmountInput) || 0;
-    const rate = parseFloat(taxRate) || 0;
-    return calculateTax(amt, rate, isTaxInclusive);
-  }, [taxAmountInput, taxRate, isTaxInclusive]);
-
-  // -------------------------------------------------------------
-  // 4. Margin & Markup State
-  // -------------------------------------------------------------
-  const [marginMode, setMarginMode] = useState<'cost_sale' | 'target_margin'>('cost_sale');
   const [marginCost, setMarginCost] = useState('800');
   const [marginSale, setMarginSale] = useState('1000');
-  const [targetMarginPercent, setTargetMarginPercent] = useState('20');
-
   const marginResult = useMemo(() => {
-    const cost = parseFloat(marginCost) || 0;
-    if (marginMode === 'cost_sale') {
-      const sale = parseFloat(marginSale) || 0;
-      return calculateMargin(cost, sale);
-    } else {
-      const targetPct = parseFloat(targetMarginPercent) || 0;
-      const targetSale = calculateTargetSellingPrice(cost, targetPct);
-      return calculateMargin(cost, targetSale);
-    }
-  }, [marginMode, marginCost, marginSale, targetMarginPercent]);
+    return calculateMargin(parseFloat(marginCost) || 0, parseFloat(marginSale) || 0);
+  }, [marginCost, marginSale]);
 
-  // -------------------------------------------------------------
-  // 5. Cash Drawer & Change Calculator State
-  // -------------------------------------------------------------
   const [counts, setCounts] = useState<Record<number, number>>({
-    1000: 10,
-    500: 20,
-    100: 50,
-    50: 40,
-    20: 30,
-    10: 25,
-    5: 20,
-    2: 10,
-    1: 10,
+    1000: 5,
+    500: 10,
+    100: 20,
+    50: 10,
+    20: 10,
+    10: 10,
+    5: 10,
   });
-  const [expectedCash, setExpectedCash] = useState('25000');
-
-  // Change Return Assistant
-  const [billTotal, setBillTotal] = useState('1350');
-  const [cashReceived, setCashReceived] = useState('2000');
-
-  const denominationResult = useMemo(() => {
-    return calculateDenominations(counts);
-  }, [counts]);
-
-  const changeReturnAmount = useMemo(() => {
-    const bill = parseFloat(billTotal) || 0;
-    const received = parseFloat(cashReceived) || 0;
-    return Math.max(0, received - bill);
-  }, [billTotal, cashReceived]);
-
-  const changeBreakdown = useMemo(() => {
-    let rem = changeReturnAmount;
-    const breakdown: { note: number; count: number }[] = [];
-    for (const d of NEPAL_DENOMINATIONS) {
-      if (rem >= d) {
-        const count = Math.floor(rem / d);
-        breakdown.push({ note: d, count });
-        rem = rem % d;
-      }
-    }
-    return breakdown;
-  }, [changeReturnAmount]);
-
-  const handleDenomChange = (denom: number, text: string) => {
-    const val = parseInt(text, 10);
-    setCounts((prev) => ({
-      ...prev,
-      [denom]: isNaN(val) ? 0 : Math.max(0, val),
-    }));
-  };
-
-  const handleQuickAdd = (denom: number, delta: number) => {
-    setCounts((prev) => ({
-      ...prev,
-      [denom]: Math.max(0, (prev[denom] || 0) + delta),
-    }));
-  };
-
-  const clearAllCounts = () => {
-    const cleared: Record<number, number> = {};
-    for (const d of NEPAL_DENOMINATIONS) {
-      cleared[d] = 0;
-    }
-    setCounts(cleared);
-  };
-
-  const expectedNum = parseFloat(expectedCash) || 0;
-  const cashDifference = denominationResult.grandTotal - expectedNum;
+  const denominationResult = useMemo(() => calculateDenominations(counts), [counts]);
 
   return (
     <View style={styles.container}>
-      {/* Segmented Top Navigation Tabs */}
-      <View style={styles.tabBarWrapper}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.tabBarScroll}
-        >
+      {/* Category Segment Control (Daily vs Finance) */}
+      <View style={styles.groupHeader}>
+        <View style={styles.groupSegment}>
           <TouchableOpacity
-            style={[styles.tabButton, activeTab === 'emi' && styles.tabButtonActive]}
-            onPress={() => setActiveTab('emi')}
-            activeOpacity={0.7}
+            style={[styles.groupBtn, categoryGroup === 'daily' && styles.groupBtnActive]}
+            onPress={() => {
+              setCategoryGroup('daily');
+              if (['emi', 'interest', 'vat', 'margin', 'cash'].includes(activeTab)) {
+                setActiveTab('units');
+              }
+            }}
           >
-            <Feather
-              name="pie-chart"
+            <MaterialCommunityIcons
+              name="storefront-outline"
               size={15}
-              color={activeTab === 'emi' ? '#FFFFFF' : theme.colors.textMuted}
+              color={categoryGroup === 'daily' ? (isDark ? '#FFFFFF' : '#1C1917') : (isDark ? '#888888' : '#777777')}
             />
-            <Text
-              style={[
-                styles.tabButtonText,
-                activeTab === 'emi' && styles.tabButtonTextActive,
-              ]}
-            >
-              {ne ? 'EMI कर्जा' : 'EMI Loan'}
+            <Text style={[styles.groupBtnText, categoryGroup === 'daily' && styles.groupBtnTextActive]}>
+              Daily Life & Shop
             </Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.groupBtn, categoryGroup === 'finance' && styles.groupBtnActive]}
+            onPress={() => {
+              setCategoryGroup('finance');
+              if (['units', 'calendar', 'qr', 'fuel', 'discount'].includes(activeTab)) {
+                setActiveTab('emi');
+              }
+            }}
+          >
+            <MaterialCommunityIcons
+              name="calculator-variant-outline"
+              size={15}
+              color={categoryGroup === 'finance' ? (isDark ? '#FFFFFF' : '#1C1917') : (isDark ? '#888888' : '#777777')}
+            />
+            <Text style={[styles.groupBtnText, categoryGroup === 'finance' && styles.groupBtnTextActive]}>
+              Finance & Accounts
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
 
-          <TouchableOpacity
-            style={[styles.tabButton, activeTab === 'interest' && styles.tabButtonActive]}
-            onPress={() => setActiveTab('interest')}
-            activeOpacity={0.7}
-          >
-            <Feather
-              name="percent"
-              size={15}
-              color={activeTab === 'interest' ? '#FFFFFF' : theme.colors.textMuted}
-            />
-            <Text
-              style={[
-                styles.tabButtonText,
-                activeTab === 'interest' && styles.tabButtonTextActive,
-              ]}
-            >
-              {ne ? 'खाता ब्याज' : 'Interest / ब्याज'}
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.tabButton, activeTab === 'vat' && styles.tabButtonActive]}
-            onPress={() => setActiveTab('vat')}
-            activeOpacity={0.7}
-          >
-            <Feather
-              name="file-text"
-              size={15}
-              color={activeTab === 'vat' ? '#FFFFFF' : theme.colors.textMuted}
-            />
-            <Text
-              style={[
-                styles.tabButtonText,
-                activeTab === 'vat' && styles.tabButtonTextActive,
-              ]}
-            >
-              {ne ? 'VAT र TDS' : 'VAT & TDS'}
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.tabButton, activeTab === 'margin' && styles.tabButtonActive]}
-            onPress={() => setActiveTab('margin')}
-            activeOpacity={0.7}
-          >
-            <Feather
-              name="trending-up"
-              size={15}
-              color={activeTab === 'margin' ? '#FFFFFF' : theme.colors.textMuted}
-            />
-            <Text
-              style={[
-                styles.tabButtonText,
-                activeTab === 'margin' && styles.tabButtonTextActive,
-              ]}
-            >
-              {ne ? 'मार्जिन र मार्कअप' : 'Margin & Markup'}
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.tabButton, activeTab === 'cash' && styles.tabButtonActive]}
-            onPress={() => setActiveTab('cash')}
-            activeOpacity={0.7}
-          >
-            <Feather
-              name="dollar-sign"
-              size={15}
-              color={activeTab === 'cash' ? '#FFFFFF' : theme.colors.textMuted}
-            />
-            <Text
-              style={[
-                styles.tabButtonText,
-                activeTab === 'cash' && styles.tabButtonTextActive,
-              ]}
-            >
-              {ne ? 'क्यास काउन्टर' : 'Cash Drawer'}
-            </Text>
-          </TouchableOpacity>
+      {/* Minimal Tabs Navigation Scroll */}
+      <View style={styles.tabScrollWrapper}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabScroll}>
+          {categoryGroup === 'daily' ? (
+            <>
+              <TouchableOpacity
+                style={[styles.tabPill, activeTab === 'units' && styles.tabPillActive]}
+                onPress={() => setActiveTab('units')}
+              >
+                <MaterialCommunityIcons
+                  name="scale-balance"
+                  size={14}
+                  color={activeTab === 'units' ? (isDark ? '#1C1917' : '#FFFFFF') : (isDark ? '#AAAAAA' : '#666666')}
+                />
+                <Text style={[styles.tabPillText, activeTab === 'units' && styles.tabPillTextActive]}>
+                  Units
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.tabPill, activeTab === 'calendar' && styles.tabPillActive]}
+                onPress={() => setActiveTab('calendar')}
+              >
+                <Feather
+                  name="calendar"
+                  size={13}
+                  color={activeTab === 'calendar' ? (isDark ? '#1C1917' : '#FFFFFF') : (isDark ? '#AAAAAA' : '#666666')}
+                />
+                <Text style={[styles.tabPillText, activeTab === 'calendar' && styles.tabPillTextActive]}>
+                  BS Calendar
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.tabPill, activeTab === 'qr' && styles.tabPillActive]}
+                onPress={() => setActiveTab('qr')}
+              >
+                <MaterialCommunityIcons
+                  name="qrcode-scan"
+                  size={14}
+                  color={activeTab === 'qr' ? (isDark ? '#1C1917' : '#FFFFFF') : (isDark ? '#AAAAAA' : '#666666')}
+                />
+                <Text style={[styles.tabPillText, activeTab === 'qr' && styles.tabPillTextActive]}>
+                  QR Standee
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.tabPill, activeTab === 'fuel' && styles.tabPillActive]}
+                onPress={() => setActiveTab('fuel')}
+              >
+                <MaterialCommunityIcons
+                  name="truck-delivery-outline"
+                  size={15}
+                  color={activeTab === 'fuel' ? (isDark ? '#1C1917' : '#FFFFFF') : (isDark ? '#AAAAAA' : '#666666')}
+                />
+                <Text style={[styles.tabPillText, activeTab === 'fuel' && styles.tabPillTextActive]}>
+                  Fuel & Delivery
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.tabPill, activeTab === 'discount' && styles.tabPillActive]}
+                onPress={() => setActiveTab('discount')}
+              >
+                <Feather
+                  name="tag"
+                  size={13}
+                  color={activeTab === 'discount' ? (isDark ? '#1C1917' : '#FFFFFF') : (isDark ? '#AAAAAA' : '#666666')}
+                />
+                <Text style={[styles.tabPillText, activeTab === 'discount' && styles.tabPillTextActive]}>
+                  Discounts
+                </Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <TouchableOpacity
+                style={[styles.tabPill, activeTab === 'emi' && styles.tabPillActive]}
+                onPress={() => setActiveTab('emi')}
+              >
+                <MaterialCommunityIcons
+                  name="bank-outline"
+                  size={14}
+                  color={activeTab === 'emi' ? (isDark ? '#1C1917' : '#FFFFFF') : (isDark ? '#AAAAAA' : '#666666')}
+                />
+                <Text style={[styles.tabPillText, activeTab === 'emi' && styles.tabPillTextActive]}>
+                  EMI Loan
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.tabPill, activeTab === 'interest' && styles.tabPillActive]}
+                onPress={() => setActiveTab('interest')}
+              >
+                <MaterialCommunityIcons
+                  name="cash-multiple"
+                  size={14}
+                  color={activeTab === 'interest' ? (isDark ? '#1C1917' : '#FFFFFF') : (isDark ? '#AAAAAA' : '#666666')}
+                />
+                <Text style={[styles.tabPillText, activeTab === 'interest' && styles.tabPillTextActive]}>
+                  Khata Interest
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.tabPill, activeTab === 'vat' && styles.tabPillActive]}
+                onPress={() => setActiveTab('vat')}
+              >
+                <Feather
+                  name="file-text"
+                  size={13}
+                  color={activeTab === 'vat' ? (isDark ? '#1C1917' : '#FFFFFF') : (isDark ? '#AAAAAA' : '#666666')}
+                />
+                <Text style={[styles.tabPillText, activeTab === 'vat' && styles.tabPillTextActive]}>
+                  VAT 13%
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.tabPill, activeTab === 'margin' && styles.tabPillActive]}
+                onPress={() => setActiveTab('margin')}
+              >
+                <Feather
+                  name="trending-up"
+                  size={13}
+                  color={activeTab === 'margin' ? (isDark ? '#1C1917' : '#FFFFFF') : (isDark ? '#AAAAAA' : '#666666')}
+                />
+                <Text style={[styles.tabPillText, activeTab === 'margin' && styles.tabPillTextActive]}>
+                  Margin
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.tabPill, activeTab === 'cash' && styles.tabPillActive]}
+                onPress={() => setActiveTab('cash')}
+              >
+                <MaterialCommunityIcons
+                  name="cash-register"
+                  size={14}
+                  color={activeTab === 'cash' ? (isDark ? '#1C1917' : '#FFFFFF') : (isDark ? '#AAAAAA' : '#666666')}
+                />
+                <Text style={[styles.tabPillText, activeTab === 'cash' && styles.tabPillTextActive]}>
+                  Cash Drawer
+                </Text>
+              </TouchableOpacity>
+            </>
+          )}
         </ScrollView>
       </View>
 
-      <ScrollView
-        style={styles.contentScroll}
-        contentContainerStyle={styles.contentContainer}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        {/* ========================================================= */}
-        {/* TAB 1: EMI LOAN CALCULATOR */}
-        {/* ========================================================= */}
-        {activeTab === 'emi' && (
-          <FadeInView>
-            <View style={styles.card}>
-              <View style={styles.cardHeader}>
-                <View style={[styles.cardIconBox, { backgroundColor: '#3B82F620' }]}>
-                  <Feather name="pie-chart" size={18} color="#3B82F6" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.cardTitle}>
-                    {ne ? 'बैंक तथा सहकारी EMI क्यालकुलेटर' : 'Bank & Cooperative EMI Calculator'}
-                  </Text>
-                  <Text style={styles.cardSubtitle}>
-                    {ne ? 'मासिक किस्ता, कुल ब्याज र कुल भुक्तानी' : 'Monthly installment, total interest & payments'}
-                  </Text>
-                </View>
-              </View>
+      {/* Main Tool Content Container */}
+      <ScrollView contentContainerStyle={styles.contentScroll} showsVerticalScrollIndicator={false}>
+        {/* 1. UNITS CONVERTER */}
+        {activeTab === 'units' && (
+          <FadeInView style={styles.card}>
+            <Text style={styles.cardTitle}>Nepali Unit Converter</Text>
+            <Text style={styles.cardSubtitle}>Weights, traditional grains, land area & liquids in standard English</Text>
 
-              {/* Input: Loan Principal */}
-              <View style={styles.fieldGroup}>
-                <Text style={styles.fieldLabel}>{ne ? 'कर्जा रकम (रु.)' : 'Loan Principal (Rs.)'}</Text>
-                <View style={styles.inputBox}>
-                  <Text style={styles.inputPrefix}>रु.</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    keyboardType="numeric"
-                    value={emiPrincipal}
-                    onChangeText={setEmiPrincipal}
-                    placeholder="500000"
-                    placeholderTextColor={theme.colors.textMuted}
-                  />
-                </View>
-                {/* Quick Principal Presets */}
-                <View style={styles.chipRow}>
-                  {[100000, 300000, 500000, 1000000, 2500000].map((amt) => (
-                    <TouchableOpacity
-                      key={amt}
-                      style={[
-                        styles.chip,
-                        emiPrincipal === String(amt) && styles.chipActive,
-                      ]}
-                      onPress={() => setEmiPrincipal(String(amt))}
-                    >
-                      <Text
-                        style={[
-                          styles.chipText,
-                          emiPrincipal === String(amt) && styles.chipTextActive,
-                        ]}
-                      >
-                        {amt >= 100000 ? `${amt / 100000}L` : `${amt / 1000}k`}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-
-              {/* Input: Annual Interest Rate */}
-              <View style={styles.fieldGroup}>
-                <Text style={styles.fieldLabel}>{ne ? 'वार्षिक ब्याजदर (%)' : 'Annual Interest Rate (%)'}</Text>
-                <View style={styles.inputBox}>
-                  <TextInput
-                    style={styles.textInput}
-                    keyboardType="numeric"
-                    value={emiRate}
-                    onChangeText={setEmiRate}
-                    placeholder="12"
-                    placeholderTextColor={theme.colors.textMuted}
-                  />
-                  <Text style={styles.inputSuffix}>%</Text>
-                </View>
-                {/* Quick Rate Presets */}
-                <View style={styles.chipRow}>
-                  {[9.5, 11, 12, 13.5, 15].map((r) => (
-                    <TouchableOpacity
-                      key={r}
-                      style={[styles.chip, emiRate === String(r) && styles.chipActive]}
-                      onPress={() => setEmiRate(String(r))}
-                    >
-                      <Text
-                        style={[styles.chipText, emiRate === String(r) && styles.chipTextActive]}
-                      >
-                        {r}%
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-
-              {/* Input: Loan Tenure */}
-              <View style={styles.fieldGroup}>
-                <View style={styles.labelRow}>
-                  <Text style={styles.fieldLabel}>{ne ? 'कर्जा अवधि' : 'Loan Tenure'}</Text>
-                  <View style={styles.togglePill}>
-                    <TouchableOpacity
-                      style={[
-                        styles.togglePillBtn,
-                        tenureUnit === 'months' && styles.togglePillBtnActive,
-                      ]}
-                      onPress={() => setTenureUnit('months')}
-                    >
-                      <Text
-                        style={[
-                          styles.togglePillText,
-                          tenureUnit === 'months' && styles.togglePillTextActive,
-                        ]}
-                      >
-                        {ne ? 'महिना' : 'Months'}
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[
-                        styles.togglePillBtn,
-                        tenureUnit === 'years' && styles.togglePillBtnActive,
-                      ]}
-                      onPress={() => setTenureUnit('years')}
-                    >
-                      <Text
-                        style={[
-                          styles.togglePillText,
-                          tenureUnit === 'years' && styles.togglePillTextActive,
-                        ]}
-                      >
-                        {ne ? 'वर्ष' : 'Years'}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-
-                <View style={styles.inputBox}>
-                  <TextInput
-                    style={styles.textInput}
-                    keyboardType="numeric"
-                    value={emiTenureMonths}
-                    onChangeText={setEmiTenureMonths}
-                    placeholder={tenureUnit === 'months' ? '24' : '2'}
-                    placeholderTextColor={theme.colors.textMuted}
-                  />
-                  <Text style={styles.inputSuffix}>
-                    {tenureUnit === 'months' ? (ne ? 'महिना' : 'Mos') : (ne ? 'वर्ष' : 'Yrs')}
-                  </Text>
-                </View>
-
-                <View style={styles.chipRow}>
-                  {(tenureUnit === 'months' ? [6, 12, 24, 36, 60] : [1, 2, 3, 5, 10]).map((t) => (
-                    <TouchableOpacity
-                      key={t}
-                      style={[
-                        styles.chip,
-                        emiTenureMonths === String(t) && styles.chipActive,
-                      ]}
-                      onPress={() => setEmiTenureMonths(String(t))}
-                    >
-                      <Text
-                        style={[
-                          styles.chipText,
-                          emiTenureMonths === String(t) && styles.chipTextActive,
-                        ]}
-                      >
-                        {t} {tenureUnit === 'months' ? (ne ? 'महिना' : 'M') : (ne ? 'वर्ष' : 'Y')}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-
-              {/* EMI Results Showcase */}
-              <View style={styles.resultBanner}>
-                <Text style={styles.resultBannerLabel}>{ne ? 'मासिक किस्ता (Monthly EMI)' : 'Monthly EMI'}</Text>
-                <Text style={styles.resultBannerAmount}>
-                  {formatNepaliCurrency(emiResult.monthlyEmi)}
-                </Text>
-
-                <View style={styles.resultBreakdownRow}>
-                  <View style={styles.resultCol}>
-                    <Text style={styles.resultSubLabel}>{ne ? 'साँवा रकम (Principal)' : 'Principal'}</Text>
-                    <Text style={styles.resultSubValue}>
-                      {formatNepaliCurrency(parseFloat(emiPrincipal) || 0)}
-                    </Text>
-                  </View>
-
-                  <View style={styles.resultCol}>
-                    <Text style={[styles.resultSubLabel, { color: '#EF4444' }]}>
-                      {ne ? 'कुल ब्याज (Interest)' : 'Total Interest'}
-                    </Text>
-                    <Text style={[styles.resultSubValue, { color: '#EF4444' }]}>
-                      {formatNepaliCurrency(emiResult.totalInterest)}
-                    </Text>
-                  </View>
-
-                  <View style={styles.resultCol}>
-                    <Text style={[styles.resultSubLabel, { color: '#10B981' }]}>
-                      {ne ? 'जम्मा भुक्तानी (Total)' : 'Total Payable'}
-                    </Text>
-                    <Text style={[styles.resultSubValue, { color: '#10B981' }]}>
-                      {formatNepaliCurrency(emiResult.totalAmount)}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Visual Ratio Bar */}
-                {emiResult.totalAmount > 0 && (
-                  <View style={styles.ratioBarContainer}>
-                    <View
-                      style={[
-                        styles.ratioBarPrincipal,
-                        {
-                          flex: (parseFloat(emiPrincipal) || 0) / emiResult.totalAmount,
-                        },
-                      ]}
+            {/* Sub type pills */}
+            <View style={styles.subPillRow}>
+              {(['weight', 'area', 'volume'] as const).map((t) => (
+                <TouchableOpacity
+                  key={t}
+                  style={[styles.subPill, unitType === t && styles.subPillActive]}
+                  onPress={() => {
+                    setUnitType(t);
+                    setSelectedUnit(t === 'weight' ? 'kg' : t === 'area' ? 'ropani' : 'litre');
+                  }}
+                >
+                  {t === 'weight' ? (
+                    <MaterialCommunityIcons
+                      name="scale"
+                      size={13}
+                      color={unitType === t ? (isDark ? '#1C1917' : '#FFFFFF') : (isDark ? '#888888' : '#6B7280')}
                     />
-                    <View
-                      style={[
-                        styles.ratioBarInterest,
-                        {
-                          flex: emiResult.totalInterest / emiResult.totalAmount,
-                        },
-                      ]}
+                  ) : t === 'area' ? (
+                    <MaterialCommunityIcons
+                      name="floor-plan"
+                      size={13}
+                      color={unitType === t ? (isDark ? '#1C1917' : '#FFFFFF') : (isDark ? '#888888' : '#6B7280')}
                     />
-                  </View>
-                )}
-
-                <View style={styles.ratioLegendRow}>
-                  <View style={styles.legendItem}>
-                    <View style={[styles.legendDot, { backgroundColor: '#3B82F6' }]} />
-                    <Text style={styles.legendText}>
-                      {ne ? 'साँवा' : 'Principal'} (
-                      {Math.round(
-                        ((parseFloat(emiPrincipal) || 0) / (emiResult.totalAmount || 1)) * 100
-                      )}
-                      %)
-                    </Text>
-                  </View>
-                  <View style={styles.legendItem}>
-                    <View style={[styles.legendDot, { backgroundColor: '#EF4444' }]} />
-                    <Text style={styles.legendText}>
-                      {ne ? 'ब्याज' : 'Interest'} (
-                      {Math.round(
-                        (emiResult.totalInterest / (emiResult.totalAmount || 1)) * 100
-                      )}
-                      %)
-                    </Text>
-                  </View>
-                </View>
-              </View>
-
-              {/* Schedule Toggle */}
-              {emiResult.schedule.length > 0 && (
-                <View style={{ marginTop: 14 }}>
-                  <TouchableOpacity
-                    style={styles.scheduleToggleBtn}
-                    onPress={() => setShowSchedule(!showSchedule)}
-                  >
-                    <Text style={styles.scheduleToggleText}>
-                      {showSchedule
-                        ? (ne ? 'तालिका लुकाउनुहोस्' : 'Hide Amortization Schedule')
-                        : (ne ? `मासिक तालिका हेर्नुहोस् (${emiResult.schedule.length} किस्ता)` : `View Amortization Schedule (${emiResult.schedule.length} Mos)`)}
-                    </Text>
-                    <Feather
-                      name={showSchedule ? 'chevron-up' : 'chevron-down'}
-                      size={16}
-                      color={theme.colors.primary}
+                  ) : (
+                    <MaterialCommunityIcons
+                      name="cup-water"
+                      size={13}
+                      color={unitType === t ? (isDark ? '#1C1917' : '#FFFFFF') : (isDark ? '#888888' : '#6B7280')}
                     />
-                  </TouchableOpacity>
-
-                  {showSchedule && (
-                    <View style={styles.scheduleListContainer}>
-                      <View style={styles.scheduleTableHeader}>
-                        <Text style={[styles.thCell, { flex: 1 }]}>{ne ? 'महिना' : 'Mo'}</Text>
-                        <Text style={[styles.thCell, { flex: 2, textAlign: 'right' }]}>{ne ? 'साँवा' : 'Principal'}</Text>
-                        <Text style={[styles.thCell, { flex: 2, textAlign: 'right' }]}>{ne ? 'ब्याज' : 'Interest'}</Text>
-                        <Text style={[styles.thCell, { flex: 2, textAlign: 'right' }]}>{ne ? 'बाँकी साँवा' : 'Balance'}</Text>
-                      </View>
-
-                      {emiResult.schedule.slice(0, 36).map((item) => (
-                        <View key={item.month} style={styles.scheduleRow}>
-                          <Text style={[styles.tdCell, { flex: 1 }]}>#{item.month}</Text>
-                          <Text style={[styles.tdCell, { flex: 2, textAlign: 'right', color: theme.colors.primary }]}>
-                            {formatNepaliCurrency(item.principalPart, false)}
-                          </Text>
-                          <Text style={[styles.tdCell, { flex: 2, textAlign: 'right', color: '#EF4444' }]}>
-                            {formatNepaliCurrency(item.interestPart, false)}
-                          </Text>
-                          <Text style={[styles.tdCell, { flex: 2, textAlign: 'right' }]}>
-                            {formatNepaliCurrency(item.balance, false)}
-                          </Text>
-                        </View>
-                      ))}
-                      {emiResult.schedule.length > 36 && (
-                        <Text style={styles.scheduleNote}>
-                          {ne ? `र बाँकी ${emiResult.schedule.length - 36} किस्ताहरू...` : `And ${emiResult.schedule.length - 36} remaining installments...`}
-                        </Text>
-                      )}
-                    </View>
                   )}
-                </View>
-              )}
+                  <Text style={[styles.subPillText, unitType === t && styles.subPillTextActive]}>
+                    {t === 'weight' ? 'Weight & Grains' : t === 'area' ? 'Land & Area' : 'Liquid Volume'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
             </View>
-          </FadeInView>
-        )}
 
-        {/* ========================================================= */}
-        {/* TAB 2: NEPALI KHATA & LOAN INTEREST CALCULATOR */}
-        {/* ========================================================= */}
-        {activeTab === 'interest' && (
-          <FadeInView>
-            <View style={styles.card}>
-              <View style={styles.cardHeader}>
-                <View style={[styles.cardIconBox, { backgroundColor: '#10B98120' }]}>
-                  <Feather name="percent" size={18} color="#10B981" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.cardTitle}>
-                    {ne ? 'नेपाली खाता तथा ऋण ब्याज क्यालकुलेटर' : 'Nepali Khata & Loan Interest Calculator'}
-                  </Text>
-                  <Text style={styles.cardSubtitle}>
-                    {ne ? 'सयकडा/मासिक वा वार्षिक, साधारण तथा चक्रवृद्धि ब्याज' : 'Monthly market / Annual bank, simple & compound'}
-                  </Text>
-                </View>
-              </View>
-
-              {/* Principal */}
-              <View style={styles.fieldGroup}>
-                <Text style={styles.fieldLabel}>{ne ? 'साँवा रकम (रु.)' : 'Principal Amount (Rs.)'}</Text>
-                <View style={styles.inputBox}>
-                  <Text style={styles.inputPrefix}>रु.</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    keyboardType="numeric"
-                    value={interestPrincipal}
-                    onChangeText={setInterestPrincipal}
-                    placeholder="100000"
-                    placeholderTextColor={theme.colors.textMuted}
-                  />
-                </View>
-              </View>
-
-              {/* Interest Rate & Basis Toggle */}
-              <View style={styles.fieldGroup}>
-                <View style={styles.labelRow}>
-                  <Text style={styles.fieldLabel}>{ne ? 'ब्याजदर' : 'Interest Rate'}</Text>
-                  <View style={styles.togglePill}>
-                    <TouchableOpacity
-                      style={[styles.togglePillBtn, isMonthlyRate && styles.togglePillBtnActive]}
-                      onPress={() => setIsMonthlyRate(true)}
-                    >
-                      <Text
-                        style={[
-                          styles.togglePillText,
-                          isMonthlyRate && styles.togglePillTextActive,
-                        ]}
-                      >
-                        {ne ? 'मासिक (सयकडा)' : 'Monthly %'}
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.togglePillBtn, !isMonthlyRate && styles.togglePillBtnActive]}
-                      onPress={() => setIsMonthlyRate(false)}
-                    >
-                      <Text
-                        style={[
-                          styles.togglePillText,
-                          !isMonthlyRate && styles.togglePillTextActive,
-                        ]}
-                      >
-                        {ne ? 'वार्षिक (Bank)' : 'Annual %'}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-
-                <View style={styles.inputBox}>
-                  <TextInput
-                    style={styles.textInput}
-                    keyboardType="numeric"
-                    value={interestRate}
-                    onChangeText={setInterestRate}
-                    placeholder={isMonthlyRate ? '2' : '12'}
-                    placeholderTextColor={theme.colors.textMuted}
-                  />
-                  <Text style={styles.inputSuffix}>
-                    {isMonthlyRate ? (ne ? '% / महिना' : '%/mo') : (ne ? '% / वर्ष' : '%/yr')}
-                  </Text>
-                </View>
-
-                {/* Presets */}
-                <View style={styles.chipRow}>
-                  {(isMonthlyRate ? [1, 1.5, 2, 2.5, 3] : [8, 10, 12, 14, 16]).map((rate) => (
-                    <TouchableOpacity
-                      key={rate}
-                      style={[styles.chip, interestRate === String(rate) && styles.chipActive]}
-                      onPress={() => setInterestRate(String(rate))}
-                    >
-                      <Text
-                        style={[
-                          styles.chipText,
-                          interestRate === String(rate) && styles.chipTextActive,
-                        ]}
-                      >
-                        {isMonthlyRate
-                          ? (ne ? `रु. ${rate} सयकडा` : `${rate}%/mo`)
-                          : `${rate}%`}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-
-              {/* Duration in Days */}
-              <View style={styles.fieldGroup}>
-                <Text style={styles.fieldLabel}>{ne ? 'अवधि (दिन)' : 'Duration (Days)'}</Text>
-                <View style={styles.inputBox}>
-                  <TextInput
-                    style={styles.textInput}
-                    keyboardType="numeric"
-                    value={interestDays}
-                    onChangeText={setInterestDays}
-                    placeholder="90"
-                    placeholderTextColor={theme.colors.textMuted}
-                  />
-                  <Text style={styles.inputSuffix}>{ne ? 'दिन' : 'Days'}</Text>
-                </View>
-                <View style={styles.chipRow}>
-                  {[
-                    { label: ne ? '१ महिना (३०)' : '30d (1m)', val: 30 },
-                    { label: ne ? '२ महिना (६०)' : '60d (2m)', val: 60 },
-                    { label: ne ? '३ महिना (९०)' : '90d (3m)', val: 90 },
-                    { label: ne ? '६ महिना (१८०)' : '180d (6m)', val: 180 },
-                    { label: ne ? '१ वर्ष (३६५)' : '365d (1y)', val: 365 },
-                  ].map((d) => (
-                    <TouchableOpacity
-                      key={d.val}
-                      style={[styles.chip, interestDays === String(d.val) && styles.chipActive]}
-                      onPress={() => setInterestDays(String(d.val))}
-                    >
-                      <Text
-                        style={[
-                          styles.chipText,
-                          interestDays === String(d.val) && styles.chipTextActive,
-                        ]}
-                      >
-                        {d.label}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-
-              {/* Simple vs Compound Switch */}
-              <View style={styles.switchRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.switchTitle}>
-                    {ne ? 'चक्रवृद्धि ब्याज (Compound Interest)' : 'Compound Interest'}
-                  </Text>
-                  <Text style={styles.switchDesc}>
-                    {ne ? 'ब्याजमा पनि ब्याज गणना गर्ने' : 'Calculate interest on accumulated interest'}
-                  </Text>
-                </View>
-                <Switch
-                  value={isCompound}
-                  onValueChange={setIsCompound}
-                  trackColor={{ false: theme.colors.borderGlass, true: theme.colors.primary }}
-                  thumbColor="#FFFFFF"
+            <View style={styles.inputRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.inputLabel}>Quantity</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={unitInput}
+                  onChangeText={setUnitInput}
+                  keyboardType="numeric"
                 />
               </View>
-
-              {isCompound && (
-                <View style={{ marginTop: 10 }}>
-                  <Text style={styles.fieldLabel}>{ne ? 'चक्रवृद्धि अन्तराल' : 'Compounding Frequency'}</Text>
-                  <View style={styles.chipRow}>
-                    {[
-                      { key: 'monthly', label: ne ? 'मासिक (Monthly)' : 'Monthly' },
-                      { key: 'quarterly', label: ne ? 'त्रैमासिक (Quarterly)' : 'Quarterly' },
-                      { key: 'annually', label: ne ? 'वार्षिक (Annually)' : 'Annually' },
-                    ].map((freq) => (
-                      <TouchableOpacity
-                        key={freq.key}
-                        style={[styles.chip, compoundFreq === freq.key && styles.chipActive]}
-                        onPress={() => setCompoundFreq(freq.key as any)}
-                      >
-                        <Text
-                          style={[
-                            styles.chipText,
-                            compoundFreq === freq.key && styles.chipTextActive,
-                          ]}
-                        >
-                          {freq.label}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </View>
-              )}
-
-              {/* Interest Results */}
-              <View style={[styles.resultBanner, { borderColor: '#10B98150' }]}>
-                <Text style={styles.resultBannerLabel}>{ne ? 'कुल ब्याज रकम (Total Interest)' : 'Total Interest'}</Text>
-                <Text style={[styles.resultBannerAmount, { color: '#10B981' }]}>
-                  {formatNepaliCurrency(interestResult.totalInterest)}
-                </Text>
-
-                <View style={styles.resultBreakdownRow}>
-                  <View style={styles.resultCol}>
-                    <Text style={styles.resultSubLabel}>{ne ? 'साँवा (Principal)' : 'Principal'}</Text>
-                    <Text style={styles.resultSubValue}>
-                      {formatNepaliCurrency(parseFloat(interestPrincipal) || 0)}
-                    </Text>
-                  </View>
-                  <View style={styles.resultCol}>
-                    <Text style={[styles.resultSubLabel, { color: '#3B82F6' }]}>
-                      {ne ? 'जम्मा फिर्ता (Total)' : 'Total Payable'}
-                    </Text>
-                    <Text style={[styles.resultSubValue, { color: '#3B82F6' }]}>
-                      {formatNepaliCurrency(interestResult.totalPayable)}
-                    </Text>
-                  </View>
-                  <View style={styles.resultCol}>
-                    <Text style={styles.resultSubLabel}>{ne ? 'दैनिक ब्याज (Daily)' : 'Daily Interest'}</Text>
-                    <Text style={styles.resultSubValue}>
-                      {formatNepaliCurrency(interestResult.days > 0 ? Math.round(interestResult.totalInterest / interestResult.days) : 0)}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-            </View>
-          </FadeInView>
-        )}
-
-        {/* ========================================================= */}
-        {/* TAB 3: VAT & TDS CALCULATOR */}
-        {/* ========================================================= */}
-        {activeTab === 'vat' && (
-          <FadeInView>
-            <View style={styles.card}>
-              <View style={styles.cardHeader}>
-                <View style={[styles.cardIconBox, { backgroundColor: '#F59E0B20' }]}>
-                  <Feather name="file-text" size={18} color="#F59E0B" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.cardTitle}>
-                    {ne ? 'VAT र TDS क्यालकुलेटर (नेपाल)' : 'Nepal VAT & TDS Calculator'}
-                  </Text>
-                  <Text style={styles.cardSubtitle}>
-                    {ne ? '१३% भ्याट जोड्ने वा समावेश भएको भ्याट छुट्याउने' : 'Tax inclusive / exclusive & TDS deduction'}
-                  </Text>
-                </View>
-              </View>
-
-              {/* Mode Toggle: Exclusive vs Inclusive */}
-              <View style={styles.fieldGroup}>
-                <Text style={styles.fieldLabel}>{ne ? 'गणना प्रकार (Calculation Mode)' : 'Mode'}</Text>
-                <View style={styles.toggleRowContainer}>
-                  <TouchableOpacity
-                    style={[styles.modeCard, !isTaxInclusive && styles.modeCardActive]}
-                    onPress={() => setIsTaxInclusive(false)}
-                  >
-                    <Feather
-                      name="plus-circle"
-                      size={16}
-                      color={!isTaxInclusive ? theme.colors.primary : theme.colors.textMuted}
-                    />
-                    <Text
-                      style={[styles.modeCardTitle, !isTaxInclusive && styles.modeCardTitleActive]}
-                    >
-                      {ne ? 'Tax Exclusive (VAT जोड्ने)' : 'Tax Exclusive (Add VAT)'}
-                    </Text>
-                    <Text style={styles.modeCardDesc}>
-                      {ne ? 'बेस रकममा १३% भ्याट थपिन्छ' : 'VAT added on top of base amount'}
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[styles.modeCard, isTaxInclusive && styles.modeCardActive]}
-                    onPress={() => setIsTaxInclusive(true)}
-                  >
-                    <Feather
-                      name="check-circle"
-                      size={16}
-                      color={isTaxInclusive ? theme.colors.primary : theme.colors.textMuted}
-                    />
-                    <Text
-                      style={[styles.modeCardTitle, isTaxInclusive && styles.modeCardTitleActive]}
-                    >
-                      {ne ? 'Tax Inclusive (भ्याट सहित)' : 'Tax Inclusive (Reverse)'}
-                    </Text>
-                    <Text style={styles.modeCardDesc}>
-                      {ne ? 'कुल बिलबाट बेस र भ्याट छुट्याउने' : 'Extract base & VAT from gross total'}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {/* Amount Input */}
-              <View style={styles.fieldGroup}>
-                <Text style={styles.fieldLabel}>
-                  {isTaxInclusive
-                    ? (ne ? 'कुल बिल रकम (Gross Total with Tax) (रु.)' : 'Gross Bill Amount (Rs.)')
-                    : (ne ? 'कर बाहेकको रकम (Taxable Base Amount) (रु.)' : 'Base Amount before Tax (Rs.)')}
-                </Text>
-                <View style={styles.inputBox}>
-                  <Text style={styles.inputPrefix}>रु.</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    keyboardType="numeric"
-                    value={taxAmountInput}
-                    onChangeText={setTaxAmountInput}
-                    placeholder="10000"
-                    placeholderTextColor={theme.colors.textMuted}
-                  />
-                </View>
-              </View>
-
-              {/* Tax Rate presets */}
-              <View style={styles.fieldGroup}>
-                <Text style={styles.fieldLabel}>{ne ? 'कर तथा TDS दर' : 'Tax / TDS Rate'}</Text>
-                <View style={styles.inputBox}>
-                  <TextInput
-                    style={styles.textInput}
-                    keyboardType="numeric"
-                    value={taxRate}
-                    onChangeText={setTaxRate}
-                    placeholder="13"
-                    placeholderTextColor={theme.colors.textMuted}
-                  />
-                  <Text style={styles.inputSuffix}>%</Text>
-                </View>
-                <View style={styles.chipRow}>
-                  {[
-                    { label: '13% VAT', rate: 13 },
-                    { label: '1.5% TDS (Goods)', rate: 1.5 },
-                    { label: '10% TDS (Rent)', rate: 10 },
-                    { label: '15% TDS (Services)', rate: 15 },
-                  ].map((p) => (
-                    <TouchableOpacity
-                      key={p.rate}
-                      style={[styles.chip, taxRate === String(p.rate) && styles.chipActive]}
-                      onPress={() => setTaxRate(String(p.rate))}
-                    >
-                      <Text
-                        style={[styles.chipText, taxRate === String(p.rate) && styles.chipTextActive]}
-                      >
-                        {p.label}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-
-              {/* Tax Results */}
-              <View style={[styles.resultBanner, { borderColor: '#F59E0B50' }]}>
-                <Text style={styles.resultBannerLabel}>
-                  {isTaxInclusive
-                    ? (ne ? 'समावेश कर रकम (Tax Component)' : 'Tax Component')
-                    : (ne ? 'थपिने कर रकम (Added Tax)' : 'Added Tax')}
-                </Text>
-                <Text style={[styles.resultBannerAmount, { color: '#F59E0B' }]}>
-                  {formatNepaliCurrency(taxResult.taxAmount)}
-                </Text>
-
-                <View style={styles.resultBreakdownRow}>
-                  <View style={styles.resultCol}>
-                    <Text style={styles.resultSubLabel}>{ne ? 'कर बाहेक (Base Amount)' : 'Base Amount'}</Text>
-                    <Text style={styles.resultSubValue}>
-                      {formatNepaliCurrency(taxResult.baseAmount)}
-                    </Text>
-                  </View>
-
-                  <View style={styles.resultCol}>
-                    <Text style={[styles.resultSubLabel, { color: '#10B981' }]}>
-                      {ne ? 'कुल रकम (Gross Total)' : 'Gross Total'}
-                    </Text>
-                    <Text style={[styles.resultSubValue, { color: '#10B981' }]}>
-                      {formatNepaliCurrency(taxResult.grossAmount)}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-            </View>
-          </FadeInView>
-        )}
-
-        {/* ========================================================= */}
-        {/* TAB 4: MARGIN & MARKUP CALCULATOR */}
-        {/* ========================================================= */}
-        {activeTab === 'margin' && (
-          <FadeInView>
-            <View style={styles.card}>
-              <View style={styles.cardHeader}>
-                <View style={[styles.cardIconBox, { backgroundColor: '#8B5CF620' }]}>
-                  <Feather name="trending-up" size={18} color="#8B5CF6" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.cardTitle}>
-                    {ne ? 'नाफा, मार्जिन र मार्कअप क्यालकुलेटर' : 'Margin & Markup Profit Calculator'}
-                  </Text>
-                  <Text style={styles.cardSubtitle}>
-                    {ne ? 'क्रय र बिक्री मूल्य वा लक्षित नाफा प्रतिशत' : 'Cost/selling price analysis or target margin pricing'}
-                  </Text>
-                </View>
-              </View>
-
-              {/* Margin Mode */}
-              <View style={styles.fieldGroup}>
-                <View style={styles.toggleRowContainer}>
-                  <TouchableOpacity
-                    style={[styles.modeCard, marginMode === 'cost_sale' && styles.modeCardActive]}
-                    onPress={() => setMarginMode('cost_sale')}
-                  >
-                    <Text
-                      style={[
-                        styles.modeCardTitle,
-                        marginMode === 'cost_sale' && styles.modeCardTitleActive,
-                      ]}
-                    >
-                      {ne ? 'क्रय र बिक्री मूल्य' : 'Cost & Sale Price'}
-                    </Text>
-                    <Text style={styles.modeCardDesc}>
-                      {ne ? 'नाफा र मार्जिन % पत्ता लगाउन' : 'Calculate Profit & Margin %'}
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[
-                      styles.modeCard,
-                      marginMode === 'target_margin' && styles.modeCardActive,
-                    ]}
-                    onPress={() => setMarginMode('target_margin')}
-                  >
-                    <Text
-                      style={[
-                        styles.modeCardTitle,
-                        marginMode === 'target_margin' && styles.modeCardTitleActive,
-                      ]}
-                    >
-                      {ne ? 'लक्षित मार्जिन %' : 'Target Margin %'}
-                    </Text>
-                    <Text style={styles.modeCardDesc}>
-                      {ne ? 'चाहिएको मार्जिन अनुसार बिक्री मूल्य' : 'Calculate needed Selling Price'}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {/* Cost Price */}
-              <View style={styles.fieldGroup}>
-                <Text style={styles.fieldLabel}>{ne ? 'क्रय मूल्य / खरिद मूल्य (Cost Price) (रु.)' : 'Cost Price (Rs.)'}</Text>
-                <View style={styles.inputBox}>
-                  <Text style={styles.inputPrefix}>रु.</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    keyboardType="numeric"
-                    value={marginCost}
-                    onChangeText={setMarginCost}
-                    placeholder="800"
-                    placeholderTextColor={theme.colors.textMuted}
-                  />
-                </View>
-              </View>
-
-              {marginMode === 'cost_sale' ? (
-                /* Selling Price Input */
-                <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>{ne ? 'बिक्री मूल्य (Selling Price) (रु.)' : 'Selling Price (Rs.)'}</Text>
-                  <View style={styles.inputBox}>
-                    <Text style={styles.inputPrefix}>रु.</Text>
-                    <TextInput
-                      style={styles.textInput}
-                      keyboardType="numeric"
-                      value={marginSale}
-                      onChangeText={setMarginSale}
-                      placeholder="1000"
-                      placeholderTextColor={theme.colors.textMuted}
-                    />
-                  </View>
-                </View>
-              ) : (
-                /* Target Margin % Input */
-                <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>{ne ? 'इच्छित नाफा मार्जिन (Target Margin %)' : 'Target Margin (%)'}</Text>
-                  <View style={styles.inputBox}>
-                    <TextInput
-                      style={styles.textInput}
-                      keyboardType="numeric"
-                      value={targetMarginPercent}
-                      onChangeText={setTargetMarginPercent}
-                      placeholder="20"
-                      placeholderTextColor={theme.colors.textMuted}
-                    />
-                    <Text style={styles.inputSuffix}>%</Text>
-                  </View>
-                  <View style={styles.chipRow}>
-                    {[10, 15, 20, 25, 30, 40].map((pct) => (
-                      <TouchableOpacity
-                        key={pct}
-                        style={[
-                          styles.chip,
-                          targetMarginPercent === String(pct) && styles.chipActive,
-                        ]}
-                        onPress={() => setTargetMarginPercent(String(pct))}
-                      >
-                        <Text
-                          style={[
-                            styles.chipText,
-                            targetMarginPercent === String(pct) && styles.chipTextActive,
-                          ]}
-                        >
-                          {pct}%
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </View>
-              )}
-
-              {/* Margin Results */}
-              <View style={[styles.resultBanner, { borderColor: '#8B5CF650' }]}>
-                {marginMode === 'target_margin' && (
-                  <View style={{ marginBottom: 12 }}>
-                    <Text style={styles.resultBannerLabel}>{ne ? 'सिफारिश गरिएको बिक्री मूल्य' : 'Recommended Selling Price'}</Text>
-                    <Text style={[styles.resultBannerAmount, { color: '#8B5CF6' }]}>
-                      {formatNepaliCurrency(
-                        calculateTargetSellingPrice(
-                          parseFloat(marginCost) || 0,
-                          parseFloat(targetMarginPercent) || 0
-                        )
-                      )}
-                    </Text>
-                  </View>
-                )}
-
-                <View style={styles.resultBreakdownRow}>
-                  <View style={styles.resultCol}>
-                    <Text style={[styles.resultSubLabel, { color: '#10B981' }]}>
-                      {ne ? 'नाफा रकम (Profit)' : 'Profit (Rs.)'}
-                    </Text>
-                    <Text style={[styles.resultSubValue, { color: '#10B981' }]}>
-                      {formatNepaliCurrency(marginResult.profit)}
-                    </Text>
-                  </View>
-
-                  <View style={styles.resultCol}>
-                    <Text style={[styles.resultSubLabel, { color: '#3B82F6' }]}>
-                      {ne ? 'मार्जिन (Margin %)' : 'Gross Margin'}
-                    </Text>
-                    <Text style={[styles.resultSubValue, { color: '#3B82F6' }]}>
-                      {marginResult.marginPercent}%
-                    </Text>
-                  </View>
-
-                  <View style={styles.resultCol}>
-                    <Text style={[styles.resultSubLabel, { color: '#F59E0B' }]}>
-                      {ne ? 'मार्कअप (Markup %)' : 'Markup'}
-                    </Text>
-                    <Text style={[styles.resultSubValue, { color: '#F59E0B' }]}>
-                      {marginResult.markupPercent}%
-                    </Text>
-                  </View>
-                </View>
-              </View>
-            </View>
-          </FadeInView>
-        )}
-
-        {/* ========================================================= */}
-        {/* TAB 5: CASH DRAWER COUNTER & CHANGE ASSISTANT */}
-        {/* ========================================================= */}
-        {activeTab === 'cash' && (
-          <FadeInView>
-            {/* Sub-Card 1: Quick Change Return Assistant */}
-            <View style={styles.card}>
-              <View style={styles.cardHeader}>
-                <View style={[styles.cardIconBox, { backgroundColor: '#10B98120' }]}>
-                  <Feather name="refresh-cw" size={18} color="#10B981" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.cardTitle}>
-                    {ne ? 'खुद्रा फिर्ता सहायक (Change Assistant)' : 'Cash Change Return Assistant'}
-                  </Text>
-                  <Text style={styles.cardSubtitle}>
-                    {ne ? 'ग्राहकलाई कति फिर्ता दिने र कुन-कुन नोट दिने' : 'Calculates exact change and optimal note breakdown'}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.twoColRow}>
-                <View style={{ flex: 1, marginRight: 8 }}>
-                  <Text style={styles.fieldLabel}>{ne ? 'बिल रकम (Bill Total)' : 'Bill Total'}</Text>
-                  <View style={styles.inputBox}>
-                    <Text style={styles.inputPrefix}>रु.</Text>
-                    <TextInput
-                      style={styles.textInput}
-                      keyboardType="numeric"
-                      value={billTotal}
-                      onChangeText={setBillTotal}
-                      placeholder="1350"
-                      placeholderTextColor={theme.colors.textMuted}
-                    />
-                  </View>
-                </View>
-
-                <View style={{ flex: 1, marginLeft: 8 }}>
-                  <Text style={styles.fieldLabel}>{ne ? 'बुझेको रकम (Cash Received)' : 'Cash Received'}</Text>
-                  <View style={styles.inputBox}>
-                    <Text style={styles.inputPrefix}>रु.</Text>
-                    <TextInput
-                      style={styles.textInput}
-                      keyboardType="numeric"
-                      value={cashReceived}
-                      onChangeText={setCashReceived}
-                      placeholder="2000"
-                      placeholderTextColor={theme.colors.textMuted}
-                    />
-                  </View>
-                </View>
-              </View>
-
-              {/* Change Output */}
-              <View style={[styles.resultBanner, { marginTop: 12, borderColor: '#10B98150' }]}>
-                <Text style={styles.resultBannerLabel}>{ne ? 'ग्राहकलाई फिर्ता दिनुपर्ने खुद्रा' : 'Change to Return'}</Text>
-                <Text style={[styles.resultBannerAmount, { color: '#10B981' }]}>
-                  {formatNepaliCurrency(changeReturnAmount)}
-                </Text>
-
-                {changeBreakdown.length > 0 && (
-                  <View style={styles.changeChipsContainer}>
-                    <Text style={styles.changeChipsTitle}>{ne ? 'सिफारिश गरिएका नोटहरू:' : 'Suggested Notes:'}</Text>
-                    <View style={styles.chipRow}>
-                      {changeBreakdown.map((item) => (
-                        <View key={item.note} style={styles.noteChip}>
-                          <Text style={styles.noteChipText}>
-                            रु. {item.note} × {item.count}
-                          </Text>
-                        </View>
-                      ))}
-                    </View>
-                  </View>
-                )}
-              </View>
             </View>
 
-            {/* Sub-Card 2: Cash Denomination Counter */}
-            <View style={[styles.card, { marginTop: 16 }]}>
-              <View style={styles.cardHeader}>
-                <View style={[styles.cardIconBox, { backgroundColor: '#3B82F620' }]}>
-                  <Feather name="dollar-sign" size={18} color="#3B82F6" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.cardTitle}>
-                    {ne ? 'दराज क्यास काउन्टर (Cash Drawer Balance)' : 'Drawer Denomination Counter'}
-                  </Text>
-                  <Text style={styles.cardSubtitle}>
-                    {ne ? 'नेपाली नोटहरूको संख्या र कुल नगद हिसाब' : 'Calculate drawer cash across Nepali denominations'}
-                  </Text>
-                </View>
+            {/* Converted values grid */}
+            <View style={styles.unitGrid}>
+              {convertedUnits.map((item) => (
                 <TouchableOpacity
-                  style={styles.clearBtn}
-                  onPress={clearAllCounts}
-                  activeOpacity={0.7}
+                  key={item.key}
+                  onPress={() => setSelectedUnit(item.key)}
+                  style={[styles.unitItem, item.isCurrent && styles.unitItemActive]}
                 >
-                  <Text style={styles.clearBtnText}>{ne ? 'खाली गर्ने' : 'Clear'}</Text>
+                  <Text style={styles.unitItemLabel} numberOfLines={1}>{item.label}</Text>
+                  <Text style={styles.unitItemVal} numberOfLines={1}>{item.value}</Text>
                 </TouchableOpacity>
+              ))}
+            </View>
+          </FadeInView>
+        )}
+
+        {/* 2. CALENDAR BS ⇄ AD */}
+        {activeTab === 'calendar' && (
+          <FadeInView style={styles.card}>
+            <Text style={styles.cardTitle}>{ne ? 'नेपाली क्यालेन्डर र खाता दिन' : 'BS ⇄ AD Calendar'}</Text>
+            <Text style={styles.cardSubtitle}>English AD to Bikram Sambat & Credit Days</Text>
+
+            <View style={styles.inputBlock}>
+              <Text style={styles.inputLabel}>Enter English Date (YYYY-MM-DD)</Text>
+              <TextInput
+                style={styles.textInput}
+                value={adDateInput}
+                onChangeText={setAdDateInput}
+                placeholder="2024-04-13"
+              />
+            </View>
+
+            {adBsConverted && (
+              <View style={styles.resultBox}>
+                <Text style={styles.resultBoxLabel}>Bikram Sambat (वि.सं.)</Text>
+                <Text style={styles.resultBoxVal}>{adBsConverted.formattedNp}</Text>
+                <Text style={styles.resultBoxSub}>{adBsConverted.monthName} ({adBsConverted.formatted})</Text>
               </View>
+            )}
 
-              {/* Denomination Rows */}
-              <View style={styles.denomTable}>
-                {NEPAL_DENOMINATIONS.map((d) => {
-                  const count = counts[d] || 0;
-                  const rowTotal = d * count;
-                  return (
-                    <View key={d} style={styles.denomRow}>
-                      <View style={styles.denomNoteBox}>
-                        <Text style={styles.denomNoteText}>रु. {d}</Text>
-                      </View>
-
-                      <View style={styles.denomStepper}>
-                        <TouchableOpacity
-                          style={styles.stepBtn}
-                          onPress={() => handleQuickAdd(d, -1)}
-                        >
-                          <Feather name="minus" size={14} color={theme.colors.textPrimary} />
-                        </TouchableOpacity>
-
-                        <TextInput
-                          style={styles.denomInput}
-                          keyboardType="numeric"
-                          value={count === 0 ? '' : String(count)}
-                          onChangeText={(t) => handleDenomChange(d, t)}
-                          placeholder="0"
-                          placeholderTextColor={theme.colors.textMuted}
-                        />
-
-                        <TouchableOpacity
-                          style={styles.stepBtn}
-                          onPress={() => handleQuickAdd(d, 1)}
-                        >
-                          <Feather name="plus" size={14} color={theme.colors.textPrimary} />
-                        </TouchableOpacity>
-                      </View>
-
-                      <Text style={styles.denomRowTotal}>
-                        {formatNepaliCurrency(rowTotal, false)}
-                      </Text>
-                    </View>
-                  );
-                })}
+            <View style={[styles.inputBlock, { marginTop: 14 }]}>
+              <Text style={styles.inputLabel}>Credit Days Calculator (Start - End)</Text>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <TextInput
+                  style={[styles.textInput, { flex: 1 }]}
+                  value={diffDate1}
+                  onChangeText={setDiffDate1}
+                  placeholder="2024-01-01"
+                />
+                <TextInput
+                  style={[styles.textInput, { flex: 1 }]}
+                  value={diffDate2}
+                  onChangeText={setDiffDate2}
+                  placeholder="2024-04-01"
+                />
               </View>
+              <Text style={[styles.resultBoxSub, { marginTop: 6 }]}>
+                Duration: <Text style={{ fontWeight: '700', color: theme.colors.textPrimary }}>{daysDifference.totalDays} Days</Text> (≈ {daysDifference.months} mos {daysDifference.remDays} days)
+              </Text>
+            </View>
+          </FadeInView>
+        )}
 
-              {/* Grand Total Drawer Banner */}
-              <View style={[styles.resultBanner, { marginTop: 14 }]}>
-                <Text style={styles.resultBannerLabel}>
-                  {ne
-                    ? `दराजमा जम्मा नगद (${denominationResult.totalNotes} वटा नोटहरू)`
-                    : `Grand Drawer Cash (${denominationResult.totalNotes} Notes)`}
+        {/* 3. COUNTER QR */}
+        {activeTab === 'qr' && (
+          <FadeInView style={styles.card}>
+            <Text style={styles.cardTitle}>{ne ? 'काउन्टर क्युआर जेनेरेटर' : 'Counter QR Code'}</Text>
+            <Text style={styles.cardSubtitle}>Generate WiFi or WhatsApp QR for shop counter</Text>
+
+            <View style={styles.subPillRow}>
+              {(['wifi', 'whatsapp', 'payment'] as const).map((m) => (
+                <TouchableOpacity
+                  key={m}
+                  style={[styles.subPill, qrMode === m && styles.subPillActive]}
+                  onPress={() => setQrMode(m)}
+                >
+                  {m === 'wifi' ? (
+                    <Feather
+                      name="wifi"
+                      size={13}
+                      color={qrMode === m ? (isDark ? '#1C1917' : '#FFFFFF') : (isDark ? '#888888' : '#6B7280')}
+                    />
+                  ) : m === 'whatsapp' ? (
+                    <Feather
+                      name="message-circle"
+                      size={13}
+                      color={qrMode === m ? (isDark ? '#1C1917' : '#FFFFFF') : (isDark ? '#888888' : '#6B7280')}
+                    />
+                  ) : (
+                    <MaterialCommunityIcons
+                      name="credit-card-outline"
+                      size={14}
+                      color={qrMode === m ? (isDark ? '#1C1917' : '#FFFFFF') : (isDark ? '#888888' : '#6B7280')}
+                    />
+                  )}
+                  <Text style={[styles.subPillText, qrMode === m && styles.subPillTextActive]}>
+                    {m === 'wifi' ? 'WiFi Standee' : m === 'whatsapp' ? 'WhatsApp' : 'Fonepay'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {qrMode === 'wifi' && (
+              <View style={styles.inputBlock}>
+                <Text style={styles.inputLabel}>WiFi Network (SSID)</Text>
+                <TextInput style={styles.textInput} value={qrSsid} onChangeText={setQrSsid} />
+                <Text style={[styles.inputLabel, { marginTop: 8 }]}>WiFi Password</Text>
+                <TextInput style={styles.textInput} value={qrPass} onChangeText={setQrPass} />
+              </View>
+            )}
+
+            {qrMode === 'whatsapp' && (
+              <View style={styles.inputBlock}>
+                <Text style={styles.inputLabel}>WhatsApp Mobile Number</Text>
+                <TextInput style={styles.textInput} value={qrPhone} onChangeText={setQrPhone} keyboardType="phone-pad" />
+              </View>
+            )}
+
+            {qrMode === 'payment' && (
+              <View style={styles.inputBlock}>
+                <Text style={styles.inputLabel}>Merchant Phone / ID</Text>
+                <TextInput style={styles.textInput} value={qrFonepay} onChangeText={setQrFonepay} />
+              </View>
+            )}
+
+            <View style={styles.qrDisplayWrap}>
+              <Image source={{ uri: qrImageUrl }} style={styles.qrImg} />
+              <Text style={styles.qrScanHint}>Scan with any phone camera</Text>
+            </View>
+          </FadeInView>
+        )}
+
+        {/* 4. FUEL & DELIVERY */}
+        {activeTab === 'fuel' && (
+          <FadeInView style={styles.card}>
+            <Text style={styles.cardTitle}>{ne ? 'ढुवानी तथा इन्धन खर्च' : 'Delivery & Fuel Calculator'}</Text>
+            <Text style={styles.cardSubtitle}>Roundtrip fuel cost & customer delivery fee</Text>
+
+            <View style={styles.inputRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.inputLabel}>Distance (1-Way km)</Text>
+                <TextInput style={styles.textInput} value={distanceKm} onChangeText={setDistanceKm} keyboardType="numeric" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.inputLabel}>Mileage (km/L)</Text>
+                <TextInput style={styles.textInput} value={mileage} onChangeText={setMileage} keyboardType="numeric" />
+              </View>
+            </View>
+
+            <View style={styles.inputRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.inputLabel}>Fuel Price (रु/L)</Text>
+                <TextInput style={styles.textInput} value={fuelPrice} onChangeText={setFuelPrice} keyboardType="numeric" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.inputLabel}>No. of Orders</Text>
+                <TextInput style={styles.textInput} value={ordersCount} onChangeText={setOrdersCount} keyboardType="numeric" />
+              </View>
+            </View>
+
+            <View style={styles.resultBox}>
+              <Text style={styles.resultBoxLabel}>Total Roundtrip Fuel Cost</Text>
+              <Text style={styles.resultBoxVal}>रु {deliveryResult.fuelCost}</Text>
+              <Text style={styles.resultBoxSub}>
+                Suggested Fee: <Text style={{ color: '#059669', fontWeight: '700' }}>रु {deliveryResult.suggestedRate}</Text> / order
+              </Text>
+            </View>
+          </FadeInView>
+        )}
+
+        {/* 5. DISCOUNT & SPLIT */}
+        {activeTab === 'discount' && (
+          <FadeInView style={styles.card}>
+            <Text style={styles.cardTitle}>{ne ? 'छुट तथा बिल बाँडफाँड' : 'Discounts & Split Bill'}</Text>
+            <Text style={styles.cardSubtitle}>Calculate customer discount or split food/khata bill</Text>
+
+            <View style={styles.subPillRow}>
+              <TouchableOpacity
+                style={[styles.subPill, discountMode === 'percent' && styles.subPillActive]}
+                onPress={() => setDiscountMode('percent')}
+              >
+                <Feather
+                  name="percent"
+                  size={12}
+                  color={discountMode === 'percent' ? (isDark ? '#1C1917' : '#FFFFFF') : (isDark ? '#888888' : '#6B7280')}
+                />
+                <Text style={[styles.subPillText, discountMode === 'percent' && styles.subPillTextActive]}>
+                  % Discount
                 </Text>
-                <Text style={styles.resultBannerAmount}>
-                  {formatNepaliCurrency(denominationResult.grandTotal)}
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.subPill, discountMode === 'split' && styles.subPillActive]}
+                onPress={() => setDiscountMode('split')}
+              >
+                <Feather
+                  name="users"
+                  size={12}
+                  color={discountMode === 'split' ? (isDark ? '#1C1917' : '#FFFFFF') : (isDark ? '#888888' : '#6B7280')}
+                />
+                <Text style={[styles.subPillText, discountMode === 'split' && styles.subPillTextActive]}>
+                  Split Bill
                 </Text>
+              </TouchableOpacity>
+            </View>
 
-                {/* Compare with Expected Drawer Cash */}
-                <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: theme.colors.borderGlass }}>
-                  <View style={styles.twoColRow}>
-                    <View style={{ flex: 1, marginRight: 8 }}>
-                      <Text style={styles.fieldLabel}>{ne ? 'हुनुपर्ने नगद (Expected)' : 'Expected Balance'}</Text>
-                      <View style={styles.inputBox}>
-                        <Text style={styles.inputPrefix}>रु.</Text>
-                        <TextInput
-                          style={styles.textInput}
-                          keyboardType="numeric"
-                          value={expectedCash}
-                          onChangeText={setExpectedCash}
-                          placeholder="25000"
-                          placeholderTextColor={theme.colors.textMuted}
-                        />
-                      </View>
-                    </View>
-
-                    <View style={{ flex: 1, marginLeft: 8 }}>
-                      <Text style={styles.fieldLabel}>{ne ? 'अन्तर (Difference)' : 'Difference'}</Text>
-                      <View
-                        style={[
-                          styles.diffBadge,
-                          cashDifference === 0
-                            ? { backgroundColor: '#10B98120' }
-                            : cashDifference > 0
-                            ? { backgroundColor: '#3B82F620' }
-                            : { backgroundColor: '#EF444420' },
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.diffBadgeText,
-                            cashDifference === 0
-                              ? { color: '#10B981' }
-                              : cashDifference > 0
-                              ? { color: '#3B82F6' }
-                              : { color: '#EF4444' },
-                          ]}
-                        >
-                          {cashDifference === 0
-                            ? (ne ? 'सटीक मिलेको ✓' : 'Exact Match ✓')
-                            : cashDifference > 0
-                            ? `+${formatNepaliCurrency(cashDifference)}`
-                            : `-${formatNepaliCurrency(Math.abs(cashDifference))}`}
-                        </Text>
-                      </View>
-                    </View>
+            {discountMode === 'percent' ? (
+              <>
+                <View style={styles.inputRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.inputLabel}>Bill Price (रु)</Text>
+                    <TextInput style={styles.textInput} value={billPrice} onChangeText={setBillPrice} keyboardType="numeric" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.inputLabel}>Discount (%)</Text>
+                    <TextInput style={styles.textInput} value={discPercent} onChangeText={setDiscPercent} keyboardType="numeric" />
                   </View>
                 </View>
+                <View style={styles.resultBox}>
+                  <Text style={styles.resultBoxLabel}>Payable Amount</Text>
+                  <Text style={styles.resultBoxVal}>रु {discountResult.finalAmt}</Text>
+                  <Text style={[styles.resultBoxSub, { color: '#059669' }]}>Customer Saves रु {discountResult.savings}</Text>
+                </View>
+              </>
+            ) : (
+              <>
+                <View style={styles.inputRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.inputLabel}>Total Bill (रु)</Text>
+                    <TextInput style={styles.textInput} value={splitBill} onChangeText={setSplitBill} keyboardType="numeric" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.inputLabel}>People Count</Text>
+                    <TextInput style={styles.textInput} value={splitPeople} onChangeText={setSplitPeople} keyboardType="numeric" />
+                  </View>
+                </View>
+                <View style={styles.resultBox}>
+                  <Text style={styles.resultBoxLabel}>Each Person Pays</Text>
+                  <Text style={styles.resultBoxVal}>रु {splitResult.perPerson}</Text>
+                </View>
+              </>
+            )}
+          </FadeInView>
+        )}
+
+        {/* 6. LOAN EMI */}
+        {activeTab === 'emi' && (
+          <FadeInView style={styles.card}>
+            <Text style={styles.cardTitle}>{ne ? 'ऋण किस्ता (EMI)' : 'Loan EMI'}</Text>
+            <View style={styles.inputBlock}>
+              <Text style={styles.inputLabel}>Principal Amount (रु)</Text>
+              <TextInput style={styles.textInput} value={emiPrincipal} onChangeText={setEmiPrincipal} keyboardType="numeric" />
+            </View>
+            <View style={styles.inputRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.inputLabel}>Rate (% p.a.)</Text>
+                <TextInput style={styles.textInput} value={emiRate} onChangeText={setEmiRate} keyboardType="numeric" />
               </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.inputLabel}>Tenure (Months)</Text>
+                <TextInput style={styles.textInput} value={emiMonths} onChangeText={setEmiMonths} keyboardType="numeric" />
+              </View>
+            </View>
+            <View style={styles.resultBox}>
+              <Text style={styles.resultBoxLabel}>Monthly Installment</Text>
+              <Text style={styles.resultBoxVal}>रु {emiResult.monthlyEmi.toLocaleString()}</Text>
+              <Text style={styles.resultBoxSub}>Total Repayment: रु {emiResult.totalAmount.toLocaleString()}</Text>
+            </View>
+          </FadeInView>
+        )}
+
+        {/* 7. KHATA INTEREST */}
+        {activeTab === 'interest' && (
+          <FadeInView style={styles.card}>
+            <Text style={styles.cardTitle}>{ne ? 'नेपाली खाता ब्याज' : 'Khata Interest'}</Text>
+            <View style={styles.inputBlock}>
+              <Text style={styles.inputLabel}>Principal (रु)</Text>
+              <TextInput style={styles.textInput} value={interestPrincipal} onChangeText={setInterestPrincipal} keyboardType="numeric" />
+            </View>
+            <View style={styles.inputRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.inputLabel}>Rate (% / Month)</Text>
+                <TextInput style={styles.textInput} value={interestRate} onChangeText={setInterestRate} keyboardType="numeric" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.inputLabel}>Days</Text>
+                <TextInput style={styles.textInput} value={interestDays} onChangeText={setInterestDays} keyboardType="numeric" />
+              </View>
+            </View>
+            <View style={styles.resultBox}>
+              <Text style={styles.resultBoxLabel}>Total Interest Accrued</Text>
+              <Text style={styles.resultBoxVal}>रु {interestResult.totalInterest.toLocaleString()}</Text>
+              <Text style={styles.resultBoxSub}>Total Receivable: रु {interestResult.totalPayable.toLocaleString()}</Text>
+            </View>
+          </FadeInView>
+        )}
+
+        {/* 8. VAT 13% */}
+        {activeTab === 'vat' && (
+          <FadeInView style={styles.card}>
+            <Text style={styles.cardTitle}>{ne ? '१३% भ्याट क्यालकुलेटर' : '13% VAT Calculator'}</Text>
+            <View style={styles.inputBlock}>
+              <Text style={styles.inputLabel}>Amount (रु)</Text>
+              <TextInput style={styles.textInput} value={vatAmount} onChangeText={setVatAmount} keyboardType="numeric" />
+            </View>
+            <View style={styles.switchRow}>
+              <Text style={styles.switchLabel}>Inclusive of VAT</Text>
+              <Switch value={isVatInclusive} onValueChange={setIsVatInclusive} />
+            </View>
+            <View style={styles.resultBox}>
+              <Text style={styles.resultBoxLabel}>{isVatInclusive ? 'Base Taxable Amount' : 'Final Gross Amount'}</Text>
+              <Text style={styles.resultBoxVal}>रु {(isVatInclusive ? vatResult.baseAmount : vatResult.grossAmount).toLocaleString()}</Text>
+              <Text style={styles.resultBoxSub}>13% VAT Component: रु {vatResult.taxAmount.toLocaleString()}</Text>
+            </View>
+          </FadeInView>
+        )}
+
+        {/* 9. MARGIN */}
+        {activeTab === 'margin' && (
+          <FadeInView style={styles.card}>
+            <Text style={styles.cardTitle}>{ne ? 'नाफा मार्जिन' : 'Margin & Markup'}</Text>
+            <View style={styles.inputRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.inputLabel}>Cost (रु)</Text>
+                <TextInput style={styles.textInput} value={marginCost} onChangeText={setMarginCost} keyboardType="numeric" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.inputLabel}>Selling Price (रु)</Text>
+                <TextInput style={styles.textInput} value={marginSale} onChangeText={setMarginSale} keyboardType="numeric" />
+              </View>
+            </View>
+            <View style={styles.resultBox}>
+              <Text style={styles.resultBoxLabel}>Net Profit</Text>
+              <Text style={[styles.resultBoxVal, { color: '#059669' }]}>रु {marginResult.profit.toLocaleString()}</Text>
+              <Text style={styles.resultBoxSub}>Margin: {marginResult.marginPercent.toFixed(1)}% • Markup: {marginResult.markupPercent.toFixed(1)}%</Text>
+            </View>
+          </FadeInView>
+        )}
+
+        {/* 10. CASH DRAWER */}
+        {activeTab === 'cash' && (
+          <FadeInView style={styles.card}>
+            <Text style={styles.cardTitle}>{ne ? 'गल्ला नगद काउन्टर' : 'Cash Drawer Counter'}</Text>
+            <Text style={styles.cardSubtitle}>Count physical banknotes</Text>
+
+            <View style={{ marginTop: 8 }}>
+              {NEPAL_DENOMINATIONS.map((d) => (
+                <View key={d} style={styles.cashRow}>
+                  <Text style={styles.cashDenom}>रु {d}</Text>
+                  <TextInput
+                    style={styles.cashInput}
+                    value={String(counts[d] || 0)}
+                    onChangeText={(t) => setCounts({ ...counts, [d]: parseInt(t, 10) || 0 })}
+                    keyboardType="numeric"
+                  />
+                  <Text style={styles.cashTotal}>= रु {((counts[d] || 0) * d).toLocaleString()}</Text>
+                </View>
+              ))}
+            </View>
+
+            <View style={styles.resultBox}>
+              <Text style={styles.resultBoxLabel}>Grand Total in Drawer</Text>
+              <Text style={styles.resultBoxVal}>रु {denominationResult.grandTotal.toLocaleString()}</Text>
+              <Text style={styles.resultBoxSub}>({denominationResult.totalNotes} Banknotes counted)</Text>
             </View>
           </FadeInView>
         )}
@@ -1375,467 +872,255 @@ const createStyles = (theme: Theme, themeMode: 'light' | 'dark') => {
   return StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: theme.colors.bg,
+      backgroundColor: isDark ? '#121212' : '#F9F9F8',
     },
-    tabBarWrapper: {
-      backgroundColor: theme.colors.card,
-      borderBottomWidth: 1,
-      borderBottomColor: theme.colors.borderGlass,
-      paddingVertical: 8,
+    groupHeader: {
+      paddingHorizontal: 16,
+      paddingTop: 12,
+      paddingBottom: 4,
     },
-    tabBarScroll: {
-      paddingHorizontal: 12,
-      gap: 8,
-    },
-    tabButton: {
+    groupSegment: {
       flexDirection: 'row',
+      backgroundColor: isDark ? '#1E1E1E' : '#EFEFEF',
+      borderRadius: 12,
+      padding: 3,
+    },
+    groupBtn: {
+      flex: 1,
+      paddingVertical: 7,
       alignItems: 'center',
-      paddingHorizontal: 14,
+      borderRadius: 9,
+    },
+    groupBtnActive: {
+      backgroundColor: isDark ? '#2A2A2A' : '#FFFFFF',
+      shadowColor: '#000',
+      shadowOpacity: 0.05,
+      shadowRadius: 3,
+      elevation: 1,
+    },
+    groupBtnText: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: isDark ? '#888888' : '#777777',
+    },
+    groupBtnTextActive: {
+      color: isDark ? '#FFFFFF' : '#1C1917',
+      fontWeight: '700',
+    },
+    tabScrollWrapper: {
       paddingVertical: 8,
-      borderRadius: 10,
-      backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)',
+    },
+    tabScroll: {
+      paddingHorizontal: 16,
       gap: 6,
     },
-    tabButtonActive: {
-      backgroundColor: theme.colors.primary,
+    tabPill: {
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 20,
+      backgroundColor: isDark ? '#1C1C1C' : '#FFFFFF',
+      borderWidth: 1,
+      borderColor: isDark ? '#2E2E2E' : '#E5E5E5',
     },
-    tabButtonText: {
-      fontSize: 13,
-      fontWeight: '600',
-      color: theme.colors.textMuted,
+    tabPillActive: {
+      backgroundColor: isDark ? '#FFFFFF' : '#1C1917',
+      borderColor: isDark ? '#FFFFFF' : '#1C1917',
     },
-    tabButtonTextActive: {
-      color: '#FFFFFF',
+    tabPillText: {
+      fontSize: 12,
+      fontWeight: '500',
+      color: isDark ? '#AAAAAA' : '#555555',
+    },
+    tabPillTextActive: {
+      color: isDark ? '#1C1917' : '#FFFFFF',
+      fontWeight: '700',
     },
     contentScroll: {
-      flex: 1,
-    },
-    contentContainer: {
       padding: 16,
       paddingBottom: 40,
     },
     card: {
-      backgroundColor: theme.colors.card,
+      backgroundColor: isDark ? '#1A1A1A' : '#FFFFFF',
       borderRadius: 16,
-      borderWidth: 1,
-      borderColor: theme.colors.borderGlass,
       padding: 16,
-      ...Platform.select({
-        ios: {
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.06,
-          shadowRadius: 6,
-        },
-        android: {
-          elevation: 2,
-        },
-      }),
-    },
-    cardHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      marginBottom: 16,
-      gap: 12,
-    },
-    cardIconBox: {
-      width: 40,
-      height: 40,
-      borderRadius: 12,
-      justifyContent: 'center',
-      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: isDark ? '#262626' : '#EAEAEA',
+      shadowColor: '#000',
+      shadowOpacity: 0.03,
+      shadowRadius: 4,
+      elevation: 1,
     },
     cardTitle: {
-      fontSize: 16,
+      fontSize: 15,
       fontWeight: '700',
-      color: theme.colors.textPrimary,
+      color: isDark ? '#FFFFFF' : '#1C1917',
     },
     cardSubtitle: {
-      fontSize: 12,
-      color: theme.colors.textMuted,
+      fontSize: 11,
+      color: isDark ? '#777777' : '#888888',
       marginTop: 2,
+      marginBottom: 12,
     },
-    fieldGroup: {
-      marginBottom: 16,
-    },
-    fieldLabel: {
-      fontSize: 13,
-      fontWeight: '600',
-      color: theme.colors.textPrimary,
-      marginBottom: 6,
-    },
-    labelRow: {
+    subPillRow: {
       flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: 6,
+      gap: 6,
+      marginBottom: 12,
     },
-    inputBox: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
-      borderWidth: 1,
-      borderColor: theme.colors.borderGlass,
-      borderRadius: 12,
-      paddingHorizontal: 12,
-      height: 46,
+    subPill: {
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      borderRadius: 8,
+      backgroundColor: isDark ? '#262626' : '#F3F3F3',
     },
-    inputPrefix: {
-      fontSize: 15,
+    subPillActive: {
+      backgroundColor: isDark ? '#3A3A3A' : '#E0E0E0',
+    },
+    subPillText: {
+      fontSize: 11,
+      fontWeight: '500',
+      color: isDark ? '#AAAAAA' : '#666666',
+    },
+    subPillTextActive: {
+      color: isDark ? '#FFFFFF' : '#1C1917',
       fontWeight: '700',
-      color: theme.colors.primary,
-      marginRight: 6,
     },
-    inputSuffix: {
-      fontSize: 13,
+    inputBlock: {
+      marginBottom: 10,
+    },
+    inputRow: {
+      flexDirection: 'row',
+      gap: 10,
+      marginBottom: 10,
+    },
+    inputLabel: {
+      fontSize: 11,
       fontWeight: '600',
-      color: theme.colors.textMuted,
-      marginLeft: 6,
+      color: isDark ? '#AAAAAA' : '#666666',
+      marginBottom: 4,
     },
     textInput: {
-      flex: 1,
-      fontSize: 15,
-      fontWeight: '600',
-      color: theme.colors.textPrimary,
-      paddingVertical: 0,
-    },
-    chipRow: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: 8,
-      marginTop: 8,
-    },
-    chip: {
-      paddingHorizontal: 10,
-      paddingVertical: 5,
-      borderRadius: 8,
-      backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)',
-      borderWidth: 1,
-      borderColor: theme.colors.borderGlass,
-    },
-    chipActive: {
-      backgroundColor: isDark ? 'rgba(59,130,246,0.25)' : 'rgba(59,130,246,0.15)',
-      borderColor: theme.colors.primary,
-    },
-    chipText: {
-      fontSize: 12,
-      fontWeight: '600',
-      color: theme.colors.textMuted,
-    },
-    chipTextActive: {
-      color: theme.colors.primary,
-      fontWeight: '700',
-    },
-    togglePill: {
-      flexDirection: 'row',
-      backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
-      borderRadius: 8,
-      padding: 2,
-    },
-    togglePillBtn: {
-      paddingHorizontal: 10,
-      paddingVertical: 3,
-      borderRadius: 6,
-    },
-    togglePillBtnActive: {
-      backgroundColor: theme.colors.primary,
-    },
-    togglePillText: {
-      fontSize: 11,
-      fontWeight: '600',
-      color: theme.colors.textMuted,
-    },
-    togglePillTextActive: {
-      color: '#FFFFFF',
-    },
-    resultBanner: {
-      backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)',
-      borderRadius: 14,
-      borderWidth: 1,
-      borderColor: theme.colors.primary + '40',
-      padding: 16,
-      alignItems: 'center',
-    },
-    resultBannerLabel: {
-      fontSize: 12,
-      fontWeight: '600',
-      color: theme.colors.textMuted,
-      textTransform: 'uppercase',
-      letterSpacing: 0.5,
-    },
-    resultBannerAmount: {
-      fontSize: 26,
-      fontWeight: '800',
-      color: theme.colors.primary,
-      marginVertical: 4,
-    },
-    resultBreakdownRow: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      width: '100%',
-      marginTop: 12,
-      paddingTop: 12,
-      borderTopWidth: 1,
-      borderTopColor: theme.colors.borderGlass,
-    },
-    resultCol: {
-      alignItems: 'center',
-      flex: 1,
-    },
-    resultSubLabel: {
-      fontSize: 11,
-      color: theme.colors.textMuted,
-      marginBottom: 2,
-      textAlign: 'center',
-    },
-    resultSubValue: {
-      fontSize: 14,
-      fontWeight: '700',
-      color: theme.colors.textPrimary,
-      textAlign: 'center',
-    },
-    ratioBarContainer: {
-      flexDirection: 'row',
-      height: 8,
-      width: '100%',
-      borderRadius: 4,
-      overflow: 'hidden',
-      marginTop: 14,
-    },
-    ratioBarPrincipal: {
-      backgroundColor: '#3B82F6',
-    },
-    ratioBarInterest: {
-      backgroundColor: '#EF4444',
-    },
-    ratioLegendRow: {
-      flexDirection: 'row',
-      justifyContent: 'center',
-      gap: 16,
-      marginTop: 8,
-    },
-    legendItem: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 5,
-    },
-    legendDot: {
-      width: 8,
-      height: 8,
-      borderRadius: 4,
-    },
-    legendText: {
-      fontSize: 11,
-      color: theme.colors.textMuted,
-      fontWeight: '500',
-    },
-    scheduleToggleBtn: {
-      flexDirection: 'row',
-      justifyContent: 'center',
-      alignItems: 'center',
-      paddingVertical: 10,
-      gap: 6,
-    },
-    scheduleToggleText: {
-      fontSize: 13,
-      fontWeight: '600',
-      color: theme.colors.primary,
-    },
-    scheduleListContainer: {
-      marginTop: 6,
-      backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)',
+      height: 40,
       borderRadius: 10,
       borderWidth: 1,
-      borderColor: theme.colors.borderGlass,
-      overflow: 'hidden',
-    },
-    scheduleTableHeader: {
-      flexDirection: 'row',
+      borderColor: isDark ? '#333333' : '#DCDCDC',
+      backgroundColor: isDark ? '#222222' : '#FAFAFA',
       paddingHorizontal: 12,
-      paddingVertical: 8,
-      backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
-      borderBottomWidth: 1,
-      borderBottomColor: theme.colors.borderGlass,
+      fontSize: 13,
+      fontWeight: '600',
+      color: isDark ? '#FFFFFF' : '#1C1917',
     },
-    thCell: {
-      fontSize: 11,
+    unitGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 6,
+      marginTop: 8,
+    },
+    unitItem: {
+      width: '48%',
+      padding: 8,
+      borderRadius: 10,
+      backgroundColor: isDark ? '#222222' : '#F8F8F8',
+      borderWidth: 1,
+      borderColor: isDark ? '#2E2E2E' : '#EAEAEA',
+    },
+    unitItemActive: {
+      borderColor: isDark ? '#FFFFFF' : '#1C1917',
+      backgroundColor: isDark ? '#2A2A2A' : '#EEEEEE',
+    },
+    unitItemLabel: {
+      fontSize: 10,
+      color: isDark ? '#888888' : '#777777',
+    },
+    unitItemVal: {
+      fontSize: 13,
       fontWeight: '700',
-      color: theme.colors.textMuted,
+      fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+      color: isDark ? '#FFFFFF' : '#1C1917',
+      marginTop: 2,
     },
-    scheduleRow: {
-      flexDirection: 'row',
-      paddingHorizontal: 12,
-      paddingVertical: 7,
-      borderBottomWidth: 1,
-      borderBottomColor: theme.colors.borderGlass,
+    resultBox: {
+      marginTop: 14,
+      padding: 14,
+      borderRadius: 12,
+      backgroundColor: isDark ? '#222222' : '#F5F5F4',
+      borderWidth: 1,
+      borderColor: isDark ? '#2E2E2E' : '#E7E5E4',
+      alignItems: 'center',
     },
-    tdCell: {
-      fontSize: 12,
-      fontWeight: '500',
-      color: theme.colors.textPrimary,
+    resultBoxLabel: {
+      fontSize: 10,
+      fontWeight: '600',
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+      color: isDark ? '#888888' : '#78716C',
     },
-    scheduleNote: {
+    resultBoxVal: {
+      fontSize: 22,
+      fontWeight: '800',
+      color: isDark ? '#FFFFFF' : '#1C1917',
+      marginVertical: 2,
+    },
+    resultBoxSub: {
       fontSize: 11,
-      color: theme.colors.textMuted,
-      textAlign: 'center',
-      paddingVertical: 8,
+      color: isDark ? '#999999' : '#78716C',
+    },
+    qrDisplayWrap: {
+      alignItems: 'center',
+      marginTop: 12,
+    },
+    qrImg: {
+      width: 180,
+      height: 180,
+      borderRadius: 12,
+      backgroundColor: '#FFFFFF',
+    },
+    qrScanHint: {
+      fontSize: 10,
+      color: isDark ? '#777777' : '#999999',
+      marginTop: 6,
     },
     switchRow: {
       flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginVertical: 8,
+    },
+    switchLabel: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: isDark ? '#CCCCCC' : '#444444',
+    },
+    cashRow: {
+      flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingVertical: 8,
-      borderTopWidth: 1,
-      borderTopColor: theme.colors.borderGlass,
-      marginTop: 6,
-    },
-    switchTitle: {
-      fontSize: 14,
-      fontWeight: '600',
-      color: theme.colors.textPrimary,
-    },
-    switchDesc: {
-      fontSize: 12,
-      color: theme.colors.textMuted,
-      marginTop: 2,
-    },
-    toggleRowContainer: {
-      flexDirection: 'row',
-      gap: 8,
-    },
-    modeCard: {
-      flex: 1,
-      padding: 12,
-      borderRadius: 12,
-      backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
-      borderWidth: 1,
-      borderColor: theme.colors.borderGlass,
-    },
-    modeCardActive: {
-      borderColor: theme.colors.primary,
-      backgroundColor: isDark ? 'rgba(59,130,246,0.12)' : 'rgba(59,130,246,0.08)',
-    },
-    modeCardTitle: {
-      fontSize: 13,
-      fontWeight: '700',
-      color: theme.colors.textPrimary,
-      marginTop: 6,
-    },
-    modeCardTitleActive: {
-      color: theme.colors.primary,
-    },
-    modeCardDesc: {
-      fontSize: 11,
-      color: theme.colors.textMuted,
-      marginTop: 2,
-    },
-    twoColRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-    },
-    changeChipsContainer: {
-      marginTop: 12,
-      width: '100%',
-      alignItems: 'center',
-    },
-    changeChipsTitle: {
-      fontSize: 11,
-      fontWeight: '600',
-      color: theme.colors.textMuted,
-      marginBottom: 6,
-    },
-    noteChip: {
-      backgroundColor: isDark ? 'rgba(16,185,129,0.2)' : 'rgba(16,185,129,0.12)',
-      borderColor: '#10B981',
-      borderWidth: 1,
-      paddingHorizontal: 10,
       paddingVertical: 4,
-      borderRadius: 8,
     },
-    noteChipText: {
+    cashDenom: {
+      width: 60,
       fontSize: 12,
       fontWeight: '700',
-      color: '#10B981',
+      fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+      color: isDark ? '#CCCCCC' : '#333333',
     },
-    clearBtn: {
-      paddingHorizontal: 10,
-      paddingVertical: 4,
-      borderRadius: 6,
-      backgroundColor: isDark ? 'rgba(239,68,68,0.15)' : 'rgba(239,68,68,0.1)',
-    },
-    clearBtnText: {
-      fontSize: 11,
-      fontWeight: '700',
-      color: '#EF4444',
-    },
-    denomTable: {
-      borderWidth: 1,
-      borderColor: theme.colors.borderGlass,
-      borderRadius: 12,
-      overflow: 'hidden',
-    },
-    denomRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingHorizontal: 12,
-      paddingVertical: 8,
-      borderBottomWidth: 1,
-      borderBottomColor: theme.colors.borderGlass,
-      backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.01)',
-    },
-    denomNoteBox: {
-      width: 72,
-    },
-    denomNoteText: {
-      fontSize: 14,
-      fontWeight: '700',
-      color: theme.colors.textPrimary,
-    },
-    denomStepper: {
-      flex: 1,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: 8,
-    },
-    stepBtn: {
-      width: 32,
+    cashInput: {
+      width: 65,
       height: 32,
-      borderRadius: 8,
-      backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    denomInput: {
-      width: 50,
-      height: 34,
+      borderRadius: 6,
       borderWidth: 1,
-      borderColor: theme.colors.borderGlass,
-      borderRadius: 8,
+      borderColor: isDark ? '#333333' : '#D0D0D0',
+      backgroundColor: isDark ? '#222222' : '#FFFFFF',
       textAlign: 'center',
-      fontSize: 14,
-      fontWeight: '700',
-      color: theme.colors.textPrimary,
-      backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)',
-      paddingVertical: 0,
+      fontSize: 12,
+      fontWeight: '600',
+      color: isDark ? '#FFFFFF' : '#1C1917',
     },
-    denomRowTotal: {
+    cashTotal: {
       width: 90,
       textAlign: 'right',
-      fontSize: 13,
-      fontWeight: '700',
-      color: theme.colors.textPrimary,
-    },
-    diffBadge: {
-      height: 46,
-      borderRadius: 12,
-      justifyContent: 'center',
-      alignItems: 'center',
-      paddingHorizontal: 8,
-    },
-    diffBadgeText: {
-      fontSize: 14,
-      fontWeight: '700',
+      fontSize: 11,
+      fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+      color: isDark ? '#888888' : '#777777',
     },
   });
 };
