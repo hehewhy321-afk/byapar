@@ -28,6 +28,8 @@ import { generateUUID } from '../utils/uuid';
 import { getDefaultRolePermissions, StaffRole } from '../db/permissions';
 import { storage } from '../services/storage';
 import { checkMobileStoreLimit } from '../services/planLimits';
+import { uploadBillImage, deleteBillImage } from '../services/billImageUploadService';
+import { offlineSyncService } from '../services/offlineSyncService';
 import { getMobileSubscription } from '../services/subscriptionService';
 import { ThemeMode, Theme, getTheme } from '../theme';
 import { supabase } from '../config/supabase';
@@ -375,6 +377,7 @@ function mapDbToBill(row: any): BillImage {
     date: row.bill_date,
     category: 'Inventory',
     imageUri: row.image_url || '',
+    primaryImageId: row.primary_image_id || undefined,
     notes: '',
   };
 }
@@ -1917,20 +1920,58 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setBills(updated);
     await storage.set('bills', updated);
 
+    // 1. Insert bill metadata into Supabase
     await supabase.from('bills').insert({
       id: newBill.id,
       business_id: activeBizId,
       title: newBill.title,
       amount: newBill.amount,
       bill_date: newBill.date,
-      image_url: newBill.imageUri,
     });
+
+    // 2. Upload image directly to Cloudflare R2
+    if (newBill.imageUri && activeBizId) {
+      try {
+        const uploadResult = await uploadBillImage({
+          rawImageUri: newBill.imageUri,
+          billId: newBill.id,
+          businessId: activeBizId,
+        });
+
+        const billWithImage: BillImage = {
+          ...newBill,
+          primaryImageId: uploadResult.imageId,
+          imageUri: uploadResult.localPersistentUri || newBill.imageUri,
+        };
+        const syncedBills = [billWithImage, ...bills.filter((b) => b.id !== newBill.id)];
+        setBills(syncedBills);
+        await storage.set('bills', syncedBills);
+      } catch (uploadErr) {
+        console.warn('[addBill] Cloudflare R2 upload error (queuing for offline retry):', uploadErr);
+        await offlineSyncService.enqueue({
+          businessId: activeBizId,
+          action: 'UPLOAD_MEDIA',
+          table: 'bill_images',
+          payload: {
+            billId: newBill.id,
+            imageUri: newBill.imageUri,
+          },
+        });
+      }
+    }
   };
 
   const deleteBill = async (id: string) => {
+    const targetBill = bills.find((b) => b.id === id);
     const updated = bills.filter((b) => b.id !== id);
     setBills(updated);
     await storage.set('bills', updated);
+
+    if (targetBill?.primaryImageId && activeBizId) {
+      deleteBillImage(targetBill.primaryImageId, activeBizId).catch((err) =>
+        console.warn('[deleteBill] Image delete error:', err)
+      );
+    }
 
     await supabase.from('bills').delete().eq('id', id);
   };

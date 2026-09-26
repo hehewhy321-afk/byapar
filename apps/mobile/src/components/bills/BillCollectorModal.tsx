@@ -8,6 +8,8 @@ import { BillImage } from '../../types';
 import { AnimatedPressable } from '../common/AnimatedPressable';
 import { FadeInView } from '../common/FadeInView';
 
+import { compressBillImage } from '../../services/imageCompressionService';
+
 interface Props {
   visible: boolean;
   onClose: () => void;
@@ -37,15 +39,25 @@ export const BillCollectorModal: React.FC<Props> = ({
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState<BillImage['category']>('Inventory');
   const [imageUri, setImageUri] = useState(initialImageUri);
+  const [compressedSizeBytes, setCompressedSizeBytes] = useState<number | null>(null);
+  const [isCompressing, setIsCompressing] = useState(false);
   const [notes, setNotes] = useState('');
 
   useEffect(() => {
     if (visible) {
       if (initialImageUri) {
-        setImageUri(initialImageUri);
+        setIsCompressing(true);
+        compressBillImage(initialImageUri)
+          .then((res) => {
+            setImageUri(res.uri);
+            setCompressedSizeBytes(res.fileSizeBytes);
+          })
+          .catch(() => setImageUri(initialImageUri))
+          .finally(() => setIsCompressing(false));
       }
     } else {
       setImageUri('');
+      setCompressedSizeBytes(null);
       setTitle('');
       setVendorName('');
       setAmount('');
@@ -73,10 +85,20 @@ export const BillCollectorModal: React.FC<Props> = ({
       }
       const result = await ImagePicker.launchCameraAsync({
         allowsEditing: false,
-        quality: 0.85,
+        quality: 1.0, // Capture original clarity; our pipeline downscales & compresses cleanly
       });
       if (!result.canceled && result.assets && result.assets.length > 0 && result.assets[0]?.uri) {
-        setImageUri(result.assets[0].uri);
+        setIsCompressing(true);
+        try {
+          const comp = await compressBillImage(result.assets[0].uri);
+          setImageUri(comp.uri);
+          setCompressedSizeBytes(comp.fileSizeBytes);
+        } catch (compErr: any) {
+          Alert.alert('Compression Notice', 'Using direct photo format: ' + (compErr?.message || ''));
+          setImageUri(result.assets[0].uri);
+        } finally {
+          setIsCompressing(false);
+        }
       }
     } catch (e: any) {
       Alert.alert('Camera Error', e.message || 'Could not open camera');
@@ -104,10 +126,20 @@ export const BillCollectorModal: React.FC<Props> = ({
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
         allowsEditing: false,
-        quality: 0.85,
+        quality: 1.0,
       });
       if (!result.canceled && result.assets && result.assets.length > 0 && result.assets[0]?.uri) {
-        setImageUri(result.assets[0].uri);
+        setIsCompressing(true);
+        try {
+          const comp = await compressBillImage(result.assets[0].uri);
+          setImageUri(comp.uri);
+          setCompressedSizeBytes(comp.fileSizeBytes);
+        } catch (compErr: any) {
+          Alert.alert('Compression Notice', 'Using direct photo format: ' + (compErr?.message || ''));
+          setImageUri(result.assets[0].uri);
+        } finally {
+          setIsCompressing(false);
+        }
       }
     } catch (e: any) {
       Alert.alert('Gallery Error', e.message || 'Could not open gallery');
@@ -214,7 +246,18 @@ export const BillCollectorModal: React.FC<Props> = ({
             </ScrollView>
 
             {/* ATTACHED SCAN / IMAGE PICKER */}
-            <Text style={styles.label}>Attached Scan / Photo</Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text style={styles.label}>Attached Scan / Photo</Text>
+              {isCompressing ? (
+                <Text style={{ fontSize: 11, color: theme.colors.primary, fontWeight: '600' }}>
+                  Compressing...
+                </Text>
+              ) : compressedSizeBytes ? (
+                <Text style={{ fontSize: 11, color: '#10B981', fontWeight: '600' }}>
+                  Optimized WebP ({(compressedSizeBytes / 1024).toFixed(0)} KB)
+                </Text>
+              ) : null}
+            </View>
             {imageUri ? (
               <View style={styles.imageSelectedBox}>
                 <Image source={{ uri: imageUri }} style={styles.selectedImg} resizeMode="contain" />

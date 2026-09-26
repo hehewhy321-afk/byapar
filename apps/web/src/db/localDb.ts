@@ -388,6 +388,7 @@ export interface BillItem {
   imageUrl?: string;
   billDate?: string;
   notes?: string;
+  primaryImageId?: string;
 }
 
 export interface NoteItem {
@@ -932,6 +933,7 @@ function mapDbBill(b: any): BillItem {
     category: b.bill_type || 'General',
     image: b.image_url || '',
     imageUrl: b.image_url || '',
+    primaryImageId: b.primary_image_id || undefined,
     tags: b.tags || [],
     notes: b.notes || '',
     createdAt: b.created_at || new Date().toISOString(),
@@ -3017,14 +3019,16 @@ export async function deleteReminder(id: string) {
   await supabase.from('reminders').delete().eq('id', id);
 }
 
-export async function addBill(bill: Omit<BillItem, 'id' | 'createdAt'>) {
+export async function addBill(bill: Omit<BillItem, 'id' | 'createdAt'> & { id?: string }) {
   const newBill: BillItem = {
     ...bill,
-    id: crypto.randomUUID(),
+    id: bill.id || crypto.randomUUID(),
     title: bill.title || bill.vendorName || 'Bill',
     type: bill.type || bill.category || 'General',
     date: bill.date || bill.billDate || new Date().toISOString().split('T')[0],
-    image: bill.image || bill.imageUrl || '',
+    image: bill.primaryImageId ? '' : (bill.image || bill.imageUrl || ''),
+    imageUrl: bill.primaryImageId ? '' : (bill.imageUrl || bill.image || ''),
+    primaryImageId: bill.primaryImageId,
     tags: bill.tags || [],
     createdAt: new Date().toISOString(),
   };
@@ -3040,14 +3044,46 @@ export async function addBill(bill: Omit<BillItem, 'id' | 'createdAt'>) {
     bill_type: newBill.type,
     amount: newBill.amount,
     bill_date: newBill.date,
-    image_url: newBill.imageUrl || newBill.image,
+    image_url: newBill.primaryImageId ? null : (newBill.imageUrl || newBill.image || null),
+    primary_image_id: newBill.primaryImageId || null,
     tags: newBill.tags,
   });
 
   return newBill;
 }
 
+export async function updateBillPrimaryImage(billId: string, primaryImageId: string) {
+  setBills((draft) => {
+    const bill = draft.find((b) => b.id === billId);
+    if (bill) {
+      bill.primaryImageId = primaryImageId;
+      bill.imageUrl = '';
+      bill.image = '';
+    }
+  });
+  persistState();
+
+  if (currentBusiness.id && currentBusiness.id !== 'a0000000-0000-0000-0000-000000000001') {
+    try {
+      await supabase
+        .from('bills')
+        .update({ primary_image_id: primaryImageId })
+        .eq('id', billId)
+        .eq('business_id', currentBusiness.id);
+
+      await supabase
+        .from('bill_images')
+        .update({ bill_id: billId })
+        .eq('id', primaryImageId);
+    } catch (err) {
+      console.warn('[updateBillPrimaryImage] Cloud sync error:', err);
+    }
+  }
+}
+
 export async function deleteBill(id: string) {
+  const target = bills.find((b) => b.id === id);
+
   setBills((draft) => {
     const idx = draft.findIndex((b) => b.id === id);
     if (idx >= 0) draft.splice(idx, 1);
@@ -3055,6 +3091,16 @@ export async function deleteBill(id: string) {
   persistState();
 
   await supabase.from('bills').delete().eq('id', id);
+
+  if (target?.primaryImageId && currentBusiness.id) {
+    try {
+      await supabase.functions.invoke('delete-bill-image', {
+        body: { imageId: target.primaryImageId, businessId: currentBusiness.id },
+      });
+    } catch (err) {
+      console.warn('[deleteBill] Failed to clean up R2 image:', err);
+    }
+  }
 }
 
 export async function addNote(note: Omit<NoteItem, 'id' | 'createdAt' | 'updatedAt'>) {

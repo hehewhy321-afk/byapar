@@ -61,6 +61,7 @@ export interface BillImage {
   date: string;
   category: 'Inventory' | 'Utilities' | 'Rent' | 'Packaging' | 'Logistics' | 'Other';
   imageUri: string;
+  primaryImageId?: string;
   notes?: string;
 }
 

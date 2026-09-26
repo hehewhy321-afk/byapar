@@ -382,7 +382,7 @@ export const Sidebar: Component = () => {
                           }}
                         >
                           <tool.icon class="w-4 h-4 shrink-0" />
-                          <span>{tool.label}</span>
+                          <span>{typeof tool.label === 'function' ? tool.label() : tool.label}</span>
                         </button>
                       )}
                     </For>
@@ -422,7 +422,7 @@ export const Sidebar: Component = () => {
                       }}
                     >
                       <tool.icon class="w-3.5 h-3.5 shrink-0 opacity-75" />
-                      <span>{tool.label}</span>
+                      <span>{typeof tool.label === 'function' ? tool.label() : tool.label}</span>
                     </button>
                   )}
                 </For>

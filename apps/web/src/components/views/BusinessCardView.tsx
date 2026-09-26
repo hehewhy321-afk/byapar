@@ -84,7 +84,7 @@ export const BusinessCardView: Component = () => {
   const [tagline, setTagline] = createSignal('Wholesale & Retail Groceries at Best Prices');
   const [phone, setPhone] = createSignal(currentBusiness.phone || '9800000000');
   const [whatsapp, setWhatsapp] = createSignal(currentBusiness.phone || '9800000000');
-  const [email, setEmail] = createSignal(currentBusiness.email || 'contact@kirana.np');
+  const [email, setEmail] = createSignal((currentBusiness as any).email || 'contact@kirana.np');
   const [address, setAddress] = createSignal(currentBusiness.address || 'Kathmandu, Nepal');
   const [pan, setPan] = createSignal(currentBusiness.pan || '600000000');
 

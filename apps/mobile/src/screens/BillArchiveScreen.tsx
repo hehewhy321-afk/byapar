@@ -17,6 +17,7 @@ import { Theme } from '../theme';
 import { useApp } from '../context/AppContext';
 import { BillImage } from '../types';
 import { BillCollectorModal } from '../components/bills/BillCollectorModal';
+import { BillImageViewer } from '../components/bills/BillImageViewer';
 import { SubscriptionModal } from '../components/SubscriptionModal';
 import { checkMobileBillUploadLimit } from '../services/planLimits';
 import { AnimatedPressable } from '../components/common/AnimatedPressable';
@@ -255,9 +256,14 @@ export const BillArchiveScreen: React.FC = () => {
                 </View>
               </View>
 
-              {item.imageUri ? (
+              {item.imageUri || item.primaryImageId ? (
                 <View style={styles.thumbWrapper}>
-                  <Image source={{ uri: item.imageUri }} style={styles.thumbImage} resizeMode="cover" />
+                  <BillImageViewer
+                    bill={item}
+                    businessId={activeBizId}
+                    style={styles.thumbImage}
+                    resizeMode="cover"
+                  />
                   <View style={styles.scanBadge}>
                     <Feather name="shield" size={11} color={theme.colors.emerald} />
                     <Text style={styles.scanBadgeText}>Verified Scan</Text>
@@ -382,10 +388,11 @@ export const BillArchiveScreen: React.FC = () => {
                 </View>
               </View>
 
-              {previewBill.imageUri ? (
+              {previewBill.imageUri || previewBill.primaryImageId ? (
                 <View style={styles.previewImageWrapper}>
-                  <Image
-                    source={{ uri: previewBill.imageUri }}
+                  <BillImageViewer
+                    bill={previewBill}
+                    businessId={activeBizId}
                     style={styles.previewFullImage}
                     resizeMode="contain"
                   />
