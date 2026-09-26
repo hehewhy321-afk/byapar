@@ -225,27 +225,9 @@ export const AppLockModal: React.FC<Props> = ({ visible, onUnlock }) => {
             </View>
           ))}
 
-          {/* Bottom row: Biometrics or Empty, 0, Backspace */}
+          {/* Bottom row: Empty space, 0, Backspace */}
           <View style={styles.keypadRow}>
-            {config.useBiometrics ? (
-              <TouchableOpacity
-                style={[
-                  styles.keypadBtn,
-                  styles.utilityKeypadBtn,
-                  {
-                    backgroundColor: isDark ? '#1C1C1E' : '#FFFFFF',
-                    borderColor: theme.colors.borderGlass,
-                  },
-                ]}
-                onPress={handleBiometricAuth}
-                activeOpacity={0.7}
-                disabled={lockoutTimer > 0}
-              >
-                <MaterialCommunityIcons name="fingerprint" size={28} color={theme.colors.primary} />
-              </TouchableOpacity>
-            ) : (
-              <View style={styles.emptyKeypadSpace} />
-            )}
+            <View style={styles.emptyKeypadSpace} />
 
             <TouchableOpacity
               style={[
