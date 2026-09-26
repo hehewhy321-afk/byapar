@@ -290,3 +290,155 @@
   background-repeat: repeat-x;
 }
 
+/* ─── SOFTLY DESIGN SYSTEM ─── */
+
+/* Grain / Noise Overlay — spec: fixed, z-50, mix-blend-mode overlay, 0.35 opacity */
+.softly-grain {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  pointer-events: none;
+  opacity: 0.35;
+  mix-blend-mode: overlay;
+}
+
+.softly-grain svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* Reveal on scroll — spec: translateY 30px to 0, opacity 0 to 1, 0.8s */
+@keyframes softlyReveal {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.softly-reveal {
+  opacity: 0;
+  animation: softlyReveal 0.8s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation-play-state: paused;
+}
+
+.softly-reveal.is-visible {
+  animation-play-state: running;
+}
+
+/* Floating blob animation — spec: 6s loop, translateY ±10px */
+@keyframes softlyBlobFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+@keyframes softlyBlobFloatReverse {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(10px); }
+}
+
+.softly-blob {
+  animation: softlyBlobFloat 6s ease-in-out infinite;
+  border-radius: 9999px;
+}
+
+.softly-blob-reverse {
+  animation: softlyBlobFloatReverse 6s ease-in-out infinite;
+  border-radius: 9999px;
+}
+
+/* Softly card shadow — spec: 0 4px 20px -2px rgba(0,0,0,0.05) */
+.softly-card {
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05);
+  transition: box-shadow 0.3s ease, transform 0.3s ease;
+}
+
+.softly-card:hover {
+  box-shadow: 0 8px 32px -4px rgba(0, 0, 0, 0.08);
+  transform: translateY(-2px);
+}
+
+/* Scenario card — hover accent color transition */
+.scenario-card {
+  transition: all 0.3s ease;
+}
+.scenario-card:hover .scenario-text {
+  color: #FFB7B2;
+}
+
+/* Phone mockup breathe pulse */
+@keyframes breathePulse {
+  0%, 100% { transform: scale(1); opacity: 0.9; }
+  50% { transform: scale(1.05); opacity: 1; }
+}
+
+.breathe-pulse {
+  animation: breathePulse 3s ease-in-out infinite;
+}
+
+/* Diary card rotation */
+.diary-card-left {
+  transform: rotate(-1deg);
+  transition: transform 0.3s ease;
+}
+.diary-card-left:hover {
+  transform: rotate(0deg);
+}
+.diary-card-right {
+  transform: rotate(1deg);
+  transition: transform 0.3s ease;
+}
+.diary-card-right:hover {
+  transform: rotate(0deg);
+}
+
+/* FAQ accordion — spec: plus rotates 45deg, height transition 500ms ease-in-out */
+.softly-faq-icon {
+  transition: transform 0.5s ease-in-out;
+}
+.softly-faq-icon.is-open {
+  transform: rotate(45deg);
+}
+
+.softly-accordion-body {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.5s ease-in-out, opacity 0.3s ease;
+  opacity: 0;
+}
+.softly-accordion-body.is-open {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+.softly-accordion-inner {
+  overflow: hidden;
+}
+
+/* Hide scrollbar utility */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Smooth scrollbar for softly pages */
+.softly-page ::-webkit-scrollbar-thumb {
+  background: rgba(120, 113, 108, 0.2);
+}
+.softly-page ::-webkit-scrollbar-thumb:hover {
+  background: rgba(120, 113, 108, 0.4);
+}
+
+/* CTA button scale on hover — spec */
+.softly-cta-scale {
+  transition: transform 0.2s ease;
+}
+.softly-cta-scale:hover {
+  transform: scale(1.03);
+}
+

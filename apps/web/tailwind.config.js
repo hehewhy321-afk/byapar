@@ -35,10 +35,22 @@ export default {
           surface: '#0d0d0d',
           border: '#262626',
         },
+        softly: {
+          bg: '#FDFCF8',
+          sage: '#E8EFE8',
+          lavender: '#EFEDF4',
+          coral: '#FFB7B2',
+          'coral-deep': '#E8948E',
+          text: '#292524',
+          muted: '#78716C',
+          light: '#A8A29E',
+          card: '#F7F5F0',
+        },
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
         heading: ['Outfit', 'Inter', 'sans-serif'],
+        cursive: ['Reenie Beanie', 'cursive'],
       },
       boxShadow: {
         'card': '0 1px 3px 0 rgba(0, 0, 0, 0.06), 0 1px 2px -1px rgba(0, 0, 0, 0.06)',

@@ -34,6 +34,7 @@ import { LandingPage } from './components/landing/LandingPage';
 import { AboutPage } from './components/pages/AboutPage';
 import { FaqPage } from './components/pages/FaqPage';
 import { LegalPage } from './components/pages/LegalPage';
+import { PricingPage } from './components/pages/PricingPage';
 import { currentUser } from './db/auth';
 import { activeTab, setActiveTab, currentBusiness, currentPage, toggleSidebar, toggleDarkMode } from './db/localDb';
 import {
@@ -205,6 +206,9 @@ export const App: Component = () => {
           </Match>
           <Match when={currentPage() === 'faq'}>
             <FaqPage />
+          </Match>
+          <Match when={currentPage() === 'pricing'}>
+            <PricingPage />
           </Match>
           <Match when={currentPage() === 'privacy'}>
             <LegalPage type="privacy" />
