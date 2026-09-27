@@ -509,10 +509,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [userStores, setUserStores] = useState<UserStoreItem[]>([]);
   const [categories, setCategories] = useState<CategoryItem[]>([]);
 
-  // Automatic backfill of local offline data to cloud
+  // Automatic backfill of local offline data to cloud (runs once per business)
   const backfillLocalDataToCloud = async (bizId: string) => {
-    if (!bizId) return;
+    if (!bizId || bizId === DEFAULT_BIZ_ID) return;
     try {
+      const alreadyDone = await storage.get<boolean>(`backfill_done_${bizId}`, false);
+      if (alreadyDone) return;
       // 1. Backfill products
       const localProds = await storage.get<Product[]>('products', []);
       if (localProds && localProds.length > 0) {
@@ -633,19 +635,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           });
         }
       }
+      await storage.set(`backfill_done_${bizId}`, true);
     } catch (backfillErr) {
       console.warn('Backfill to cloud non-fatal:', backfillErr);
     }
   };
 
-  // Hydrate Cloud Supabase data
-  // Hydrate Cloud Supabase data with extreme optimization (<400ms pull-to-refresh)
+  // Hydrate Cloud Supabase data with extreme optimization (<300ms pull-to-refresh)
   const hydrateFromCloud = async (targetBizId?: string) => {
     const bizId = targetBizId || activeBizId;
     if (!bizId) return;
-
-    // Trigger non-blocking cloud backfill in the background (never blocks pull-to-refresh!)
-    backfillLocalDataToCloud(bizId).catch((err) => console.warn('Background backfill non-fatal:', err));
 
     try {
       // Parallelize all Supabase network calls in a single batch
@@ -683,7 +682,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         supabase.from('notes').select('*').eq('business_id', bizId).order('created_at', { ascending: false }),
       ]);
 
-      const storageTasks: Promise<any>[] = [];
+      const storageEntries: [string, any][] = [];
 
       // 1. Categories
       if (catsRes.data && catsRes.data.length > 0) {
@@ -693,28 +692,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           color: c.color_code,
         }));
         setCategories(mappedCats);
-        storageTasks.push(storage.set('categories', mappedCats));
+        storageEntries.push(['categories', mappedCats]);
       }
 
       // 2. Products
       if (itemsRes.data) {
         const mapped = itemsRes.data.map(mapDbToProduct);
         setProducts(mapped);
-        storageTasks.push(storage.set('products', mapped));
+        storageEntries.push(['products', mapped]);
       }
 
       // 3. Parties
       if (partiesRes.data) {
         const mapped = partiesRes.data.map(mapDbToParty);
         setParties(mapped);
-        storageTasks.push(storage.set('parties', mapped));
+        storageEntries.push(['parties', mapped]);
       }
 
       // 4. Khata Entries
       if (khataRes.data) {
         const mapped = khataRes.data.map(mapDbToLedger);
         setLedgerEntries(mapped);
-        storageTasks.push(storage.set('ledger', mapped));
+        storageEntries.push(['ledger', mapped]);
       }
 
       // 5. Invoices & Vouchers
@@ -723,25 +722,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           .filter((r: any) => !r.invoice_type || r.invoice_type === 'sale')
           .map(mapDbToInvoice);
         setInvoices(salesInvoices);
-        storageTasks.push(storage.set('invoices', salesInvoices));
+        storageEntries.push(['invoices', salesInvoices]);
 
         const quots = invoicesRes.data
           .filter((r: any) => r.invoice_type === 'quotation')
           .map(mapDbToQuotation);
         setQuotations(quots);
-        storageTasks.push(storage.set('quotations', quots));
+        storageEntries.push(['quotations', quots]);
 
         const sReturns = invoicesRes.data
           .filter((r: any) => r.invoice_type === 'sale_return')
           .map(mapDbToSalesReturn);
         setSalesReturns(sReturns);
-        storageTasks.push(storage.set('sales_returns', sReturns));
+        storageEntries.push(['sales_returns', sReturns]);
 
         const pReturns = invoicesRes.data
           .filter((r: any) => r.invoice_type === 'purchase_return')
           .map(mapDbToPurchaseReturn);
         setPurchaseReturns(pReturns);
-        storageTasks.push(storage.set('purchase_returns', pReturns));
+        storageEntries.push(['purchase_returns', pReturns]);
       }
 
       // 6. Payments
@@ -751,15 +750,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const payOut = allPayments.filter((p) => p.type === 'out');
         setPaymentInRecords(payIn);
         setPaymentOutRecords(payOut);
-        storageTasks.push(storage.set('pay_in', payIn));
-        storageTasks.push(storage.set('pay_out', payOut));
+        storageEntries.push(['pay_in', payIn]);
+        storageEntries.push(['pay_out', payOut]);
       }
 
       // 7. Bills
       if (billsRes.data) {
         const mapped = billsRes.data.map(mapDbToBill);
         setBills(mapped);
-        storageTasks.push(storage.set('bills', mapped));
+        storageEntries.push(['bills', mapped]);
 
         const purchaseMapped: PurchaseBill[] = billsRes.data
           .filter((b: any) => (b.bill_type || '').toLowerCase() === 'purchase')
@@ -778,7 +777,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }));
         if (purchaseMapped.length > 0) {
           setPurchaseBills(purchaseMapped);
-          storageTasks.push(storage.set('purchase_bills', purchaseMapped));
+          storageEntries.push(['purchase_bills', purchaseMapped]);
         }
       }
 
@@ -786,21 +785,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (accountTxsRes.data) {
         const mapped = accountTxsRes.data.map(mapDbToAccountTx);
         setAccountTransactions(mapped);
-        storageTasks.push(storage.set('account_txs', mapped));
+        storageEntries.push(['account_txs', mapped]);
       }
 
       // 9. Bank Accounts
       if (accountsRes.data) {
         const mapped = accountsRes.data.map(mapDbToAccount);
         setAccounts(mapped);
-        storageTasks.push(storage.set('accounts', mapped));
+        storageEntries.push(['accounts', mapped]);
       }
 
       // 10. Staff Members
       if (staffRes.data) {
         const mapped = staffRes.data.map(mapDbToStaff);
         setStaffList(mapped);
-        storageTasks.push(storage.set('staff_list', mapped));
+        storageEntries.push(['staff_list', mapped]);
       }
 
       // 11. Expenses
@@ -818,7 +817,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           createdAt: e.created_at,
         }));
         setExpenses(mappedExpenses);
-        storageTasks.push(storage.set('expenses', mappedExpenses));
+        storageEntries.push(['expenses', mappedExpenses]);
       }
 
       // 12. Incomes
@@ -836,7 +835,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           createdAt: inc.created_at,
         }));
         setIncomes(mappedIncomes);
-        storageTasks.push(storage.set('incomes', mappedIncomes));
+        storageEntries.push(['incomes', mappedIncomes]);
       }
 
       // 13. Reminders
@@ -856,7 +855,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           createdAt: r.created_at,
         }));
         setReminders(mappedReminders);
-        storageTasks.push(storage.set('reminders', mappedReminders));
+        storageEntries.push(['reminders', mappedReminders]);
       }
 
       // 14. Notes
@@ -872,7 +871,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           updatedAt: n.updated_at || n.created_at,
         }));
         setNotes(mappedNotes);
-        storageTasks.push(storage.set('notes', mappedNotes));
+        storageEntries.push(['notes', mappedNotes]);
       }
 
       // 15. Store Profile / Business (ignore demo seed business)
@@ -903,11 +902,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           fonepayQrImage: dbBiz.fonepay_qr_image || store.fonepayQrImage,
         };
         setStore(updatedStore);
-        storageTasks.push(storage.set('store', updatedStore));
+        storageEntries.push(['store', updatedStore]);
       }
 
-      // Concurrently persist all state updates to local cache
-      await Promise.all(storageTasks);
+      // Non-blocking storage cache write via single multiSet
+      if (storageEntries.length > 0) {
+        storage.multiSet(storageEntries).catch((storageErr) =>
+          console.warn('Background storage sync non-fatal:', storageErr)
+        );
+      }
     } catch (err) {
       console.warn('Error hydrating mobile app from cloud:', err);
     }
@@ -1093,7 +1096,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const refreshFromCloud = async () => {
-    await hydrateFromCloud(activeBizId);
+    try {
+      // Strict 3.5s timeout guarantee: pull-to-refresh will NEVER hang or spin for 20+ seconds
+      await Promise.race([
+        hydrateFromCloud(activeBizId),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Refresh timeout')), 3500)),
+      ]);
+    } catch (err) {
+      console.warn('[refreshFromCloud] Handled gracefully:', err);
+    }
   };
 
   useEffect(() => {

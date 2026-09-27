@@ -355,7 +355,10 @@ export const DashboardScreen: React.FC = () => {
   const onRefresh = async () => {
     setRefreshing(true);
     try {
-      await refreshData();
+      await Promise.race([
+        refreshData(),
+        new Promise((resolve) => setTimeout(resolve, 3500)),
+      ]);
     } catch (e) {
       console.warn('[DashboardScreen] Refresh error:', e);
     } finally {

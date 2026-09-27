@@ -43,6 +43,18 @@ export const storage = {
     }
   },
 
+  async multiSet(keyValuePairs: [string, any][]): Promise<void> {
+    try {
+      const serialized: [string, string][] = keyValuePairs.map(([k, v]) => [
+        `@byapar_${k}`,
+        JSON.stringify(v),
+      ]);
+      await AsyncStorage.multiSet(serialized);
+    } catch (e) {
+      console.warn('Error in storage.multiSet:', e);
+    }
+  },
+
   async remove(key: string): Promise<void> {
     try {
       await AsyncStorage.removeItem(`@byapar_${key}`);
