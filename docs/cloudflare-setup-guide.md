@@ -10,38 +10,37 @@ This guide provides end-to-end instructions for deploying and configuring the **
 
 ---
 
-## 1. Cloudflare Pages Deployment (Web App & Super Admin)
+## 1. Cloudflare Deployment (Web App & Super Admin)
 
-Both `apps/web` and `apps/admin` are optimized for Cloudflare Pages with pre-configured SPA client routing (`_redirects`) and edge security/immutable caching (`_headers`).
+Both `apps/web` and `apps/admin` are optimized for Cloudflare Pages and Cloudflare Workers Static Assets (`wrangler deploy`) with native SPA client routing (`not_found_handling = "single-page-application"` in `wrangler.toml`) and edge security/immutable caching (`_headers`).
+
+> [!NOTE]
+> Do NOT use `/* /index.html 200` in `_redirects` when deploying with Wrangler Static Assets. Cloudflare normalizes `.html` URLs and flags rewrite rules targeting `index.html` as recursive infinite loops (`code: 100324`). Instead, Cloudflare's native `not_found_handling = "single-page-application"` in `wrangler.toml` handles SPA 404 fallbacks cleanly.
 
 ### A. Deploying Merchant Web App (`app.byapar.com`)
-1. Log in to the [Cloudflare Dashboard](https://dash.cloudflare.com/) and navigate to **Compute (Workers) > Pages**.
-2. Click **Connect to Git** and select your `byapar` repository.
-3. Configure build settings:
-   - **Project Name:** `byapar-web`
-   - **Framework Preset:** `Vite`
-   - **Root Directory:** `/` (or leave empty)
+1. In Cloudflare Dashboard, go to **Workers & Pages > Overview**.
+2. Configure build settings:
+   - **Framework Preset:** `Vite` (or `None`)
    - **Build Command:** `pnpm --filter @byapar/web build`
    - **Build Output Directory:** `apps/web/dist`
-4. In **Environment Variables**, add:
+   - **Deploy Command (if prompted):** Leave empty (for Pages) OR `npx wrangler deploy --config apps/web/wrangler.toml` (for Workers)
+3. In **Environment Variables**, add:
    - `VITE_SUPABASE_URL`: `https://sovpldesvrdbmklpntrx.supabase.co`
    - `VITE_SUPABASE_ANON_KEY`: *(Your Supabase project anon key)*
    - `VITE_CLOUDFLARE_TURNSTILE_SITE_KEY`: *(Your Turnstile site key from Step 2)*
    - `VITE_EDGE_SHORTLINK_URL`: `https://pay.byapar.com` (or your worker URL)
-5. Click **Save and Deploy**.
-6. Under **Custom Domains**, add `app.byapar.com`. Cloudflare will automatically provision a free SSL/TLS certificate.
+4. Under **Custom Domains**, add `app.byapar.com`.
 
 ### B. Deploying Super Admin Portal (`admin.byapar.com`)
-1. In Cloudflare Pages, click **Create Application > Pages > Connect to Git**.
-2. Configure build settings:
-   - **Project Name:** `byapar-admin`
+1. Configure build settings:
    - **Build Command:** `pnpm --filter @byapar/admin build`
    - **Build Output Directory:** `apps/admin/dist`
-3. Add environment variables:
+   - **Deploy Command (if prompted):** Leave empty OR `npx wrangler deploy --config apps/admin/wrangler.toml`
+2. Add environment variables:
    - `VITE_SUPABASE_URL`: `https://sovpldesvrdbmklpntrx.supabase.co`
    - `VITE_SUPABASE_ANON_KEY`: *(Your Supabase project anon key)*
    - `VITE_CLOUDFLARE_TURNSTILE_SITE_KEY`: *(Your Turnstile site key)*
-4. Under **Custom Domains**, assign `admin.byapar.com`.
+3. Under **Custom Domains**, assign `admin.byapar.com`.
 
 ---
 
