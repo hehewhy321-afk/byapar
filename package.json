@@ -8,7 +8,10 @@
     "dev:admin": "pnpm --filter @byapar/admin dev",
     "dev:mobile": "pnpm --filter @byapar/mobile start",
     "build": "pnpm --filter @byapar/web build",
-    "build:admin": "pnpm --filter @byapar/admin build"
+    "build:admin": "pnpm --filter @byapar/admin build",
+    "deploy:web": "npx wrangler deploy --config apps/web/wrangler.toml",
+    "deploy:admin": "npx wrangler deploy --config apps/admin/wrangler.toml",
+    "deploy:shortlinks": "pnpm --filter @byapar/edge-shortlinks deploy"
   },
   "pnpm": {
     "overrides": {

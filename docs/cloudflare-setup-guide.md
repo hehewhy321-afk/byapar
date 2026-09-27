@@ -48,18 +48,27 @@ Both `apps/web` and `apps/admin` are optimized for Cloudflare Pages and Cloudfla
 
 Turnstile protects login and signup endpoints from automated credential stuffing and bot spam without frustrating users with captcha image puzzles.
 
-### A. Generating Turnstile Keys
+### A. Generating Turnstile Keys (Works for All Sites)
 1. In Cloudflare Dashboard, go to **Turnstile** in the left sidebar.
 2. Click **Add Widget**:
    - **Widget Name:** `Byapar Auth Shield`
-   - **Domain:** Add `app.byapar.com`, `admin.byapar.com`, and `localhost` (for local development).
+   - **Domains:** Add all domains where your apps run:
+     - `localhost` (for local development on any port)
+     - `127.0.0.1`
+     - `*.workers.dev` (covers any worker deploy e.g. `byapar-web.*.workers.dev`, `byapar-admin.*.workers.dev`)
+     - `*.pages.dev` (covers any Pages preview or branch deploy)
+     - `app.byapar.com` and `admin.byapar.com` (if you add custom domains later)
    - **Widget Mode:** `Managed` (Cloudflare automatically decides whether an invisible or interactive check is required).
-3. Copy the **Site Key** and **Secret Key**.
-4. In your `.env` (or Cloudflare Pages environment variables):
+3. Click **Create**.
+4. You will see two keys:
+   - **Site Key** (Public): Starts with `0x4AAAAAA...`
+   - **Secret Key** (Private): Used for backend validation if desired.
+5. In your Cloudflare Project Settings (**Workers & Pages > byapar-web / byapar-admin > Settings > Variables and Secrets**) and local `.env`:
    ```env
    VITE_CLOUDFLARE_TURNSTILE_SITE_KEY=0x4AAAAAA...your_site_key_here...
    ```
-> **Note:** During local development or if this variable is not set, Byapar automatically falls back to Cloudflare's official testing key (`1x00000000000000000000AA`), which always passes.
+> [!TIP]
+> **Zero-Config Test Mode:** If you do not set `VITE_CLOUDFLARE_TURNSTILE_SITE_KEY`, Byapar automatically uses Cloudflare's official testing site key (`1x00000000000000000000AA`), which always passes on any domain and localhost without needing a Cloudflare account.
 
 ---
 
@@ -129,18 +138,33 @@ database_id = "YOUR_D1_DATABASE_ID_HERE"
 ```
 
 ```bash
-# 4. Initialize the database schema
+# 4. Initialize the database schema on Cloudflare D1
 npx wrangler d1 execute byapar_shortlinks --remote --file=./schema.sql
 
 # 5. Deploy the worker to Cloudflare's edge
 npx wrangler deploy
 ```
 
-In Cloudflare Dashboard under **Workers & Pages > byapar-edge-shortlinks > Settings > Domains & Routes**, add a custom domain such as `pay.byapar.com`.
+Upon successful deploy, Wrangler outputs your free worker URL:
+```
+Uploaded byapar-edge-shortlinks
+Published byapar-edge-shortlinks triggers:
+  https://byapar-edge-shortlinks.<your-subdomain>.workers.dev
+```
+
+### 6. Connect Worker URL to Web App (No Custom Domain Needed)
+Copy that URL (e.g. `https://byapar-edge-shortlinks.<your-subdomain>.workers.dev`) and set:
+1. In Cloudflare Dashboard (**Workers & Pages > byapar-web > Settings > Variables and Secrets**):
+   - Add variable: `VITE_EDGE_SHORTLINK_URL` = `https://byapar-edge-shortlinks.<your-subdomain>.workers.dev`
+2. In local `.env` (`apps/web/.env`):
+   ```env
+   VITE_EDGE_SHORTLINK_URL=https://byapar-edge-shortlinks.<your-subdomain>.workers.dev
+   ```
+> Custom domains (like `pay.byapar.com`) are completely optional. The default `*.workers.dev` URL provides full edge speed, HTTPS certificates, shortlink redirection, and digital receipt rendering right out of the box.
 
 ---
 
-## 6. Cloudflare Cache Rules for R2 Receipts & Static Assets
+## 7. Cloudflare Cache Rules for R2 Receipts & Static Assets
 
 To ensure receipt images and thumbnails load instantly without repeating S3 API calls:
 1. In Cloudflare Dashboard, go to **Caching > Cache Rules > Create rule**.
