@@ -11,7 +11,7 @@
     "build:admin": "pnpm --filter @byapar/admin build",
     "deploy:web": "npx wrangler deploy --config apps/web/wrangler.toml",
     "deploy:admin": "npx wrangler deploy --config apps/admin/wrangler.toml",
-    "deploy:shortlinks": "pnpm --filter @byapar/edge-shortlinks deploy"
+    "deploy:shortlinks": "npx wrangler deploy --config apps/edge-shortlinks/wrangler.toml"
   },
   "pnpm": {
     "overrides": {

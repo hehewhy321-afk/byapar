@@ -26,6 +26,7 @@ function generateSlug(length = 7): string {
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+    const db = env.DB || (env as any).byapar_shortlinks;
 
     // Handle CORS Preflight
     if (request.method === 'OPTIONS') {
@@ -47,7 +48,7 @@ export default {
         const now = Date.now();
         const itemsJson = JSON.stringify(body.items || []);
 
-        await env.DB.prepare(`
+        await db.prepare(`
           INSERT INTO short_links (
             slug, business_id, business_name, business_phone, business_pan, business_address,
             customer_name, customer_phone, invoice_id, bill_number, items_json,
@@ -108,7 +109,7 @@ export default {
         return new Response('Not Found', { status: 404 });
       }
 
-      const row = await env.DB.prepare(
+      const row = await db.prepare(
         'SELECT * FROM short_links WHERE slug = ?'
       ).bind(slug).first<any>();
 
@@ -124,7 +125,7 @@ export default {
 
       // Background click counter increment (Zero latency impact to user)
       ctx.waitUntil(
-        env.DB.prepare('UPDATE short_links SET click_count = click_count + 1 WHERE slug = ?')
+        db.prepare('UPDATE short_links SET click_count = click_count + 1 WHERE slug = ?')
           .bind(slug)
           .run()
           .catch((e) => console.warn('Failed to increment click count:', e))
@@ -169,7 +170,7 @@ export default {
     // 3. GET /r/:slug - Instant 302 Redirect to Web App
     if (request.method === 'GET' && url.pathname.startsWith('/r/')) {
       const slug = url.pathname.slice(3).trim();
-      const row = await env.DB.prepare(
+      const row = await db.prepare(
         'SELECT invoice_id, business_id FROM short_links WHERE slug = ?'
       ).bind(slug).first<any>();
 
@@ -184,7 +185,7 @@ export default {
     // 4. GET /api/stats/:slug - Click analytics
     if (request.method === 'GET' && url.pathname.startsWith('/api/stats/')) {
       const slug = url.pathname.slice(11).trim();
-      const row = await env.DB.prepare(
+      const row = await db.prepare(
         'SELECT slug, click_count, created_at, grand_total FROM short_links WHERE slug = ?'
       ).bind(slug).first<any>();
 

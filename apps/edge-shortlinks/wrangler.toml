@@ -7,7 +7,7 @@ compatibility_flags = ["nodejs_compat"]
 [[d1_databases]]
 binding = "DB"
 database_name = "byapar_shortlinks"
-database_id = "local-byapar-shortlinks-id"
+database_id = "be6235ea-e21e-4524-b046-e6c40b7693a3"
 
 [vars]
 ENVIRONMENT = "production"
