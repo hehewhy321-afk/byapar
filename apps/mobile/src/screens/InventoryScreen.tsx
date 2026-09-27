@@ -6,6 +6,7 @@ import {
   FlatList,
   TextInput,
   Alert,
+  RefreshControl,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { Theme } from '../theme';
@@ -17,8 +18,20 @@ import { FadeInView } from '../components/common/FadeInView';
 import { EmptyState } from '../components/common/EmptyState';
 
 export const InventoryScreen: React.FC = () => {
-  const { products, addProduct, editProduct, deleteProduct, theme, themeMode } = useApp();
+  const { products, addProduct, editProduct, deleteProduct, theme, themeMode, refreshData } = useApp();
   const styles = useMemo(() => createStyles(theme, themeMode), [theme, themeMode]);
+
+  const [refreshing, setRefreshing] = useState(false);
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refreshData();
+    } catch (e) {
+      console.warn('[InventoryScreen] Refresh error:', e);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const [search, setSearch] = useState('');
   const [modalVisible, setModalVisible] = useState(false);
@@ -131,6 +144,14 @@ export const InventoryScreen: React.FC = () => {
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={theme.colors.primary}
+            colors={[theme.colors.primary]}
+          />
+        }
         renderItem={({ item, index }: { item: Product; index: number }) => {
           const isLow = item.stock <= 10;
           return (

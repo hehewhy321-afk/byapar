@@ -59,6 +59,9 @@ apps/mobile/android/default/
 *.aab
 *.ap_
 *.dex
+apps/mobile/android/app/src/main/assets/fonts/
+**/android/app/src/main/assets/fonts/
+*.ttf
 
 # --- iOS Native ---
 apps/mobile/ios/Pods/

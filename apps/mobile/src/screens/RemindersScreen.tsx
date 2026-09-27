@@ -9,6 +9,7 @@ import {
   Modal,
   Alert,
   ScrollView,
+  RefreshControl,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { Theme } from '../theme';
@@ -27,7 +28,20 @@ export const RemindersScreen: React.FC = () => {
     theme,
     themeMode,
     language,
+    refreshData,
   } = useApp();
+
+  const [refreshing, setRefreshing] = useState(false);
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refreshData();
+    } catch (e) {
+      console.warn('[RemindersScreen] Refresh error:', e);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const styles = useMemo(() => createStyles(theme, themeMode), [theme, themeMode]);
   const isDark = themeMode === 'dark';
@@ -205,6 +219,14 @@ export const RemindersScreen: React.FC = () => {
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={theme.colors.primary}
+            colors={[theme.colors.primary]}
+          />
+        }
         renderItem={({ item, index }) => {
           const isDone = item.status === 'completed';
           return (

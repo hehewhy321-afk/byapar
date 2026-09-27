@@ -8,6 +8,7 @@ import {
   Modal,
   TextInput,
   Alert,
+  RefreshControl,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useApp } from '../context/AppContext';
@@ -22,7 +23,19 @@ import { SubscriptionModal } from '../components/SubscriptionModal';
 import { checkMobileStaffLimit } from '../services/planLimits';
 
 export const StaffScreen: React.FC = () => {
-  const { staffList, addStaffMember, updateStaffMember, deleteStaffMember, theme, activeBizId } = useApp();
+  const { staffList, addStaffMember, updateStaffMember, deleteStaffMember, theme, activeBizId, refreshData } = useApp();
+
+  const [refreshing, setRefreshing] = useState(false);
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refreshData();
+    } catch (e) {
+      console.warn('[StaffScreen] Refresh error:', e);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const [search, setSearch] = useState('');
   const [modalVisible, setModalVisible] = useState(false);
@@ -195,7 +208,18 @@ export const StaffScreen: React.FC = () => {
       </View>
 
       {/* Staff List */}
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={theme.colors.primary}
+            colors={[theme.colors.primary]}
+          />
+        }
+      >
         {filteredStaff.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Feather name="user-x" size={40} color={theme.colors.textMuted} />

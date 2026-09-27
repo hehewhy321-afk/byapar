@@ -74,6 +74,7 @@ export interface ExpenseRecord {
   recipientName?: string;
   note?: string;
   receiptUrl?: string;
+  primaryImageId?: string;
   createdAt: string;
   updatedAt?: string;
 }
@@ -87,6 +88,7 @@ export interface IncomeRecord {
   payerName?: string;
   note?: string;
   receiptUrl?: string;
+  primaryImageId?: string;
   createdAt: string;
   updatedAt?: string;
 }
@@ -2830,10 +2832,10 @@ export async function checkoutInvoice(params: {
   return newInvoice;
 }
 
-export async function addExpense(expense: Omit<ExpenseRecord, 'id' | 'createdAt'>) {
+export async function addExpense(expense: Omit<ExpenseRecord, 'id' | 'createdAt'> & { id?: string }) {
   const newExp: ExpenseRecord = {
     ...expense,
-    id: crypto.randomUUID(),
+    id: expense.id || crypto.randomUUID(),
     createdAt: new Date().toISOString(),
   };
   setExpenses((draft) => {
@@ -2847,19 +2849,21 @@ export async function addExpense(expense: Omit<ExpenseRecord, 'id' | 'createdAt'
     category: newExp.category,
     amount: newExp.amount,
     payment_mode: newExp.paymentMode,
-    recipient_name: newExp.recipientName,
-    notes: newExp.note,
+    recipient_name: newExp.recipientName || null,
+    notes: newExp.note || null,
     date_ad: newExp.date,
     date_bs: adToBs(new Date(newExp.date)).formatted,
+    receipt_url: newExp.primaryImageId ? null : (newExp.receiptUrl || null),
+    primary_image_id: newExp.primaryImageId || null,
   });
 
   return newExp;
 }
 
-export async function addIncome(income: Omit<IncomeRecord, 'id' | 'createdAt'>) {
+export async function addIncome(income: Omit<IncomeRecord, 'id' | 'createdAt'> & { id?: string }) {
   const newInc: IncomeRecord = {
     ...income,
-    id: crypto.randomUUID(),
+    id: income.id || crypto.randomUUID(),
     createdAt: new Date().toISOString(),
   };
   setIncomes((draft) => {
@@ -2873,10 +2877,12 @@ export async function addIncome(income: Omit<IncomeRecord, 'id' | 'createdAt'>) 
     category: newInc.source,
     amount: newInc.amount,
     payment_mode: newInc.paymentMode,
-    payer_name: newInc.payerName,
-    notes: newInc.note,
+    payer_name: newInc.payerName || null,
+    notes: newInc.note || null,
     date_ad: newInc.date,
     date_bs: adToBs(new Date(newInc.date)).formatted,
+    receipt_url: newInc.primaryImageId ? null : (newInc.receiptUrl || null),
+    primary_image_id: newInc.primaryImageId || null,
   });
 
   return newInc;
@@ -2918,6 +2924,7 @@ export async function updateExpense(id: string, updates: Partial<ExpenseRecord>)
   if (updates.recipientName !== undefined) payload.recipient_name = updates.recipientName;
   if (updates.note !== undefined) payload.notes = updates.note;
   if (updates.receiptUrl !== undefined) payload.receipt_url = updates.receiptUrl;
+  if (updates.primaryImageId !== undefined) payload.primary_image_id = updates.primaryImageId;
   if (updates.date !== undefined) {
     payload.date_ad = updates.date;
     payload.date_bs = adToBs(new Date(updates.date)).formatted;
@@ -2942,6 +2949,7 @@ export async function updateIncome(id: string, updates: Partial<IncomeRecord>) {
   if (updates.payerName !== undefined) payload.payer_name = updates.payerName;
   if (updates.note !== undefined) payload.notes = updates.note;
   if (updates.receiptUrl !== undefined) payload.receipt_url = updates.receiptUrl;
+  if (updates.primaryImageId !== undefined) payload.primary_image_id = updates.primaryImageId;
   if (updates.date !== undefined) {
     payload.date_ad = updates.date;
     payload.date_bs = adToBs(new Date(updates.date)).formatted;

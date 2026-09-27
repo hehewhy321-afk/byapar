@@ -9,6 +9,7 @@ const MainContent: React.FC = () => {
   const { theme, themeMode, setActiveTab } = useApp();
 
   useEffect(() => {
+
     // Request Android 13+ (POST_NOTIFICATIONS) runtime permission on startup
     requestNotificationPermission();
 

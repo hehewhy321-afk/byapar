@@ -10,6 +10,7 @@ import {
   Platform,
   Image,
   Share,
+  RefreshControl,
 } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useApp } from '../context/AppContext';
@@ -40,7 +41,20 @@ type UtilityTab =
   | 'cash';
 
 export const UtilitiesScreen: React.FC = () => {
-  const { theme, themeMode, language } = useApp();
+  const { theme, themeMode, language, refreshData } = useApp();
+
+  const [refreshing, setRefreshing] = useState(false);
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refreshData();
+    } catch (e) {
+      console.warn('[UtilitiesScreen] Refresh error:', e);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   const isDark = themeMode === 'dark';
   const ne = language === 'ne';
   const styles = useMemo(() => createStyles(theme, themeMode), [theme, themeMode]);
@@ -439,7 +453,18 @@ export const UtilitiesScreen: React.FC = () => {
       </View>
 
       {/* Main Tool Content Container */}
-      <ScrollView contentContainerStyle={styles.contentScroll} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.contentScroll}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={theme.colors.primary}
+            colors={[theme.colors.primary]}
+          />
+        }
+      >
         {/* 1. UNITS CONVERTER */}
         {activeTab === 'units' && (
           <FadeInView style={styles.card}>

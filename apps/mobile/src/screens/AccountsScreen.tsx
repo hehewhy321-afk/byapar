@@ -8,6 +8,7 @@ import {
   Modal,
   TextInput,
   Alert,
+  RefreshControl,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useApp } from '../context/AppContext';
@@ -26,7 +27,20 @@ export const AccountsScreen: React.FC = () => {
     transferMoney,
     theme,
     themeMode,
+    refreshData,
   } = useApp();
+
+  const [refreshing, setRefreshing] = useState(false);
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refreshData();
+    } catch (e) {
+      console.warn('[AccountsScreen] Refresh error:', e);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const styles = useMemo(() => createStyles(theme, themeMode), [theme, themeMode]);
 
@@ -224,7 +238,18 @@ export const AccountsScreen: React.FC = () => {
       </View>
 
       {activeTab === 'accounts' ? (
-        <ScrollView contentContainerStyle={styles.scrollList} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={styles.scrollList}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor={theme.colors.primary}
+              colors={[theme.colors.primary]}
+            />
+          }
+        >
           {accounts.map((acc) => (
             <View key={acc.id} style={styles.accountCard}>
               <View style={styles.accountHeader}>
@@ -358,7 +383,18 @@ export const AccountsScreen: React.FC = () => {
           </ScrollView>
 
           {/* Transactions List */}
-          <ScrollView contentContainerStyle={styles.txList} showsVerticalScrollIndicator={false}>
+          <ScrollView
+            contentContainerStyle={styles.txList}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={handleRefresh}
+                tintColor={theme.colors.primary}
+                colors={[theme.colors.primary]}
+              />
+            }
+          >
             {filteredTransactions.length === 0 ? (
               <View style={styles.emptyState}>
                 <Feather name="inbox" size={40} color={theme.colors.textMuted} />

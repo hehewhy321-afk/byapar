@@ -10,6 +10,7 @@ import {
   Linking,
   Image,
   Modal,
+  RefreshControl,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { Theme } from '../theme';
@@ -40,7 +41,20 @@ export const LedgerScreen: React.FC = () => {
     theme,
     themeMode,
     language,
+    refreshData,
   } = useApp();
+
+  const [refreshing, setRefreshing] = useState(false);
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refreshData();
+    } catch (e) {
+      console.warn('[LedgerScreen] Refresh error:', e);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const ne = language === 'ne';
   const styles = useMemo(() => createStyles(theme, themeMode), [theme, themeMode]);
@@ -320,6 +334,14 @@ export const LedgerScreen: React.FC = () => {
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.timelineList}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor={theme.colors.primary}
+              colors={[theme.colors.primary]}
+            />
+          }
           renderItem={({ item }) => (
             <View style={styles.timelineItem}>
               <View
@@ -529,6 +551,14 @@ export const LedgerScreen: React.FC = () => {
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={theme.colors.primary}
+            colors={[theme.colors.primary]}
+          />
+        }
         renderItem={({ item, index }: { item: Party; index: number }) => {
           const isReceivable = item.balance >= 0;
           return (

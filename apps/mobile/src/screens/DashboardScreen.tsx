@@ -201,6 +201,7 @@ export const DashboardScreen: React.FC = () => {
     user,
     language,
     t,
+    refreshData,
   } = useApp();
 
   const [refreshing, setRefreshing] = useState(false);
@@ -351,11 +352,15 @@ export const DashboardScreen: React.FC = () => {
     });
   }, [parties, contactSearchQuery, contactFilterType]);
 
-  const onRefresh = () => {
+  const onRefresh = async () => {
     setRefreshing(true);
-    setTimeout(() => {
+    try {
+      await refreshData();
+    } catch (e) {
+      console.warn('[DashboardScreen] Refresh error:', e);
+    } finally {
       setRefreshing(false);
-    }, 600);
+    }
   };
 
   // Financial Metrics Calculations

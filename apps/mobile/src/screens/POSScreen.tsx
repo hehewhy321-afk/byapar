@@ -6,6 +6,7 @@ import {
   TextInput,
   FlatList,
   ScrollView,
+  RefreshControl,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useApp } from '../context/AppContext';
@@ -31,7 +32,20 @@ export const POSScreen: React.FC = () => {
     setActiveInvoice,
     theme,
     themeMode,
+    refreshData,
   } = useApp();
+
+  const [refreshing, setRefreshing] = useState(false);
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refreshData();
+    } catch (e) {
+      console.warn('[POSScreen] Refresh error:', e);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const dynamicCategories = useMemo(() => {
     const catSet = new Set<string>();
@@ -149,6 +163,14 @@ export const POSScreen: React.FC = () => {
         columnWrapperStyle={styles.rowWrapper}
         contentContainerStyle={[styles.listContent, cart.length > 0 && styles.listContentWithCart]}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={theme.colors.primary}
+            colors={[theme.colors.primary]}
+          />
+        }
         renderItem={({ item, index }: { item: Product; index: number }) => {
           const inCartItem = cart.find((c) => c.id === item.id);
           const isLowStock = item.stock <= 10;

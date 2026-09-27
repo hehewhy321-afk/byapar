@@ -10,6 +10,7 @@ import {
   Alert,
   ScrollView,
   Share,
+  RefreshControl,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { Theme } from '../theme';
@@ -79,7 +80,19 @@ const COLORS: { key: string; label: string; bgLight: string; bgDark: string; bor
 ];
 
 export const NotesScreen: React.FC = () => {
-  const { notes, addNote, editNote, deleteNote, togglePinNote, theme, themeMode, language } = useApp();
+  const { notes, addNote, editNote, deleteNote, togglePinNote, theme, themeMode, language, refreshData } = useApp();
+
+  const [refreshing, setRefreshing] = useState(false);
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refreshData();
+    } catch (e) {
+      console.warn('[NotesScreen] Refresh error:', e);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const styles = useMemo(() => createStyles(theme, themeMode), [theme, themeMode]);
   const isDark = themeMode === 'dark';
@@ -333,6 +346,15 @@ export const NotesScreen: React.FC = () => {
         keyExtractor={(item) => item.id}
         renderItem={renderNoteCard}
         contentContainerStyle={styles.listContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={theme.colors.primary}
+            colors={[theme.colors.primary]}
+          />
+        }
         ListEmptyComponent={
           <EmptyState
             icon="book-open"

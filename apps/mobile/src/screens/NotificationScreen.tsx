@@ -22,7 +22,7 @@ import { analytics } from '../services/analyticsService';
 import type { NotificationItem } from '../types';
 
 export const NotificationScreen: React.FC = () => {
-  const { activeBizId, store, setActiveTab, theme } = useApp();
+  const { activeBizId, store, setActiveTab, theme, refreshData } = useApp();
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [activeFilter, setActiveFilter] = useState<'all' | 'debtor_reminder' | 'supplier_payable' | 'low_stock' | 'system'>('all');
   const [refreshing, setRefreshing] = useState(false);
@@ -42,8 +42,16 @@ export const NotificationScreen: React.FC = () => {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await initMobileNotifications(currentBizId);
-    setRefreshing(false);
+    try {
+      await Promise.allSettled([
+        initMobileNotifications(currentBizId),
+        refreshData(),
+      ]);
+    } catch (e) {
+      console.warn('[NotificationScreen] Refresh error:', e);
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const filteredList = useMemo(() => {

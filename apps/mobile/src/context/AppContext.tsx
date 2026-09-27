@@ -87,6 +87,7 @@ interface AppContextType {
   activeBizId: string;
   categories: CategoryItem[];
   refreshFromCloud: () => Promise<void>;
+  refreshData: () => Promise<void>;
   login: (email: string, pass: string) => Promise<{ data?: any; error?: any }>;
   signUp: (email: string, pass: string, storeName: string, phone: string, businessType?: BusinessType) => Promise<{ data?: any; error?: any }>;
   logout: () => Promise<void>;
@@ -440,7 +441,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (prev.length > 0 && prev[prev.length - 1] === tab) return prev;
       return [...prev, tab];
     });
-    storage.set('active_tab', tab).catch(() => {});
   };
 
   const navigateBack = (): boolean => {
@@ -450,13 +450,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const prevTab = nextHistory[nextHistory.length - 1];
       setTabHistory(nextHistory);
       setActiveTabState(prevTab);
-      storage.set('active_tab', prevTab).catch(() => {});
       return true;
     }
     if (activeTab !== 'dashboard') {
       setActiveTabState('dashboard');
       setTabHistory(['dashboard']);
-      storage.set('active_tab', 'dashboard').catch(() => {});
       return true;
     }
     return false;
@@ -873,6 +871,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           date: e.date_ad || e.created_at?.split('T')[0] || new Date().toISOString().split('T')[0],
           recipientName: e.recipient_name || undefined,
           note: e.notes || undefined,
+          receiptUrl: e.receipt_url || undefined,
+          primaryImageId: e.primary_image_id || undefined,
           createdAt: e.created_at,
         }));
         setExpenses(mappedExpenses);
@@ -895,6 +895,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           date: inc.date_ad || inc.created_at?.split('T')[0] || new Date().toISOString().split('T')[0],
           payerName: inc.payer_name || undefined,
           note: inc.notes || undefined,
+          receiptUrl: inc.receipt_url || undefined,
+          primaryImageId: inc.primary_image_id || undefined,
           createdAt: inc.created_at,
         }));
         setIncomes(mappedIncomes);
@@ -1116,40 +1118,46 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   useEffect(() => {
     (async () => {
-      // 1. Read cached local state for instant start
-      const storedOnboarded = await storage.get<boolean>('onboarded', true);
-      const storedTheme = await storage.get<ThemeMode>('theme_mode', 'dark');
-      const storedLang = await storage.get<Language>('app_language', 'ne');
-      const storedStore = await storage.get<StoreProfile>('store', INITIAL_STORE);
-      const storedBizId = await storage.get<string>('active_biz_id', DEFAULT_BIZ_ID);
-      const storedStores = await storage.get<UserStoreItem[]>('user_stores', []);
-      const storedCategories = await storage.get<CategoryItem[]>('categories', []);
-      const storedProducts = await storage.get<Product[]>('products', []);
-      const storedParties = await storage.get<Party[]>('parties', []);
-      const storedLedger = await storage.get<LedgerEntry[]>('ledger', []);
-      const storedBills = await storage.get<BillImage[]>('bills', []);
-      const storedInvoices = await storage.get<Invoice[]>('invoices', []);
-      const storedAccounts = await storage.get<BankAccount[]>('accounts', []);
-      const storedTxs = await storage.get<AccountTransaction[]>('account_txs', []);
-      const storedQuotations = await storage.get<Quotation[]>('quotations', []);
-      const storedReturns = await storage.get<SalesReturn[]>('sales_returns', []);
-      const storedPBills = await storage.get<PurchaseBill[]>('purchase_bills', []);
-      const storedPReturns = await storage.get<PurchaseReturn[]>('purchase_returns', []);
-      const storedPayIn = await storage.get<PaymentRecord[]>('pay_in', []);
-      const storedPayOut = await storage.get<PaymentRecord[]>('pay_out', []);
-      const storedStaff = await storage.get<StaffMember[]>('staff_list', []);
-      const storedExpenses = await storage.get<ExpenseRecord[]>('expenses', []);
-      const storedIncomes = await storage.get<IncomeRecord[]>('incomes', []);
-      const storedReminders = await storage.get<ReminderItem[]>('reminders', []);
-      const storedNotes = await storage.get<NoteItem[]>('notes', []);
-      const storedCustomExpCats = await storage.get<string[]>('custom_expense_cats', []);
-      const storedCustomIncCats = await storage.get<string[]>('custom_income_cats', []);
+      // 1. Read cached local state in a single batch for instant startup (<50ms)
+      const data = await storage.multiGet([
+        'onboarded', 'theme_mode', 'app_language', 'store', 'active_biz_id',
+        'user_stores', 'categories', 'products', 'parties', 'ledger', 'bills',
+        'invoices', 'accounts', 'account_txs', 'quotations', 'sales_returns',
+        'purchase_bills', 'purchase_returns', 'pay_in', 'pay_out', 'staff_list',
+        'expenses', 'incomes', 'reminders', 'notes', 'custom_expense_cats', 'custom_income_cats'
+      ]);
 
-      const storedActiveTab = await storage.get<ActiveTab>('active_tab', 'dashboard');
-      if (storedActiveTab && storedActiveTab !== 'dashboard') {
-        setActiveTabState(storedActiveTab);
-        setTabHistory(['dashboard', storedActiveTab]);
-      }
+      const storedOnboarded = data.onboarded ?? true;
+      const storedTheme = data.theme_mode ?? 'light';
+      const storedLang = data.app_language ?? 'en';
+      const storedStore = data.store ?? INITIAL_STORE;
+      const storedBizId = data.active_biz_id ?? DEFAULT_BIZ_ID;
+      const storedStores = data.user_stores ?? [];
+      const storedCategories = data.categories ?? [];
+      const storedProducts = data.products ?? [];
+      const storedParties = data.parties ?? [];
+      const storedLedger = data.ledger ?? [];
+      const storedBills = data.bills ?? [];
+      const storedInvoices = data.invoices ?? [];
+      const storedAccounts = data.accounts ?? [];
+      const storedTxs = data.account_txs ?? [];
+      const storedQuotations = data.quotations ?? [];
+      const storedReturns = data.sales_returns ?? [];
+      const storedPBills = data.purchase_bills ?? [];
+      const storedPReturns = data.purchase_returns ?? [];
+      const storedPayIn = data.pay_in ?? [];
+      const storedPayOut = data.pay_out ?? [];
+      const storedStaff = data.staff_list ?? [];
+      const storedExpenses = data.expenses ?? [];
+      const storedIncomes = data.incomes ?? [];
+      const storedReminders = data.reminders ?? [];
+      const storedNotes = data.notes ?? [];
+      const storedCustomExpCats = data.custom_expense_cats ?? [];
+      const storedCustomIncCats = data.custom_income_cats ?? [];
+
+      // Always reset to Home Screen (dashboard) on fresh launch
+      setActiveTabState('dashboard');
+      setTabHistory(['dashboard']);
 
       setIsOnboarded(storedOnboarded);
       setThemeModeState(storedTheme === 'dark' ? 'dark' : 'light');
@@ -1183,16 +1191,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setStaffList(storedStaff);
       }
 
-      // Check current auth session
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (sessionData?.session?.user) {
-        setUser(sessionData.session.user);
-        await resolveUserBusiness(sessionData.session.user);
-      } else {
-        await hydrateFromCloud(storedBizId);
-      }
-
+      // App is ready immediately from local cache!
       setIsReady(true);
+
+      // Non-blocking background sync: session check & cloud hydration
+      (async () => {
+        try {
+          const { data: sessionData } = await supabase.auth.getSession();
+          if (sessionData?.session?.user) {
+            setUser(sessionData.session.user);
+            await resolveUserBusiness(sessionData.session.user);
+          } else {
+            await hydrateFromCloud(storedBizId);
+          }
+        } catch (e) {
+          console.warn('Background sync on startup error:', e);
+        }
+      })();
 
       // Auto-check for updates silently on launch
       updateService.checkForUpdates(true).catch(() => {});
@@ -1440,9 +1455,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               date: e.date_ad || e.created_at?.split('T')[0] || new Date().toISOString().split('T')[0],
               recipientName: e.recipient_name || undefined,
               note: e.notes || undefined,
+              receiptUrl: e.receipt_url || undefined,
+              primaryImageId: e.primary_image_id || undefined,
               createdAt: e.created_at,
             };
             setExpenses((prev) => (prev.some((x) => x.id === newE.id) ? prev : [newE, ...prev]));
+          } else if (payload.eventType === 'UPDATE') {
+            const e = payload.new as any;
+            setExpenses((prev) =>
+              prev.map((x) =>
+                x.id === e.id
+                  ? {
+                      ...x,
+                      category: e.category || x.category,
+                      amount: Number(e.amount) || x.amount,
+                      paymentMode: e.payment_mode || x.paymentMode,
+                      date: e.date_ad || x.date,
+                      recipientName: e.recipient_name !== undefined ? e.recipient_name : x.recipientName,
+                      note: e.notes !== undefined ? e.notes : x.note,
+                      receiptUrl: e.receipt_url !== undefined ? e.receipt_url : x.receiptUrl,
+                      primaryImageId: e.primary_image_id !== undefined ? e.primary_image_id : x.primaryImageId,
+                    }
+                  : x
+              )
+            );
           } else if (payload.eventType === 'DELETE') {
             setExpenses((prev) => prev.filter((x) => x.id !== (payload.old as any).id));
           }
@@ -1462,9 +1498,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               date: inc.date_ad || inc.created_at?.split('T')[0] || new Date().toISOString().split('T')[0],
               payerName: inc.payer_name || undefined,
               note: inc.notes || undefined,
+              receiptUrl: inc.receipt_url || undefined,
+              primaryImageId: inc.primary_image_id || undefined,
               createdAt: inc.created_at,
             };
             setIncomes((prev) => (prev.some((x) => x.id === newI.id) ? prev : [newI, ...prev]));
+          } else if (payload.eventType === 'UPDATE') {
+            const inc = payload.new as any;
+            setIncomes((prev) =>
+              prev.map((x) =>
+                x.id === inc.id
+                  ? {
+                      ...x,
+                      category: inc.category || x.category,
+                      amount: Number(inc.amount) || x.amount,
+                      paymentMode: inc.payment_mode || x.paymentMode,
+                      date: inc.date_ad || x.date,
+                      payerName: inc.payer_name !== undefined ? inc.payer_name : x.payerName,
+                      note: inc.notes !== undefined ? inc.notes : x.note,
+                      receiptUrl: inc.receipt_url !== undefined ? inc.receipt_url : x.receiptUrl,
+                      primaryImageId: inc.primary_image_id !== undefined ? inc.primary_image_id : x.primaryImageId,
+                    }
+                  : x
+              )
+            );
           } else if (payload.eventType === 'DELETE') {
             setIncomes((prev) => prev.filter((x) => x.id !== (payload.old as any).id));
           }
@@ -2575,45 +2632,57 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await supabase.from('staff').delete().eq('id', id);
   };
 
-  // Expenses & Income Handlers
+  // Expenses & Income Handlers (Optimistic 0ms UI with background cloud sync)
   const addExpense = async (exp: Omit<ExpenseRecord, 'id'>): Promise<ExpenseRecord> => {
     const newExp: ExpenseRecord = {
       ...exp,
       id: generateUUID(),
       createdAt: new Date().toISOString(),
     };
-    const updated = [newExp, ...expenses];
-    setExpenses(updated);
-    await storage.set('expenses', updated);
+    setExpenses((prev) => {
+      const next = [newExp, ...prev.filter((e) => e.id !== newExp.id)];
+      storage.set('expenses', next).catch(console.warn);
+      return next;
+    });
 
-    try {
-      const bs = adToBs(new Date(newExp.date));
-      await supabase.from('expenses').insert({
-        id: newExp.id,
-        business_id: activeBizId,
-        category: newExp.category,
-        amount: newExp.amount,
-        payment_mode: newExp.paymentMode,
-        recipient_name: newExp.recipientName || null,
-        notes: newExp.note || null,
-        date_ad: newExp.date,
-        date_bs: bs.formatted,
-      });
-    } catch (err) {
-      console.warn('Failed to insert expense to cloud:', err);
-    }
+    // Background cloud sync
+    (async () => {
+      try {
+        const bs = adToBs(new Date(newExp.date));
+        await supabase.from('expenses').insert({
+          id: newExp.id,
+          business_id: activeBizId,
+          category: newExp.category,
+          amount: newExp.amount,
+          payment_mode: newExp.paymentMode,
+          recipient_name: newExp.recipientName || null,
+          notes: newExp.note || null,
+          date_ad: newExp.date,
+          date_bs: bs.formatted,
+          receipt_url: newExp.primaryImageId ? null : (newExp.receiptUrl || null),
+          primary_image_id: newExp.primaryImageId || null,
+        });
+      } catch (err) {
+        console.warn('Failed to insert expense to cloud:', err);
+      }
+    })();
+
     return newExp;
   };
 
   const deleteExpense = async (id: string): Promise<void> => {
-    const updated = expenses.filter((e) => e.id !== id);
-    setExpenses(updated);
-    await storage.set('expenses', updated);
-    try {
-      await supabase.from('expenses').delete().eq('id', id);
-    } catch (err) {
-      console.warn('Failed to delete expense from cloud:', err);
-    }
+    setExpenses((prev) => {
+      const next = prev.filter((e) => e.id !== id);
+      storage.set('expenses', next).catch(console.warn);
+      return next;
+    });
+    (async () => {
+      try {
+        await supabase.from('expenses').delete().eq('id', id);
+      } catch (err) {
+        console.warn('Failed to delete expense from cloud:', err);
+      }
+    })();
   };
 
   const addIncome = async (inc: Omit<IncomeRecord, 'id'>): Promise<IncomeRecord> => {
@@ -2622,84 +2691,106 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       id: generateUUID(),
       createdAt: new Date().toISOString(),
     };
-    const updated = [newInc, ...incomes];
-    setIncomes(updated);
-    await storage.set('incomes', updated);
+    setIncomes((prev) => {
+      const next = [newInc, ...prev.filter((i) => i.id !== newInc.id)];
+      storage.set('incomes', next).catch(console.warn);
+      return next;
+    });
 
-    try {
-      const bs = adToBs(new Date(newInc.date));
-      await supabase.from('incomes').insert({
-        id: newInc.id,
-        business_id: activeBizId,
-        category: newInc.category,
-        amount: newInc.amount,
-        payment_mode: newInc.paymentMode,
-        payer_name: newInc.payerName || null,
-        notes: newInc.note || null,
-        date_ad: newInc.date,
-        date_bs: bs.formatted,
-      });
-    } catch (err) {
-      console.warn('Failed to insert income to cloud:', err);
-    }
+    // Background cloud sync
+    (async () => {
+      try {
+        const bs = adToBs(new Date(newInc.date));
+        await supabase.from('incomes').insert({
+          id: newInc.id,
+          business_id: activeBizId,
+          category: newInc.category,
+          amount: newInc.amount,
+          payment_mode: newInc.paymentMode,
+          payer_name: newInc.payerName || null,
+          notes: newInc.note || null,
+          date_ad: newInc.date,
+          date_bs: bs.formatted,
+          receipt_url: newInc.primaryImageId ? null : (newInc.receiptUrl || null),
+          primary_image_id: newInc.primaryImageId || null,
+        });
+      } catch (err) {
+        console.warn('Failed to insert income to cloud:', err);
+      }
+    })();
+
     return newInc;
   };
 
   const deleteIncome = async (id: string): Promise<void> => {
-    const updated = incomes.filter((i) => i.id !== id);
-    setIncomes(updated);
-    await storage.set('incomes', updated);
-    try {
-      await supabase.from('incomes').delete().eq('id', id);
-    } catch (err) {
-      console.warn('Failed to delete income from cloud:', err);
-    }
+    setIncomes((prev) => {
+      const next = prev.filter((i) => i.id !== id);
+      storage.set('incomes', next).catch(console.warn);
+      return next;
+    });
+    (async () => {
+      try {
+        await supabase.from('incomes').delete().eq('id', id);
+      } catch (err) {
+        console.warn('Failed to delete income from cloud:', err);
+      }
+    })();
   };
 
   const editExpense = async (id: string, updates: Partial<ExpenseRecord>): Promise<void> => {
-    const updated = expenses.map((e) => (e.id === id ? { ...e, ...updates, updatedAt: new Date().toISOString() } : e));
-    setExpenses(updated);
-    await storage.set('expenses', updated);
+    setExpenses((prev) => {
+      const next = prev.map((e) => (e.id === id ? { ...e, ...updates, updatedAt: new Date().toISOString() } : e));
+      storage.set('expenses', next).catch(console.warn);
+      return next;
+    });
 
-    try {
-      const payload: any = { updated_at: new Date().toISOString() };
-      if (updates.category !== undefined) payload.category = updates.category;
-      if (updates.amount !== undefined) payload.amount = updates.amount;
-      if (updates.paymentMode !== undefined) payload.payment_mode = updates.paymentMode;
-      if (updates.recipientName !== undefined) payload.recipient_name = updates.recipientName;
-      if (updates.note !== undefined) payload.notes = updates.note;
-      if (updates.receiptUrl !== undefined) payload.receipt_url = updates.receiptUrl;
-      if (updates.date !== undefined) {
-        payload.date_ad = updates.date;
-        payload.date_bs = adToBs(new Date(updates.date)).formatted;
+    (async () => {
+      try {
+        const payload: any = { updated_at: new Date().toISOString() };
+        if (updates.category !== undefined) payload.category = updates.category;
+        if (updates.amount !== undefined) payload.amount = updates.amount;
+        if (updates.paymentMode !== undefined) payload.payment_mode = updates.paymentMode;
+        if (updates.recipientName !== undefined) payload.recipient_name = updates.recipientName;
+        if (updates.note !== undefined) payload.notes = updates.note;
+        if (updates.receiptUrl !== undefined) payload.receipt_url = updates.receiptUrl;
+        if (updates.primaryImageId !== undefined) payload.primary_image_id = updates.primaryImageId;
+        if (updates.date !== undefined) {
+          payload.date_ad = updates.date;
+          payload.date_bs = adToBs(new Date(updates.date)).formatted;
+        }
+        await supabase.from('expenses').update(payload).eq('id', id);
+      } catch (err) {
+        console.warn('Failed to update expense in cloud:', err);
       }
-      await supabase.from('expenses').update(payload).eq('id', id);
-    } catch (err) {
-      console.warn('Failed to update expense in cloud:', err);
-    }
+    })();
   };
 
   const editIncome = async (id: string, updates: Partial<IncomeRecord>): Promise<void> => {
-    const updated = incomes.map((i) => (i.id === id ? { ...i, ...updates, updatedAt: new Date().toISOString() } : i));
-    setIncomes(updated);
-    await storage.set('incomes', updated);
+    setIncomes((prev) => {
+      const next = prev.map((i) => (i.id === id ? { ...i, ...updates, updatedAt: new Date().toISOString() } : i));
+      storage.set('incomes', next).catch(console.warn);
+      return next;
+    });
 
-    try {
-      const payload: any = { updated_at: new Date().toISOString() };
-      if (updates.category !== undefined) payload.category = updates.category;
-      if (updates.amount !== undefined) payload.amount = updates.amount;
-      if (updates.paymentMode !== undefined) payload.payment_mode = updates.paymentMode;
-      if (updates.payerName !== undefined) payload.payer_name = updates.payerName;
-      if (updates.note !== undefined) payload.notes = updates.note;
-      if (updates.receiptUrl !== undefined) payload.receipt_url = updates.receiptUrl;
-      if (updates.date !== undefined) {
-        payload.date_ad = updates.date;
-        payload.date_bs = adToBs(new Date(updates.date)).formatted;
+    (async () => {
+      try {
+        const payload: any = { updated_at: new Date().toISOString() };
+        if (updates.category !== undefined) payload.category = updates.category;
+        if (updates.amount !== undefined) payload.amount = updates.amount;
+        if (updates.paymentMode !== undefined) payload.payment_mode = updates.paymentMode;
+        if (updates.payerName !== undefined) payload.payer_name = updates.payerName;
+        if (updates.note !== undefined) payload.notes = updates.note;
+        if (updates.receiptUrl !== undefined) payload.receipt_url = updates.receiptUrl;
+        if (updates.primaryImageId !== undefined) payload.primary_image_id = updates.primaryImageId;
+        if (updates.date !== undefined) {
+          payload.date_ad = updates.date;
+          payload.date_bs = adToBs(new Date(updates.date)).formatted;
+        }
+        await supabase.from('incomes').update(payload).eq('id', id);
+      } catch (err) {
+        console.warn('Failed to update income in cloud:', err);
       }
-      await supabase.from('incomes').update(payload).eq('id', id);
-    } catch (err) {
-      console.warn('Failed to update income in cloud:', err);
-    }
+    })();
   };
 
   const addExpenseCategory = async (name: string): Promise<void> => {
@@ -2930,6 +3021,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         activeBizId,
         categories,
         refreshFromCloud,
+        refreshData: refreshFromCloud,
         login,
         signUp,
         logout,

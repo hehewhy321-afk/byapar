@@ -9,6 +9,7 @@ import {
   TextInput,
   Alert,
   Image,
+  RefreshControl,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -28,7 +29,20 @@ export const PurchaseHubScreen: React.FC = () => {
     createPaymentOut,
     theme,
     themeMode,
+    refreshData,
   } = useApp();
+
+  const [refreshing, setRefreshing] = useState(false);
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refreshData();
+    } catch (e) {
+      console.warn('[PurchaseHubScreen] Refresh error:', e);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const isDark = themeMode === 'dark';
 
@@ -380,6 +394,14 @@ export const PurchaseHubScreen: React.FC = () => {
       <ScrollView
         contentContainerStyle={styles.listContainer}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={theme.colors.primary}
+            colors={[theme.colors.primary]}
+          />
+        }
       >
         {/* 1. BILLS */}
         {activeSubTab === 'bills' && (

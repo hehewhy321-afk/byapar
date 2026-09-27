@@ -10,6 +10,10 @@ import {
   Modal,
   Linking,
   TouchableOpacity,
+  RefreshControl,
+  ScrollView,
+  ActivityIndicator,
+  SafeAreaView,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -20,6 +24,7 @@ import { BillCollectorModal } from '../components/bills/BillCollectorModal';
 import { BillImageViewer } from '../components/bills/BillImageViewer';
 import { SubscriptionModal } from '../components/SubscriptionModal';
 import { checkMobileBillUploadLimit } from '../services/planLimits';
+import { downloadBillImage } from '../services/imageDownloadService';
 import { AnimatedPressable } from '../components/common/AnimatedPressable';
 import { FadeInView } from '../components/common/FadeInView';
 import { EmptyState } from '../components/common/EmptyState';
@@ -27,13 +32,16 @@ import { EmptyState } from '../components/common/EmptyState';
 const CATEGORIES = ['All', 'Inventory', 'Utilities', 'Rent', 'Packaging', 'Logistics', 'Other'];
 
 export const BillArchiveScreen: React.FC = () => {
-  const { bills, addBill, deleteBill, theme, themeMode, activeBizId } = useApp();
+  const { bills, addBill, deleteBill, theme, themeMode, activeBizId, refreshData } = useApp();
   const styles = useMemo(() => createStyles(theme, themeMode), [theme, themeMode]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [isCollectorOpen, setIsCollectorOpen] = useState(false);
   const [collectorInitialImage, setCollectorInitialImage] = useState<string>('');
   const [previewBill, setPreviewBill] = useState<BillImage | null>(null);
+  const [fullScreenBill, setFullScreenBill] = useState<BillImage | null>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [showSubModal, setShowSubModal] = useState(false);
 
   const handleDirectCapture = async () => {
@@ -153,6 +161,33 @@ export const BillArchiveScreen: React.FC = () => {
     );
   };
 
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refreshData();
+    } catch (e) {
+      console.warn('[BillArchiveScreen] Refresh error:', e);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const handleDownloadBill = async (bill: BillImage) => {
+    setIsDownloading(true);
+    try {
+      await downloadBillImage({
+        imageUri: bill.imageUri,
+        primaryImageId: bill.primaryImageId,
+        businessId: activeBizId,
+        title: bill.title || 'bill_receipt',
+      });
+    } catch (err: any) {
+      Alert.alert('Download Error', err?.message || 'Failed to download bill image');
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.bg }]}>
       {/* OVERVIEW HERO BANNER */}
@@ -231,6 +266,14 @@ export const BillArchiveScreen: React.FC = () => {
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={theme.colors.primary}
+            colors={[theme.colors.primary]}
+          />
+        }
         renderItem={({ item, index }: { item: BillImage; index: number }) => (
           <FadeInView delay={Math.min(index * 30, 240)}>
             <AnimatedPressable
@@ -389,14 +432,22 @@ export const BillArchiveScreen: React.FC = () => {
               </View>
 
               {previewBill.imageUri || previewBill.primaryImageId ? (
-                <View style={styles.previewImageWrapper}>
+                <TouchableOpacity
+                  activeOpacity={0.9}
+                  onPress={() => setFullScreenBill(previewBill)}
+                  style={styles.previewImageWrapper}
+                >
                   <BillImageViewer
                     bill={previewBill}
                     businessId={activeBizId}
                     style={styles.previewFullImage}
                     resizeMode="contain"
                   />
-                </View>
+                  <View style={styles.imageZoomHintBadge}>
+                    <Feather name="maximize-2" size={11} color="#FFFFFF" />
+                    <Text style={styles.imageZoomHintText}>Tap to View Full</Text>
+                  </View>
+                </TouchableOpacity>
               ) : null}
 
               {previewBill.notes ? (
@@ -406,14 +457,96 @@ export const BillArchiveScreen: React.FC = () => {
                 </View>
               ) : null}
 
-              <AnimatedPressable
-                style={styles.donePreviewBtn}
-                onPress={() => setPreviewBill(null)}
-                activeScale={0.94}
-              >
-                <Text style={styles.donePreviewText}>Close</Text>
-              </AnimatedPressable>
+              <View style={styles.previewActionsRow}>
+                <AnimatedPressable
+                  style={[styles.previewActionBtn, styles.previewDownloadBtn]}
+                  onPress={() => handleDownloadBill(previewBill)}
+                  activeScale={0.94}
+                  disabled={isDownloading}
+                >
+                  {isDownloading ? (
+                    <ActivityIndicator size="small" color={theme.colors.primary} />
+                  ) : (
+                    <Feather name="download" size={16} color={theme.colors.primary} />
+                  )}
+                  <Text style={styles.previewDownloadText}>Download</Text>
+                </AnimatedPressable>
+
+                <AnimatedPressable
+                  style={[styles.previewActionBtn, styles.previewViewFullBtn]}
+                  onPress={() => setFullScreenBill(previewBill)}
+                  activeScale={0.94}
+                >
+                  <Feather name="maximize-2" size={16} color={theme.colors.primaryText} />
+                  <Text style={styles.previewViewFullText}>View Full</Text>
+                </AnimatedPressable>
+              </View>
             </FadeInView>
+          </View>
+        </Modal>
+      )}
+
+      {/* FULL-SCREEN ACTUAL SIZE IMAGE VIEWER MODAL */}
+      {fullScreenBill && (
+        <Modal
+          visible={!!fullScreenBill}
+          transparent={false}
+          animationType="fade"
+          statusBarTranslucent
+          onRequestClose={() => setFullScreenBill(null)}
+        >
+          <View style={styles.fullScreenModal}>
+            <SafeAreaView style={styles.fullScreenHeader}>
+              <TouchableOpacity
+                style={styles.fullScreenCloseBtn}
+                onPress={() => setFullScreenBill(null)}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                <Feather name="arrow-left" size={20} color="#FFFFFF" />
+              </TouchableOpacity>
+              <View style={{ flex: 1, marginHorizontal: 12 }}>
+                <Text style={styles.fullScreenTitle} numberOfLines={1}>
+                  {fullScreenBill.title}
+                </Text>
+                <Text style={styles.fullScreenSub} numberOfLines={1}>
+                  Rs. {fullScreenBill.amount.toLocaleString()} • {fullScreenBill.vendorName}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.fullScreenDownloadBtn}
+                onPress={() => handleDownloadBill(fullScreenBill)}
+                disabled={isDownloading}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                {isDownloading ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Feather name="download" size={18} color="#FFFFFF" />
+                )}
+              </TouchableOpacity>
+            </SafeAreaView>
+
+            <ScrollView
+              style={{ flex: 1 }}
+              contentContainerStyle={styles.fullScreenScrollContent}
+              maximumZoomScale={5}
+              minimumZoomScale={1}
+              showsHorizontalScrollIndicator={false}
+              showsVerticalScrollIndicator={false}
+              centerContent
+            >
+              <BillImageViewer
+                bill={fullScreenBill}
+                businessId={activeBizId}
+                style={styles.actualFullImage}
+                containerStyle={styles.actualFullImageContainer}
+                resizeMode="contain"
+              />
+            </ScrollView>
+
+            <View style={styles.fullScreenFooter}>
+              <Text style={styles.fullScreenHint}>Pinch with two fingers to zoom in/out • Actual size</Text>
+            </View>
           </View>
         </Modal>
       )}
@@ -750,16 +883,122 @@ const createStyles = (theme: Theme, themeMode: 'dark' | 'light') =>
       fontSize: 12,
       color: theme.colors.textSecondary,
     },
-    donePreviewBtn: {
-      backgroundColor: theme.colors.primary,
-      borderRadius: theme.borderRadius.md,
-      paddingVertical: 12,
+    previewActionsRow: {
+      flexDirection: 'row',
       alignItems: 'center',
+      gap: 10,
+      marginTop: 4,
     },
-    donePreviewText: {
+    previewActionBtn: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 12,
+      borderRadius: theme.borderRadius.md,
+      gap: 8,
+    },
+    previewDownloadBtn: {
+      backgroundColor: theme.colors.card,
+      borderWidth: 1,
+      borderColor: theme.colors.borderGlass,
+    },
+    previewDownloadText: {
+      color: theme.colors.primary,
+      fontSize: 13,
+      fontWeight: '700',
+    },
+    previewViewFullBtn: {
+      backgroundColor: theme.colors.primary,
+    },
+    previewViewFullText: {
       color: theme.colors.primaryText,
       fontSize: 13,
       fontWeight: '800',
+    },
+    imageZoomHintBadge: {
+      position: 'absolute',
+      bottom: 8,
+      right: 8,
+      backgroundColor: 'rgba(0,0,0,0.65)',
+      borderRadius: 12,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+    },
+    imageZoomHintText: {
+      color: '#FFFFFF',
+      fontSize: 10,
+      fontWeight: '600',
+    },
+    fullScreenModal: {
+      flex: 1,
+      backgroundColor: '#0A0A0A',
+    },
+    fullScreenHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 16,
+      paddingTop: 42,
+      paddingBottom: 14,
+      backgroundColor: '#141414',
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: '#262626',
+    },
+    fullScreenCloseBtn: {
+      width: 38,
+      height: 38,
+      borderRadius: 19,
+      backgroundColor: 'rgba(255,255,255,0.12)',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    fullScreenTitle: {
+      color: '#FFFFFF',
+      fontSize: 15,
+      fontWeight: '700',
+    },
+    fullScreenSub: {
+      color: '#A3A3A3',
+      fontSize: 12,
+      marginTop: 2,
+    },
+    fullScreenDownloadBtn: {
+      width: 38,
+      height: 38,
+      borderRadius: 19,
+      backgroundColor: theme.colors.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    fullScreenScrollContent: {
+      flexGrow: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    actualFullImageContainer: {
+      width: '100%',
+      height: '100%',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    actualFullImage: {
+      width: '100%',
+      height: '100%',
+    },
+    fullScreenFooter: {
+      paddingVertical: 14,
+      alignItems: 'center',
+      backgroundColor: '#141414',
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: '#262626',
+    },
+    fullScreenHint: {
+      color: '#A3A3A3',
+      fontSize: 11,
+      fontWeight: '500',
     },
     emptyContainer: {
       alignItems: 'center',

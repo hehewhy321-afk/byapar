@@ -10,12 +10,18 @@ import {
   Alert,
   Image,
   Pressable,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useApp } from '../context/AppContext';
 import { ExpenseRecord, IncomeRecord } from '../types';
 import { formatNepaliCurrency } from '@byapar/core';
+import { uploadBillImage } from '../services/billImageUploadService';
+import { checkMobileBillUploadLimit } from '../services/planLimits';
+import { BillImageViewer } from '../components/bills/BillImageViewer';
+import { downloadBillImage } from '../services/imageDownloadService';
 
 const DEFAULT_EXPENSE_CATEGORIES = [
   'Rent',
@@ -65,7 +71,21 @@ export const ExpenseIncomeScreen: React.FC = () => {
     theme,
     themeMode,
     language,
+    activeBizId,
+    refreshData,
   } = useApp();
+
+  const [refreshing, setRefreshing] = useState(false);
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refreshData();
+    } catch (e) {
+      console.warn('[ExpenseIncomeScreen] Refresh error:', e);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const ne = language === 'ne';
   const isDark = themeMode === 'dark';
@@ -91,13 +111,23 @@ export const ExpenseIncomeScreen: React.FC = () => {
   const [formDate, setFormDate] = useState(new Date().toISOString().split('T')[0]);
   const [formNote, setFormNote] = useState('');
   const [formReceiptUrl, setFormReceiptUrl] = useState('');
+  const [formPrimaryImageId, setFormPrimaryImageId] = useState<string | undefined>(undefined);
 
   // Category Manager modal
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
 
   // Image Preview modal
-  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+  const [previewRecord, setPreviewRecord] = useState<{ receiptUrl?: string; primaryImageId?: string } | null>(null);
+
+  // Transaction Details modal
+  const [selectedDetailRecord, setSelectedDetailRecord] = useState<ExpenseRecord | IncomeRecord | null>(null);
+
+  // Upload state
+  const [rawImageUri, setRawImageUri] = useState<string>('');
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadStatusText, setUploadStatusText] = useState('');
 
   const isExpense = activeTab === 'expense';
 
@@ -189,6 +219,7 @@ export const ExpenseIncomeScreen: React.FC = () => {
 
   const handleOpenAdd = () => {
     setEditingRecord(null);
+    setRawImageUri('');
     setFormAmount('');
     setFormCategory(categoriesList[0] || 'Other');
     setFormPaymentMode(PAYMENT_MODES[0]);
@@ -196,11 +227,13 @@ export const ExpenseIncomeScreen: React.FC = () => {
     setFormDate(new Date().toISOString().split('T')[0]);
     setFormNote('');
     setFormReceiptUrl('');
+    setFormPrimaryImageId(undefined);
     setShowAddModal(true);
   };
 
   const handleOpenEdit = (rec: ExpenseRecord | IncomeRecord) => {
     setEditingRecord(rec);
+    setRawImageUri('');
     setFormAmount(String(rec.amount));
     setFormCategory(rec.category);
     setFormPaymentMode(rec.paymentMode || PAYMENT_MODES[0]);
@@ -208,27 +241,40 @@ export const ExpenseIncomeScreen: React.FC = () => {
     setFormDate(rec.date);
     setFormNote(rec.note || '');
     setFormReceiptUrl(rec.receiptUrl || '');
+    setFormPrimaryImageId(rec.primaryImageId);
     setShowAddModal(true);
   };
 
   const handlePickImage = async (useCamera = false) => {
     try {
+      const bizId = activeBizId || '';
+      const isDemoMode = !bizId || bizId === 'a0000000-0000-0000-0000-000000000001';
+      if (!isDemoMode) {
+        const limitCheck = await checkMobileBillUploadLimit(bizId);
+        if (!limitCheck.allowed) {
+          Alert.alert(
+            ne ? 'दैनिक अपलोड सीमा पुग्यो' : 'Daily Upload Limit Reached',
+            limitCheck.message || (ne ? 'तपाईंले आजको बिल अपलोड सीमा पार गर्नुभएको छ।' : 'You have reached your daily bill upload limit.')
+          );
+          return;
+        }
+      }
+
       const res = useCamera
         ? await ImagePicker.launchCameraAsync({
             allowsEditing: true,
-            quality: 0.6,
-            base64: true,
+            quality: 0.7,
           })
         : await ImagePicker.launchImageLibraryAsync({
             allowsEditing: true,
-            quality: 0.6,
-            base64: true,
+            quality: 0.7,
           });
 
       if (!res.canceled && res.assets && res.assets[0]) {
         const asset = res.assets[0];
-        const uri = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
-        setFormReceiptUrl(uri);
+        // Keep the raw file URI for R2 upload; use it for preview too
+        setRawImageUri(asset.uri);
+        setFormReceiptUrl(asset.uri);
       }
     } catch (err) {
       console.warn('Image picker error:', err);
@@ -238,63 +284,125 @@ export const ExpenseIncomeScreen: React.FC = () => {
   const handleSave = async () => {
     const amt = parseFloat(formAmount);
     if (isNaN(amt) || amt <= 0) {
-      Alert.alert('Validation Error', 'Please enter a valid amount.');
+      Alert.alert(ne ? 'त्रुटि' : 'Validation Error', ne ? 'कृपया मान्य रकम प्रविष्ट गर्नुहोस्।' : 'Please enter a valid amount.');
       return;
     }
     if (!formCategory) {
-      Alert.alert('Validation Error', 'Please select a category.');
+      Alert.alert(ne ? 'त्रुटि' : 'Validation Error', ne ? 'कृपया शीर्षक चयन गर्नुहोस्।' : 'Please select a category.');
       return;
     }
 
-    if (editingRecord) {
-      // Update existing
-      if (isExpense) {
-        await editExpense(editingRecord.id, {
-          category: formCategory,
-          amount: amt,
-          paymentMode: formPaymentMode,
-          date: formDate,
-          recipientName: formParty.trim() || undefined,
-          note: formNote.trim() || undefined,
-          receiptUrl: formReceiptUrl || undefined,
-        });
-      } else {
-        await editIncome(editingRecord.id, {
-          category: formCategory,
-          amount: amt,
-          paymentMode: formPaymentMode,
-          date: formDate,
-          payerName: formParty.trim() || undefined,
-          note: formNote.trim() || undefined,
-          receiptUrl: formReceiptUrl || undefined,
-        });
-      }
-    } else {
-      // Add new
-      if (isExpense) {
-        await addExpense({
-          category: formCategory,
-          amount: amt,
-          paymentMode: formPaymentMode,
-          date: formDate,
-          recipientName: formParty.trim() || undefined,
-          note: formNote.trim() || undefined,
-          receiptUrl: formReceiptUrl || undefined,
-        });
-      } else {
-        await addIncome({
-          category: formCategory,
-          amount: amt,
-          paymentMode: formPaymentMode,
-          date: formDate,
-          payerName: formParty.trim() || undefined,
-          note: formNote.trim() || undefined,
-          receiptUrl: formReceiptUrl || undefined,
-        });
-      }
-    }
+    const bizId = activeBizId || '';
+    const isDemoMode = !bizId || bizId === 'a0000000-0000-0000-0000-000000000001';
+    const pendingImageUri = rawImageUri;
+    const isEdit = !!editingRecord;
+    const currentEditingRecord = editingRecord;
+    const currentCategory = formCategory;
+    const currentPaymentMode = formPaymentMode;
+    const currentDate = formDate;
+    const currentParty = formParty.trim();
+    const currentNote = formNote.trim();
+    const currentPrimaryImageId = formPrimaryImageId;
+    const currentReceiptUrl = formReceiptUrl;
 
+    // Immediately dismiss modal & clear inputs (0ms UI latency, 120fps smooth)
     setShowAddModal(false);
+    setRawImageUri('');
+    setFormAmount('');
+    setFormParty('');
+    setFormNote('');
+    setFormReceiptUrl('');
+    setFormPrimaryImageId(undefined);
+    setEditingRecord(null);
+
+    try {
+      if (isEdit && currentEditingRecord) {
+        // Update existing record immediately with optimistic receipt preview
+        const baseUpdates: Partial<ExpenseRecord & IncomeRecord> = {
+          category: currentCategory,
+          amount: amt,
+          paymentMode: currentPaymentMode,
+          date: currentDate,
+          note: currentNote || undefined,
+        };
+
+        if (pendingImageUri) {
+          baseUpdates.receiptUrl = pendingImageUri;
+        } else if (!currentPrimaryImageId && !currentReceiptUrl) {
+          baseUpdates.primaryImageId = undefined;
+          baseUpdates.receiptUrl = undefined;
+        }
+
+        if (isExpense) {
+          (baseUpdates as any).recipientName = currentParty || undefined;
+          await editExpense(currentEditingRecord.id, baseUpdates);
+        } else {
+          (baseUpdates as any).payerName = currentParty || undefined;
+          await editIncome(currentEditingRecord.id, baseUpdates);
+        }
+
+        // Background R2 upload if a new photo was selected
+        if (pendingImageUri && !isDemoMode && bizId) {
+          uploadBillImage({
+            rawImageUri: pendingImageUri,
+            billId: currentEditingRecord.id,
+            businessId: bizId,
+          }).then((uploadRes) => {
+            if (isExpense) {
+              editExpense(currentEditingRecord.id, { primaryImageId: uploadRes.imageId });
+            } else {
+              editIncome(currentEditingRecord.id, { primaryImageId: uploadRes.imageId });
+            }
+          }).catch((uploadErr) => {
+            console.warn('Background receipt upload failed (edit):', uploadErr);
+          });
+        }
+      } else {
+        // Add new record immediately with optimistic local receipt preview
+        let newRecord: ExpenseRecord | IncomeRecord;
+
+        if (isExpense) {
+          newRecord = await addExpense({
+            category: currentCategory,
+            amount: amt,
+            paymentMode: currentPaymentMode,
+            date: currentDate,
+            recipientName: currentParty || undefined,
+            note: currentNote || undefined,
+            receiptUrl: pendingImageUri || undefined,
+          });
+        } else {
+          newRecord = await addIncome({
+            category: currentCategory,
+            amount: amt,
+            paymentMode: currentPaymentMode,
+            date: currentDate,
+            payerName: currentParty || undefined,
+            note: currentNote || undefined,
+            receiptUrl: pendingImageUri || undefined,
+          });
+        }
+
+        // Background R2 upload if receipt photo is present
+        if (pendingImageUri && !isDemoMode && bizId) {
+          uploadBillImage({
+            rawImageUri: pendingImageUri,
+            billId: newRecord.id,
+            businessId: bizId,
+          }).then((uploadRes) => {
+            if (isExpense) {
+              editExpense(newRecord.id, { primaryImageId: uploadRes.imageId });
+            } else {
+              editIncome(newRecord.id, { primaryImageId: uploadRes.imageId });
+            }
+          }).catch((uploadErr) => {
+            console.warn('Background receipt upload failed (create):', uploadErr);
+          });
+        }
+      }
+    } catch (err: any) {
+      console.warn('Error saving record:', err);
+    }
   };
 
   const handleDelete = (id: string, name: string) => {
@@ -565,6 +673,7 @@ export const ExpenseIncomeScreen: React.FC = () => {
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
+        style={styles.categoryScroll}
         contentContainerStyle={styles.categoryRow}
       >
         <TouchableOpacity
@@ -620,7 +729,20 @@ export const ExpenseIncomeScreen: React.FC = () => {
       </ScrollView>
 
       {/* Records List */}
-      <ScrollView contentContainerStyle={styles.listContainer}>
+      <ScrollView
+        style={styles.listScroll}
+        contentContainerStyle={styles.listContainer}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={theme.colors.primary}
+            colors={[theme.colors.primary]}
+          />
+        }
+      >
         {filteredRecords.length === 0 ? (
           <View style={styles.emptyContainer}>
             <View
@@ -648,8 +770,10 @@ export const ExpenseIncomeScreen: React.FC = () => {
               ? (item as any).recipientName
               : (item as any).payerName;
             return (
-              <View
+              <TouchableOpacity
                 key={item.id}
+                activeOpacity={0.88}
+                onPress={() => setSelectedDetailRecord(item)}
                 style={[
                   styles.recordCard,
                   {
@@ -710,12 +834,19 @@ export const ExpenseIncomeScreen: React.FC = () => {
 
                 <View style={styles.recordRight}>
                   {/* Receipt thumbnail */}
-                  {item.receiptUrl ? (
+                  {item.receiptUrl || item.primaryImageId ? (
                     <TouchableOpacity
-                      onPress={() => setPreviewImageUrl(item.receiptUrl!)}
+                      onPress={() => setPreviewRecord({ receiptUrl: item.receiptUrl, primaryImageId: item.primaryImageId })}
                       style={styles.receiptThumb}
                     >
-                      <Image source={{ uri: item.receiptUrl }} style={styles.receiptThumbImg} />
+                      <BillImageViewer
+                        imageUri={item.receiptUrl}
+                        primaryImageId={item.primaryImageId}
+                        businessId={activeBizId}
+                        style={styles.receiptThumbImg}
+                        containerStyle={styles.receiptThumb}
+                        resizeMode="cover"
+                      />
                     </TouchableOpacity>
                   ) : null}
 
@@ -748,7 +879,7 @@ export const ExpenseIncomeScreen: React.FC = () => {
                     </TouchableOpacity>
                   </View>
                 </View>
-              </View>
+              </TouchableOpacity>
             );
           })
         )}
@@ -960,12 +1091,35 @@ export const ExpenseIncomeScreen: React.FC = () => {
                     <Text style={[styles.imgActionText, { color: theme.colors.textPrimary }]}>Gallery</Text>
                   </TouchableOpacity>
 
-                  {formReceiptUrl ? (
+                  {rawImageUri ? (
                     <View style={styles.previewContainer}>
-                      <Image source={{ uri: formReceiptUrl }} style={styles.receiptPreviewImg} />
+                      <Image source={{ uri: rawImageUri }} style={styles.receiptPreviewImg} />
                       <TouchableOpacity
                         style={styles.removeImgBtn}
-                        onPress={() => setFormReceiptUrl('')}
+                        onPress={() => {
+                          setRawImageUri('');
+                          setFormReceiptUrl('');
+                        }}
+                      >
+                        <Feather name="x" size={12} color="#FFFFFF" />
+                      </TouchableOpacity>
+                    </View>
+                  ) : formPrimaryImageId || formReceiptUrl ? (
+                    <View style={styles.previewContainer}>
+                      <BillImageViewer
+                        imageUri={formReceiptUrl}
+                        primaryImageId={formPrimaryImageId}
+                        businessId={activeBizId}
+                        style={styles.receiptPreviewImg}
+                        containerStyle={styles.receiptPreviewImg}
+                        resizeMode="cover"
+                      />
+                      <TouchableOpacity
+                        style={styles.removeImgBtn}
+                        onPress={() => {
+                          setFormReceiptUrl('');
+                          setFormPrimaryImageId(undefined);
+                        }}
                       >
                         <Feather name="x" size={12} color="#FFFFFF" />
                       </TouchableOpacity>
@@ -979,6 +1133,7 @@ export const ExpenseIncomeScreen: React.FC = () => {
               <TouchableOpacity
                 style={[styles.modalBtn, styles.cancelBtn, { borderColor: theme.colors.borderGlass }]}
                 onPress={() => setShowAddModal(false)}
+                disabled={isUploading}
               >
                 <Text style={[styles.cancelBtnText, { color: theme.colors.textSecondary }]}>
                   {ne ? 'रद्द' : 'Cancel'}
@@ -986,14 +1141,28 @@ export const ExpenseIncomeScreen: React.FC = () => {
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.modalBtn, isExpense ? styles.saveExpenseBtn : styles.saveIncomeBtn]}
+                style={[
+                  styles.modalBtn,
+                  isExpense ? styles.saveExpenseBtn : styles.saveIncomeBtn,
+                  isUploading && { opacity: 0.7 },
+                ]}
                 onPress={handleSave}
+                disabled={isUploading}
               >
-                <Text style={styles.saveBtnText}>
-                  {editingRecord
-                    ? (ne ? 'अपडेट गर्नुहोस्' : 'Update Record')
-                    : (isExpense ? (ne ? 'खर्च सेभ गर्नुहोस्' : 'Save Expense') : (ne ? 'आम्दानी सेभ गर्नुहोस्' : 'Save Income'))}
-                </Text>
+                {isUploading ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                    <Text style={styles.saveBtnText}>
+                      {uploadStatusText || (ne ? 'अपलोड हुँदैछ...' : 'Saving...')}
+                    </Text>
+                  </View>
+                ) : (
+                  <Text style={styles.saveBtnText}>
+                    {editingRecord
+                      ? (ne ? 'अपडेट गर्नुहोस्' : 'Update Record')
+                      : (isExpense ? (ne ? 'खर्च सेभ गर्नुहोस्' : 'Save Expense') : (ne ? 'आम्दानी सेभ गर्नुहोस्' : 'Save Income'))}
+                  </Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -1003,7 +1172,7 @@ export const ExpenseIncomeScreen: React.FC = () => {
       {/* Date Filter Selection Sheet Modal */}
       <Modal
         visible={showDateFilterSheet}
-        animationType="fade"
+        animationType="slide"
         transparent
         onRequestClose={() => setShowDateFilterSheet(false)}
       >
@@ -1012,17 +1181,30 @@ export const ExpenseIncomeScreen: React.FC = () => {
             style={StyleSheet.absoluteFill}
             onPress={() => setShowDateFilterSheet(false)}
           />
-          <View style={[styles.modalCard, styles.dateFilterCard, { backgroundColor: theme.colors.card }]}>
-            <View style={styles.modalHeader}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <View
+            style={[
+              styles.modalCard,
+              styles.dateFilterCard,
+              { backgroundColor: theme.colors.card, borderColor: theme.colors.borderGlass },
+            ]}
+          >
+            <View style={[styles.sheetHandle, { backgroundColor: theme.colors.borderGlass }]} />
+            <View style={[styles.modalHeader, { borderBottomColor: theme.colors.borderGlass }]}>
+              <View style={styles.dateFilterHeaderGroup}>
                 <View style={[styles.dateFilterIconCircle, { backgroundColor: isExpense ? 'rgba(239, 68, 68, 0.12)' : 'rgba(16, 185, 129, 0.12)' }]}>
                   <Feather name="calendar" size={16} color={isExpense ? '#EF4444' : '#10B981'} />
                 </View>
-                <View>
-                  <Text style={[styles.modalTitle, { color: theme.colors.textPrimary }]}>
+                <View style={styles.dateFilterHeaderText}>
+                  <Text
+                    style={[styles.modalTitle, { color: theme.colors.textPrimary }]}
+                    numberOfLines={1}
+                  >
                     {ne ? 'समय अवधि छनोट' : 'Select Time Period'}
                   </Text>
-                  <Text style={[styles.dateFilterSubtitle, { color: theme.colors.textMuted }]}>
+                  <Text
+                    style={[styles.dateFilterSubtitle, { color: theme.colors.textMuted }]}
+                    numberOfLines={1}
+                  >
                     {ne ? 'कारोबार फिल्टर गर्न दायरा रोज्नुहोस्' : 'Filter records by date range'}
                   </Text>
                 </View>
@@ -1030,12 +1212,17 @@ export const ExpenseIncomeScreen: React.FC = () => {
               <TouchableOpacity
                 style={styles.modalCloseBtn}
                 onPress={() => setShowDateFilterSheet(false)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
                 <Feather name="x" size={18} color={theme.colors.textMuted} />
               </TouchableOpacity>
             </View>
 
-            <View style={styles.dateFilterList}>
+            <ScrollView
+              style={styles.dateFilterScroll}
+              contentContainerStyle={styles.dateFilterList}
+              showsVerticalScrollIndicator={false}
+            >
               {(['today', 'yesterday', 'week', 'month', 'year', 'all', 'custom'] as DateFilterType[]).map((f) => {
                 const isSelected = dateFilter === f;
                 const iconName: keyof typeof Feather.glyphMap =
@@ -1073,7 +1260,7 @@ export const ExpenseIncomeScreen: React.FC = () => {
                     }}
                     activeOpacity={0.75}
                   >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <View style={styles.dateFilterOptionLabel}>
                       <Feather
                         name={iconName}
                         size={15}
@@ -1093,6 +1280,7 @@ export const ExpenseIncomeScreen: React.FC = () => {
                             fontWeight: isSelected ? '800' : '600',
                           },
                         ]}
+                        numberOfLines={1}
                       >
                         {dateFilterLabels[f][ne ? 'ne' : 'en']}
                       </Text>
@@ -1107,7 +1295,7 @@ export const ExpenseIncomeScreen: React.FC = () => {
                   </TouchableOpacity>
                 );
               })}
-            </View>
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -1251,26 +1439,289 @@ export const ExpenseIncomeScreen: React.FC = () => {
         </View>
       </Modal>
 
+      {/* Transaction Details Modal */}
+      {/* Transaction Details Modal */}
+      <Modal
+        visible={!!selectedDetailRecord}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setSelectedDetailRecord(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => setSelectedDetailRecord(null)}
+          />
+          <View style={[styles.detailModalCard, { backgroundColor: theme.colors.card }]}>
+            {selectedDetailRecord && (() => {
+              const rec = selectedDetailRecord;
+              const isRecExpense = 'recipientName' in rec || isExpense;
+              const partyName = isRecExpense ? (rec as any).recipientName : (rec as any).payerName;
+              const hasReceipt = Boolean(rec.receiptUrl || rec.primaryImageId);
+
+              return (
+                <>
+                  <View style={[styles.modalHeader, { paddingHorizontal: 20, paddingVertical: 16 }]}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <View
+                        style={{
+                          paddingHorizontal: 12,
+                          paddingVertical: 5,
+                          borderRadius: 12,
+                          backgroundColor: isRecExpense ? 'rgba(239, 68, 68, 0.15)' : 'rgba(16, 185, 129, 0.15)',
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 12,
+                            fontWeight: '700',
+                            color: isRecExpense ? '#EF4444' : '#10B981',
+                          }}
+                        >
+                          {isRecExpense ? (ne ? 'खर्च प्रविष्टि' : 'Expense Entry') : (ne ? 'आम्दानी प्रविष्टि' : 'Income Entry')}
+                        </Text>
+                      </View>
+                    </View>
+                    <TouchableOpacity onPress={() => setSelectedDetailRecord(null)} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+                      <Feather name="x" size={20} color={theme.colors.textMuted} />
+                    </TouchableOpacity>
+                  </View>
+
+                  <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 28 }}>
+                    {/* Amount Banner */}
+                    <View
+                      style={{
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        paddingVertical: 18,
+                        backgroundColor: theme.colors.surface,
+                        borderRadius: 12,
+                        marginBottom: 16,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 28,
+                          fontWeight: '800',
+                          color: isRecExpense ? '#EF4444' : '#10B981',
+                        }}
+                      >
+                        {isRecExpense ? '−' : '+'}Rs. {Number(rec.amount).toLocaleString()}
+                      </Text>
+                      <Text style={{ fontSize: 13, color: theme.colors.textMuted, marginTop: 4 }}>
+                        📅 {rec.date}
+                      </Text>
+                    </View>
+
+                    {/* Details Table */}
+                    <View style={{ gap: 12, marginBottom: 16 }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text style={{ fontSize: 13, color: theme.colors.textMuted }}>{ne ? 'शीर्षक / वर्ग' : 'Category'}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: theme.colors.surface, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }}>
+                          <Feather name="tag" size={12} color={theme.colors.primary} />
+                          <Text style={{ fontSize: 13, fontWeight: '600', color: theme.colors.textPrimary }}>{rec.category}</Text>
+                        </View>
+                      </View>
+
+                      {partyName ? (
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <Text style={{ fontSize: 13, color: theme.colors.textMuted }}>
+                            {isRecExpense ? (ne ? 'पाउने व्यक्ति/संस्था' : 'Paid To') : (ne ? 'दिने व्यक्ति/संस्था' : 'Received From')}
+                          </Text>
+                          <Text style={{ fontSize: 13, fontWeight: '600', color: theme.colors.textPrimary }}>{partyName}</Text>
+                        </View>
+                      ) : null}
+
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text style={{ fontSize: 13, color: theme.colors.textMuted }}>{ne ? 'भुक्तानी माध्यम' : 'Payment Mode'}</Text>
+                        <Text style={{ fontSize: 13, fontWeight: '600', color: theme.colors.textPrimary }}>{rec.paymentMode || 'Cash'}</Text>
+                      </View>
+
+                      {rec.note ? (
+                        <View style={{ marginTop: 4 }}>
+                          <Text style={{ fontSize: 13, color: theme.colors.textMuted, marginBottom: 4 }}>{ne ? 'कैफियत / विवरण' : 'Note / Description'}</Text>
+                          <View style={{ backgroundColor: theme.colors.surface, padding: 10, borderRadius: 8 }}>
+                            <Text style={{ fontSize: 13, color: theme.colors.textSecondary, lineHeight: 18 }}>{rec.note}</Text>
+                          </View>
+                        </View>
+                      ) : null}
+                    </View>
+
+                    {/* Receipt / Bill Image Section */}
+                    <View style={{ marginTop: 8, marginBottom: 16 }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: theme.colors.textPrimary, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                          {ne ? 'संलग्न बिल / रसिद' : 'Attached Receipt / Bill'}
+                        </Text>
+                        {hasReceipt ? (
+                          <TouchableOpacity
+                            onPress={() => setPreviewRecord({ receiptUrl: rec.receiptUrl, primaryImageId: rec.primaryImageId })}
+                            style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                          >
+                            <Feather name="maximize-2" size={13} color={theme.colors.primary} />
+                            <Text style={{ fontSize: 12, color: theme.colors.primary, fontWeight: '600' }}>
+                              {ne ? 'पूरा हेर्नुहोस्' : 'View Full'}
+                            </Text>
+                          </TouchableOpacity>
+                        ) : null}
+                      </View>
+
+                      {hasReceipt ? (
+                        <TouchableOpacity
+                          activeOpacity={0.9}
+                          onPress={() => setPreviewRecord({ receiptUrl: rec.receiptUrl, primaryImageId: rec.primaryImageId })}
+                          style={{
+                            borderRadius: 12,
+                            overflow: 'hidden',
+                            borderWidth: 1,
+                            borderColor: theme.colors.borderGlass,
+                            backgroundColor: theme.colors.surface,
+                            height: 220,
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                          }}
+                        >
+                          <BillImageViewer
+                            imageUri={rec.receiptUrl}
+                            primaryImageId={rec.primaryImageId}
+                            businessId={activeBizId}
+                            style={{ width: '100%', height: '100%' }}
+                            containerStyle={{ width: '100%', height: '100%' }}
+                            resizeMode="contain"
+                          />
+                        </TouchableOpacity>
+                      ) : (
+                        <View
+                          style={{
+                            padding: 16,
+                            borderRadius: 12,
+                            borderWidth: 1,
+                            borderStyle: 'dashed',
+                            borderColor: theme.colors.borderGlass,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            backgroundColor: theme.colors.surface,
+                          }}
+                        >
+                          <Feather name="image" size={24} color={theme.colors.textMuted} style={{ marginBottom: 6 }} />
+                          <Text style={{ fontSize: 12, color: theme.colors.textMuted }}>
+                            {ne ? 'यस कारोबारमा कुनै रसिद संलग्न गरिएको छैन' : 'No receipt attached to this transaction'}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+
+                    {/* Bottom Actions Row */}
+                    <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
+                      <TouchableOpacity
+                        style={{
+                          flex: 1,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 6,
+                          paddingVertical: 12,
+                          borderRadius: 8,
+                          backgroundColor: theme.colors.primary,
+                        }}
+                        onPress={() => {
+                          const currentRec = rec;
+                          setSelectedDetailRecord(null);
+                          handleOpenEdit(currentRec);
+                        }}
+                      >
+                        <Feather name="edit-2" size={15} color="#FFFFFF" />
+                        <Text style={{ fontSize: 14, fontWeight: '600', color: '#FFFFFF' }}>
+                          {ne ? 'सम्पादन' : 'Edit'}
+                        </Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={{
+                          flex: 1,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 6,
+                          paddingVertical: 12,
+                          borderRadius: 8,
+                          backgroundColor: 'rgba(239, 68, 68, 0.12)',
+                          borderWidth: 1,
+                          borderColor: 'rgba(239, 68, 68, 0.3)',
+                        }}
+                        onPress={() => {
+                          const currentRec = rec;
+                          setSelectedDetailRecord(null);
+                          handleDelete(currentRec.id, currentRec.category);
+                        }}
+                      >
+                        <Feather name="trash-2" size={15} color="#EF4444" />
+                        <Text style={{ fontSize: 14, fontWeight: '600', color: '#EF4444' }}>
+                          {ne ? 'मेटाउनुहोस्' : 'Delete'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </ScrollView>
+                </>
+              );
+            })()}
+          </View>
+        </View>
+      </Modal>
+
       {/* Image Preview Modal */}
       <Modal
-        visible={!!previewImageUrl}
+        visible={!!previewRecord}
         transparent
         animationType="fade"
-        onRequestClose={() => setPreviewImageUrl(null)}
+        onRequestClose={() => setPreviewRecord(null)}
       >
         <View style={styles.imageModalOverlay}>
-          <TouchableOpacity
-            style={styles.closeImageBtn}
-            onPress={() => setPreviewImageUrl(null)}
-          >
-            <Feather name="x" size={24} color="#FFFFFF" />
-          </TouchableOpacity>
-          {previewImageUrl ? (
-            <Image
-              source={{ uri: previewImageUrl }}
-              style={styles.fullPreviewImage}
-              resizeMode="contain"
-            />
+          <View style={styles.imageModalTopBar}>
+            <TouchableOpacity
+              style={styles.closeImageBtn}
+              onPress={() => setPreviewRecord(null)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Feather name="x" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.downloadImageBtn}
+              onPress={() => {
+                if (previewRecord) {
+                  downloadBillImage({
+                    imageUri: previewRecord.receiptUrl,
+                    primaryImageId: previewRecord.primaryImageId,
+                    businessId: activeBizId,
+                    title: 'receipt',
+                  });
+                }
+              }}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Feather name="download" size={22} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
+          {previewRecord ? (
+            <ScrollView
+              style={{ flex: 1, width: '100%' }}
+              contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', alignItems: 'center' }}
+              maximumZoomScale={5}
+              minimumZoomScale={1}
+              showsHorizontalScrollIndicator={false}
+              showsVerticalScrollIndicator={false}
+              centerContent
+            >
+              <BillImageViewer
+                imageUri={previewRecord.receiptUrl}
+                primaryImageId={previewRecord.primaryImageId}
+                businessId={activeBizId}
+                style={styles.fullPreviewImage}
+                containerStyle={{ width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center' }}
+                resizeMode="contain"
+              />
+            </ScrollView>
           ) : null}
         </View>
       </Modal>
@@ -1380,11 +1831,28 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
   },
   dateFilterCard: {
-    maxWidth: 380,
-    width: '92%',
-    padding: 18,
-    borderRadius: 22,
+    width: '100%',
+    maxWidth: 460,
+    alignSelf: 'center',
+    maxHeight: '80%',
     borderWidth: 1,
+    overflow: 'hidden',
+  },
+  sheetHandle: {
+    alignSelf: 'center',
+    width: 38,
+    height: 4,
+    borderRadius: 2,
+    marginTop: 8,
+  },
+  dateFilterHeaderGroup: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  dateFilterHeaderText: {
+    flex: 1,
   },
   dateFilterIconCircle: {
     width: 34,
@@ -1397,9 +1865,15 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     marginTop: 2,
   },
+  dateFilterScroll: {
+    flexGrow: 0,
+    flexShrink: 1,
+  },
   dateFilterList: {
+    padding: 16,
+    paddingTop: 14,
+    paddingBottom: 24,
     gap: 7,
-    marginTop: 14,
   },
   dateFilterOptionItem: {
     flexDirection: 'row',
@@ -1409,8 +1883,16 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 12,
     borderWidth: 1,
+    gap: 10,
+  },
+  dateFilterOptionLabel: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
   dateFilterOptionText: {
+    flexShrink: 1,
     fontSize: 12.5,
   },
   searchRow: {
@@ -1446,6 +1928,10 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     fontWeight: '600',
   },
+  categoryScroll: {
+    flexGrow: 0,
+    flexShrink: 0,
+  },
   categoryRow: {
     paddingHorizontal: 16,
     paddingVertical: 5,
@@ -1472,8 +1958,12 @@ const styles = StyleSheet.create({
   catChipTextActive: {
     color: '#FFFFFF',
   },
+  listScroll: {
+    flex: 1,
+  },
   listContainer: {
     paddingHorizontal: 16,
+    paddingTop: 6,
     paddingBottom: 90,
     gap: 10,
   },
@@ -1629,6 +2119,20 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     maxHeight: '90%',
+  },
+  detailModalCard: {
+    width: '100%',
+    maxWidth: 520,
+    alignSelf: 'center',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '90%',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.16,
+    shadowRadius: 16,
+    elevation: 12,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -1878,19 +2382,39 @@ const styles = StyleSheet.create({
   },
   imageModalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.92)',
+    backgroundColor: '#0A0A0A',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  closeImageBtn: {
-    position: 'absolute',
-    top: 50,
-    right: 20,
+  imageModalTopBar: {
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 46,
+    paddingBottom: 14,
+    backgroundColor: '#141414',
     zIndex: 10,
-    padding: 8,
+  },
+  closeImageBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  downloadImageBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#2563EB',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   fullPreviewImage: {
-    width: '90%',
-    height: '75%',
+    width: '100%',
+    height: '100%',
   },
 });

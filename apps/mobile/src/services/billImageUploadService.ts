@@ -46,7 +46,7 @@ async function extractEdgeFunctionError(err: any, fallbackMessage: string): Prom
 
 export interface UploadBillImageParams {
   rawImageUri: string;
-  billId: string;
+  billId?: string;
   businessId: string;
   onProgress?: (progressFraction: number) => void;
 }

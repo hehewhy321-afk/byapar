@@ -9,6 +9,7 @@ def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
  * By default you don't need to apply any configuration, just uncomment the lines you need.
  */
 react {
+    root = file(projectRoot)
     entryFile = file(["node", "-e", "require('expo/scripts/resolveAppEntry')", projectRoot, "android", "absolute"].execute(null, rootDir).text.trim())
     reactNativeDir = new File(["node", "--print", "require.resolve('react-native/package.json')"].execute(null, rootDir).text.trim()).getParentFile().getAbsoluteFile()
     hermesCommand = new File(["node", "--print", "require.resolve('react-native/package.json')"].execute(null, rootDir).text.trim()).getParentFile().getAbsolutePath() + "/sdks/hermesc/%OS-BIN%/hermesc"
@@ -22,6 +23,43 @@ react {
     /* Autolinking */
     autolinkLibrariesWithApp()
 }
+
+task copyExpoVectorIcons(type: Copy) {
+    try {
+        def vectorIconsDir = file("${projectRoot}/node_modules/@expo/vector-icons")
+        if (!vectorIconsDir.exists()) {
+            vectorIconsDir = new File(["node", "--print", "require.resolve('@expo/vector-icons/package.json', { paths: [projectRoot] })"].execute(null, rootDir).text.trim()).getParentFile()
+        }
+        from "${vectorIconsDir}/build/vendor/react-native-vector-icons/Fonts"
+        into "${projectDir}/src/main/assets/fonts"
+        include "Feather.ttf", "MaterialCommunityIcons.ttf", "FontAwesome.ttf", "FontAwesome5_*.ttf"
+        doLast {
+            def fontsDir = file("${projectDir}/src/main/assets/fonts")
+            def aliases = [
+                'feather.ttf': 'Feather.ttf',
+                'material-community.ttf': 'MaterialCommunityIcons.ttf',
+                'font-awesome.ttf': 'FontAwesome.ttf',
+                'FontAwesome5Free-Solid.ttf': 'FontAwesome5_Solid.ttf',
+                'FontAwesome5Free-Regular.ttf': 'FontAwesome5_Regular.ttf',
+                'FontAwesome5Free-Brand.ttf': 'FontAwesome5_Brands.ttf'
+            ]
+            aliases.each { aliasName, srcName ->
+                def srcFile = new File(fontsDir, srcName)
+                def dstFile = new File(fontsDir, aliasName)
+                if (srcFile.exists()) {
+                    try {
+                        if (!dstFile.exists() || dstFile.length() != srcFile.length()) {
+                            dstFile.bytes = srcFile.bytes
+                        }
+                    } catch (Exception ignored) {}
+                }
+            }
+        }
+    } catch (Exception e) {
+        println "Warning: Could not auto-copy expo-vector-icons: " + e.message
+    }
+}
+preBuild.dependsOn(copyExpoVectorIcons)
 
 /**
  * Set this to true to Run Proguard on Release builds to minify the Java bytecode.
@@ -46,6 +84,9 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
         versionName "1.0"
+        ndk {
+            abiFilters (*(findProperty('reactNativeArchitectures')?.split(',') ?: ['arm64-v8a']))
+        }
     }
     signingConfigs {
         debug {

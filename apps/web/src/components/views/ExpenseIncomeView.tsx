@@ -15,11 +15,17 @@ import {
   addIncomeCategory,
   deleteIncomeCategory,
   setActiveTab,
+  currentBusiness,
   type ExpenseRecord,
   type IncomeRecord,
 } from '../../db/localDb';
+import { isAuthenticated } from '../../db/auth';
 import { formatNepaliCurrency } from '@byapar/core';
 import { currentLang } from '../../services/i18n';
+import { compressWebImage, WebCompressedImageResult } from '../../services/imageCompressionService';
+import { uploadBillImageWeb } from '../../services/billImageUploadService';
+import { BillImageViewer } from '../bills/BillImageViewer';
+import { checkBillUploadLimit } from '../../services/planLimits';
 import {
   IconExpense,
   IconIncome,
@@ -68,6 +74,16 @@ export const ExpenseIncomeView: Component<ExpenseIncomeViewProps> = (props) => {
   const [formParty, setFormParty] = createSignal('');
   const [formNote, setFormNote] = createSignal('');
   const [formReceiptUrl, setFormReceiptUrl] = createSignal('');
+  const [formPrimaryImageId, setFormPrimaryImageId] = createSignal<string | undefined>(undefined);
+
+  // Upload & compression state
+  const [selectedFile, setSelectedFile] = createSignal<File | null>(null);
+  const [compressedResult, setCompressedResult] = createSignal<WebCompressedImageResult | null>(null);
+  const [isCompressing, setIsCompressing] = createSignal<boolean>(false);
+  const [isUploading, setIsUploading] = createSignal<boolean>(false);
+  const [uploadProgress, setUploadProgress] = createSignal<number>(0);
+  const [uploadStatusText, setUploadStatusText] = createSignal<string>('');
+  const [uploadError, setUploadError] = createSignal<string>('');
 
   // Category Manager modal
   const [showCategoryModal, setShowCategoryModal] = createSignal(false);
@@ -75,6 +91,10 @@ export const ExpenseIncomeView: Component<ExpenseIncomeViewProps> = (props) => {
 
   // Image preview modal
   const [previewImageUrl, setPreviewImageUrl] = createSignal<string | null>(null);
+  const [previewRecord, setPreviewRecord] = createSignal<{ primaryImageId?: string; receiptUrl?: string; title?: string } | null>(null);
+
+  // Full Details modal
+  const [selectedDetailRecord, setSelectedDetailRecord] = createSignal<ExpenseRecord | IncomeRecord | null>(null);
 
   // Categories list (defaults + user custom)
   const allCategories = createMemo(() => {
@@ -176,6 +196,8 @@ export const ExpenseIncomeView: Component<ExpenseIncomeViewProps> = (props) => {
     setFormParty('');
     setFormNote('');
     setFormReceiptUrl('');
+    setFormPrimaryImageId(undefined);
+    handleClearImage();
     setShowModal(true);
   };
 
@@ -195,6 +217,8 @@ export const ExpenseIncomeView: Component<ExpenseIncomeViewProps> = (props) => {
     setFormDate(rec.date);
     setFormNote(rec.note || '');
     setFormReceiptUrl(rec.receiptUrl || '');
+    setFormPrimaryImageId(rec.primaryImageId);
+    handleClearImage();
     setShowModal(true);
   };
 
@@ -202,55 +226,141 @@ export const ExpenseIncomeView: Component<ExpenseIncomeViewProps> = (props) => {
     e.preventDefault();
     if (!formCategory() || formAmount() <= 0) return;
 
-    if (editingId()) {
-      // Edit existing
-      if (isExpense()) {
-        await updateExpense(editingId()!, {
-          category: formCategory(),
-          amount: formAmount(),
-          paymentMode: formPaymentMode(),
-          date: formDate(),
-          recipientName: formParty().trim() || undefined,
-          note: formNote().trim() || undefined,
-          receiptUrl: formReceiptUrl() || undefined,
-        });
-      } else {
-        await updateIncome(editingId()!, {
-          source: formCategory(),
-          amount: formAmount(),
-          paymentMode: formPaymentMode(),
-          date: formDate(),
-          payerName: formParty().trim() || undefined,
-          note: formNote().trim() || undefined,
-          receiptUrl: formReceiptUrl() || undefined,
-        });
-      }
-    } else {
-      // Create new
-      if (isExpense()) {
-        await addExpense({
-          category: formCategory(),
-          amount: formAmount(),
-          paymentMode: formPaymentMode(),
-          date: formDate(),
-          recipientName: formParty().trim() || undefined,
-          note: formNote().trim() || undefined,
-          receiptUrl: formReceiptUrl() || undefined,
-        });
-      } else {
-        await addIncome({
-          source: formCategory(),
-          amount: formAmount(),
-          paymentMode: formPaymentMode(),
-          date: formDate(),
-          payerName: formParty().trim() || undefined,
-          note: formNote().trim() || undefined,
-          receiptUrl: formReceiptUrl() || undefined,
-        });
+    const isDemoMode = currentBusiness.id === 'a0000000-0000-0000-0000-000000000001' || !isAuthenticated();
+    const comp = compressedResult();
+
+    if (comp && !isDemoMode) {
+      const limitCheck = await checkBillUploadLimit(currentBusiness.id);
+      if (!limitCheck.allowed) {
+        alert(limitCheck.message || 'Daily bill upload limit reached');
+        return;
       }
     }
 
-    setShowModal(false);
+    setIsUploading(true);
+    setUploadError('');
+    setUploadProgress(10);
+    setUploadStatusText('Preparing record...');
+
+    try {
+      if (editingId()) {
+        // Edit existing
+        const baseUpdates: any = {
+          amount: formAmount(),
+          paymentMode: formPaymentMode(),
+          date: formDate(),
+          note: formNote().trim() || undefined,
+        };
+
+        if (isExpense()) {
+          baseUpdates.category = formCategory();
+          baseUpdates.recipientName = formParty().trim() || undefined;
+        } else {
+          baseUpdates.source = formCategory();
+          baseUpdates.payerName = formParty().trim() || undefined;
+        }
+
+        // If user removed the existing receipt image
+        if (!comp && !formPrimaryImageId() && !formReceiptUrl()) {
+          baseUpdates.primaryImageId = undefined;
+          baseUpdates.receiptUrl = undefined;
+        }
+
+        if (isExpense()) {
+          await updateExpense(editingId()!, baseUpdates);
+        } else {
+          await updateIncome(editingId()!, baseUpdates);
+        }
+
+        // If a new image was selected, upload it
+        if (comp && !isDemoMode) {
+          setUploadStatusText('Uploading receipt to cloud...');
+          const uploadRes = await uploadBillImageWeb({
+            fileOrBlob: comp,
+            businessId: currentBusiness.id,
+            onProgress: (p) => {
+              setUploadProgress(p);
+              if (p < 30) setUploadStatusText(`Preparing session (${p}%)...`);
+              else if (p < 85) setUploadStatusText(`Uploading receipt (${p}%)...`);
+              else setUploadStatusText('Verifying integrity...');
+            },
+          });
+          // Link uploaded image to the record
+          if (isExpense()) {
+            await updateExpense(editingId()!, { primaryImageId: uploadRes.imageId });
+          } else {
+            await updateIncome(editingId()!, { primaryImageId: uploadRes.imageId });
+          }
+        } else if (comp && isDemoMode) {
+          // Demo mode: save preview URL as receiptUrl
+          if (isExpense()) {
+            await updateExpense(editingId()!, { receiptUrl: comp.previewUrl });
+          } else {
+            await updateIncome(editingId()!, { receiptUrl: comp.previewUrl });
+          }
+        }
+      } else {
+        // Create new
+        const newId = crypto.randomUUID();
+
+        if (isExpense()) {
+          setUploadStatusText('Creating expense record...');
+          await addExpense({
+            id: newId,
+            category: formCategory(),
+            amount: formAmount(),
+            paymentMode: formPaymentMode(),
+            date: formDate(),
+            recipientName: formParty().trim() || undefined,
+            note: formNote().trim() || undefined,
+            receiptUrl: (isDemoMode && comp) ? comp.previewUrl : undefined,
+          });
+        } else {
+          setUploadStatusText('Creating income record...');
+          await addIncome({
+            id: newId,
+            source: formCategory(),
+            amount: formAmount(),
+            paymentMode: formPaymentMode(),
+            date: formDate(),
+            payerName: formParty().trim() || undefined,
+            note: formNote().trim() || undefined,
+            receiptUrl: (isDemoMode && comp) ? comp.previewUrl : undefined,
+          });
+        }
+
+        // Upload image to R2 if selected and authenticated
+        if (comp && !isDemoMode) {
+          setUploadStatusText('Uploading receipt to cloud...');
+          const uploadRes = await uploadBillImageWeb({
+            fileOrBlob: comp,
+            businessId: currentBusiness.id,
+            onProgress: (p) => {
+              setUploadProgress(p);
+              if (p < 30) setUploadStatusText(`Preparing session (${p}%)...`);
+              else if (p < 85) setUploadStatusText(`Uploading receipt (${p}%)...`);
+              else setUploadStatusText('Verifying integrity...');
+            },
+          });
+          // Link uploaded image to the record
+          if (isExpense()) {
+            await updateExpense(newId, { primaryImageId: uploadRes.imageId });
+          } else {
+            await updateIncome(newId, { primaryImageId: uploadRes.imageId });
+          }
+        }
+      }
+
+      setShowModal(false);
+      handleClearImage();
+    } catch (err: any) {
+      console.error('Failed to save record:', err);
+      setUploadError(err.message || 'Failed to save record and upload image.');
+    } finally {
+      setIsUploading(false);
+      setUploadStatusText('');
+      setUploadProgress(0);
+    }
   };
 
   const handleDelete = async (id: string, name: string) => {
@@ -267,18 +377,31 @@ export const ExpenseIncomeView: Component<ExpenseIncomeViewProps> = (props) => {
     }
   };
 
-  const handleImageUpload = (e: Event) => {
-    const input = e.target as HTMLInputElement;
-    if (input.files && input.files[0]) {
-      const file = input.files[0];
-      const reader = new FileReader();
-      reader.onload = (uploadEvent) => {
-        if (uploadEvent.target?.result) {
-          setFormReceiptUrl(uploadEvent.target.result as string);
-        }
-      };
-      reader.readAsDataURL(file);
+  /** Compress image on file selection (same pattern as BillGalleryView) */
+  const handleFileSelect = async (e: Event) => {
+    const file = (e.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+
+    setSelectedFile(file);
+    setIsCompressing(true);
+    setUploadError('');
+
+    try {
+      const res = await compressWebImage(file);
+      setCompressedResult(res);
+      setFormReceiptUrl(res.previewUrl);
+    } catch (err: any) {
+      console.error('Image compression failed:', err);
+      setUploadError('Failed to process image. Please try another file.');
+    } finally {
+      setIsCompressing(false);
     }
+  };
+
+  const handleClearImage = () => {
+    setSelectedFile(null);
+    setCompressedResult(null);
+    setUploadError('');
   };
 
   const handleAddCategory = (e: Event) => {
@@ -510,7 +633,10 @@ export const ExpenseIncomeView: Component<ExpenseIncomeViewProps> = (props) => {
               const cat = isExpense() ? (rec as ExpenseRecord).category : (rec as IncomeRecord).source;
               const party = isExpense() ? (rec as ExpenseRecord).recipientName : (rec as IncomeRecord).payerName;
               return (
-                <div class="stat-card flex flex-wrap sm:flex-nowrap items-center justify-between gap-3 hover:border-primary/40 transition-colors !p-4">
+                <div
+                  class="stat-card flex flex-wrap sm:flex-nowrap items-center justify-between gap-3 hover:border-primary/40 transition-colors !p-4 cursor-pointer"
+                  onClick={() => setSelectedDetailRecord(rec)}
+                >
                   {/* Left info */}
                   <div class="flex items-center gap-3.5 min-w-[200px]">
                     <div class={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-extrabold uppercase shrink-0 ${
@@ -546,13 +672,25 @@ export const ExpenseIncomeView: Component<ExpenseIncomeViewProps> = (props) => {
                   {/* Right actions & amount */}
                   <div class="flex items-center gap-4 ml-auto sm:ml-0">
                     {/* Receipt thumbnail if uploaded */}
-                    <Show when={rec.receiptUrl}>
+                    <Show when={rec.primaryImageId || rec.receiptUrl}>
                       <button
-                        onClick={() => setPreviewImageUrl(rec.receiptUrl!)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setPreviewRecord({
+                            primaryImageId: rec.primaryImageId,
+                            receiptUrl: rec.receiptUrl,
+                            title: isExpense() ? (rec as ExpenseRecord).category : (rec as IncomeRecord).source,
+                          });
+                        }}
                         class="w-8 h-8 rounded-lg overflow-hidden border border-gray-200 dark:border-neutral-700 hover:opacity-80 transition relative shrink-0"
                         title="Click to view receipt photo"
                       >
-                        <img src={rec.receiptUrl} alt="Receipt" class="w-full h-full object-cover" />
+                        <BillImageViewer
+                          primaryImageId={rec.primaryImageId}
+                          imageUrl={rec.receiptUrl}
+                          class="w-full h-full"
+                          imgClass="w-full h-full object-cover"
+                        />
                       </button>
                     </Show>
 
@@ -568,7 +706,10 @@ export const ExpenseIncomeView: Component<ExpenseIncomeViewProps> = (props) => {
                       {/* Edit Button */}
                       <button
                         class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-neutral-800 text-gray-400 hover:text-primary transition-colors"
-                        onClick={() => handleOpenEdit(rec)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenEdit(rec);
+                        }}
                         title="Edit entry"
                       >
                         <IconEdit class="w-4 h-4" />
@@ -577,7 +718,10 @@ export const ExpenseIncomeView: Component<ExpenseIncomeViewProps> = (props) => {
                       {/* Delete Button */}
                       <button
                         class="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/40 text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
-                        onClick={() => handleDelete(rec.id, cat)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDelete(rec.id, cat);
+                        }}
                         title="Delete entry"
                       >
                         <IconTrash class="w-4 h-4" />
@@ -727,26 +871,79 @@ export const ExpenseIncomeView: Component<ExpenseIncomeViewProps> = (props) => {
                 <label class="block text-xs font-semibold text-gray-600 dark:text-neutral-300 mb-1.5">
                   {currentLang() === 'ne' ? 'बिल वा रसिदको फोटो (वैकल्पिक)' : 'Receipt / Bill Photo (Optional)'}
                 </label>
+
+                {/* Show existing image if editing a record with primaryImageId */}
+                <Show when={!compressedResult() && formPrimaryImageId()}>
+                  <div class="mb-2 flex items-center gap-2">
+                    <div class="w-12 h-12 rounded-lg overflow-hidden border border-gray-200 dark:border-neutral-700">
+                      <BillImageViewer
+                        primaryImageId={formPrimaryImageId()}
+                        class="w-full h-full"
+                        imgClass="w-full h-full object-cover"
+                      />
+                    </div>
+                    <span class="text-[11px] text-gray-500 dark:text-neutral-400">
+                      {currentLang() === 'ne' ? 'हालको रसिद फोटो' : 'Current receipt photo'}
+                    </span>
+                    <button
+                      type="button"
+                      class="text-xs text-red-500 hover:text-red-700 ml-auto font-medium"
+                      onClick={() => { setFormPrimaryImageId(undefined); setFormReceiptUrl(''); }}
+                    >
+                      {currentLang() === 'ne' ? 'हटाउनुहोस्' : 'Remove'}
+                    </button>
+                  </div>
+                </Show>
+
                 <div class="flex items-center gap-3">
                   <input
                     type="file"
                     accept="image/*"
-                    onChange={handleImageUpload}
+                    onChange={handleFileSelect}
+                    disabled={isCompressing() || isUploading()}
                     class="text-xs file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:bg-gray-100 dark:file:bg-neutral-800 file:text-gray-700 dark:file:text-neutral-300 file:font-semibold file:cursor-pointer hover:file:bg-gray-200"
                   />
-                  <Show when={formReceiptUrl()}>
+
+                  {/* Compression spinner */}
+                  <Show when={isCompressing()}>
+                    <div class="flex items-center gap-1.5 text-xs text-gray-500">
+                      <div class="w-4 h-4 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+                      <span>{currentLang() === 'ne' ? 'कम्प्रेस गर्दै...' : 'Compressing...'}</span>
+                    </div>
+                  </Show>
+
+                  {/* Preview thumbnail of newly selected image */}
+                  <Show when={compressedResult() && formReceiptUrl()}>
                     <div class="relative w-10 h-10 rounded-lg overflow-hidden border border-gray-300 dark:border-neutral-700">
                       <img src={formReceiptUrl()} alt="Preview" class="w-full h-full object-cover" />
                       <button
                         type="button"
                         class="absolute top-0 right-0 bg-red-500 text-white rounded-bl p-0.5"
-                        onClick={() => setFormReceiptUrl('')}
+                        onClick={() => { setFormReceiptUrl(''); handleClearImage(); }}
                       >
                         <IconX class="w-3 h-3" />
                       </button>
                     </div>
                   </Show>
                 </div>
+
+                {/* Upload progress bar */}
+                <Show when={isUploading()}>
+                  <div class="mt-2 space-y-1">
+                    <div class="w-full bg-gray-200 dark:bg-neutral-800 rounded-full h-1.5">
+                      <div
+                        class={`h-1.5 rounded-full transition-all duration-300 ${isExpense() ? 'bg-red-500' : 'bg-emerald-500'}`}
+                        style={{ width: `${uploadProgress()}%` }}
+                      />
+                    </div>
+                    <p class="text-[11px] text-gray-500 dark:text-neutral-400">{uploadStatusText()}</p>
+                  </div>
+                </Show>
+
+                {/* Upload error */}
+                <Show when={uploadError()}>
+                  <p class="mt-1.5 text-xs text-red-500 font-medium">{uploadError()}</p>
+                </Show>
               </div>
 
               {/* Buttons */}
@@ -761,10 +958,16 @@ export const ExpenseIncomeView: Component<ExpenseIncomeViewProps> = (props) => {
                 <button
                   type="submit"
                   class={isExpense() ? 'btn-danger' : 'btn-primary'}
+                  disabled={isUploading() || isCompressing()}
                 >
-                  {editingId()
-                    ? (currentLang() === 'ne' ? 'अपडेट गर्नुहोस्' : 'Update Record')
-                    : (isExpense() ? (currentLang() === 'ne' ? 'खर्च सेभ गर्नुहोस्' : 'Save Expense') : (currentLang() === 'ne' ? 'आम्दानी सेभ गर्नुहोस्' : 'Save Income'))}
+                  <Show when={isUploading()}>
+                    <div class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-1.5 inline-block" />
+                  </Show>
+                  {isUploading()
+                    ? (currentLang() === 'ne' ? 'अपलोड हुँदैछ...' : 'Uploading...')
+                    : editingId()
+                      ? (currentLang() === 'ne' ? 'अपडेट गर्नुहोस्' : 'Update Record')
+                      : (isExpense() ? (currentLang() === 'ne' ? 'खर्च सेभ गर्नुहोस्' : 'Save Expense') : (currentLang() === 'ne' ? 'आम्दानी सेभ गर्नुहोस्' : 'Save Income'))}
                 </button>
               </div>
             </form>
@@ -920,23 +1123,211 @@ export const ExpenseIncomeView: Component<ExpenseIncomeViewProps> = (props) => {
         </div>
       </Show>
 
-      {/* Image Preview Modal */}
-      <Show when={previewImageUrl()}>
-        <div class="modal-overlay animate-fade-in" onClick={() => setPreviewImageUrl(null)}>
+      {/* Full Transaction Details Modal */}
+      <Show when={selectedDetailRecord()}>
+        <div class="modal-overlay animate-fade-in" onClick={() => setSelectedDetailRecord(null)}>
+          <div
+            class="modal-content max-w-lg bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-2xl overflow-hidden shadow-2xl p-0"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {(() => {
+              const rec = selectedDetailRecord()!;
+              const isRecExpense = () => 'category' in rec || isExpense();
+              const cat = isRecExpense() ? (rec as ExpenseRecord).category : (rec as IncomeRecord).source;
+              const party = isRecExpense() ? (rec as ExpenseRecord).recipientName : (rec as IncomeRecord).payerName;
+              const hasReceipt = Boolean(rec.primaryImageId || rec.receiptUrl);
+
+              return (
+                <div>
+                  {/* Header */}
+                  <div class="px-6 py-4 border-b border-gray-100 dark:border-neutral-800 flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                      <span class={`text-xs px-2.5 py-1 rounded-full font-bold ${
+                        isRecExpense()
+                          ? 'bg-red-50 dark:bg-red-950/40 text-red-500 dark:text-red-400'
+                          : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400'
+                      }`}>
+                        {isRecExpense()
+                          ? (currentLang() === 'ne' ? 'खर्च प्रविष्टि' : 'Expense Entry')
+                          : (currentLang() === 'ne' ? 'आम्दानी प्रविष्टि' : 'Income Entry')}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => setSelectedDetailRecord(null)}
+                      class="text-gray-400 hover:text-gray-600 dark:hover:text-white p-1 rounded-lg"
+                    >
+                      <IconX class="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  {/* Body */}
+                  <div class="p-6 space-y-5 max-h-[75vh] overflow-y-auto">
+                    {/* Amount Banner */}
+                    <div class="text-center py-5 bg-gray-50 dark:bg-neutral-800/60 rounded-xl border border-gray-100 dark:border-neutral-800">
+                      <div class={`text-3xl font-extrabold font-mono tracking-tight ${
+                        isRecExpense() ? 'text-red-500 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'
+                      }`}>
+                        {isRecExpense() ? '−' : '+'} {formatNepaliCurrency(rec.amount)}
+                      </div>
+                      <div class="text-xs text-gray-500 dark:text-neutral-400 mt-1 font-mono">
+                        📅 {rec.date}
+                      </div>
+                    </div>
+
+                    {/* Breakdown */}
+                    <div class="space-y-3 text-sm">
+                      <div class="flex items-center justify-between py-1.5 border-b border-gray-100 dark:border-neutral-800/80">
+                        <span class="text-xs text-gray-500 dark:text-neutral-400 font-medium">
+                          {currentLang() === 'ne' ? 'शीर्षक / वर्ग' : 'Category'}
+                        </span>
+                        <span class="font-bold text-gray-900 dark:text-white bg-gray-100 dark:bg-neutral-800 px-2.5 py-0.5 rounded-lg text-xs">
+                          {cat}
+                        </span>
+                      </div>
+
+                      <Show when={party}>
+                        <div class="flex items-center justify-between py-1.5 border-b border-gray-100 dark:border-neutral-800/80">
+                          <span class="text-xs text-gray-500 dark:text-neutral-400 font-medium">
+                            {isRecExpense() ? (currentLang() === 'ne' ? 'पाउने व्यक्ति/संस्था' : 'Paid To') : (currentLang() === 'ne' ? 'दिने व्यक्ति/संस्था' : 'Received From')}
+                          </span>
+                          <span class="font-semibold text-gray-900 dark:text-white">
+                            {party}
+                          </span>
+                        </div>
+                      </Show>
+
+                      <div class="flex items-center justify-between py-1.5 border-b border-gray-100 dark:border-neutral-800/80">
+                        <span class="text-xs text-gray-500 dark:text-neutral-400 font-medium">
+                          {currentLang() === 'ne' ? 'भुक्तानी माध्यम' : 'Payment Mode'}
+                        </span>
+                        <span class="font-semibold text-gray-900 dark:text-white">
+                          {rec.paymentMode}
+                        </span>
+                      </div>
+
+                      <Show when={rec.note}>
+                        <div class="py-1.5 border-b border-gray-100 dark:border-neutral-800/80">
+                          <span class="text-xs text-gray-500 dark:text-neutral-400 font-medium block mb-1">
+                            {currentLang() === 'ne' ? 'कैफियत / विवरण' : 'Note / Description'}
+                          </span>
+                          <p class="text-xs text-gray-700 dark:text-neutral-300 bg-gray-50 dark:bg-neutral-800/50 p-2.5 rounded-lg italic">
+                            {rec.note}
+                          </p>
+                        </div>
+                      </Show>
+                    </div>
+
+                    {/* Receipt / Bill Photo Section */}
+                    <div>
+                      <div class="flex items-center justify-between mb-2">
+                        <h4 class="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-neutral-400">
+                          {currentLang() === 'ne' ? 'संलग्न बिल / रसिद' : 'Attached Receipt / Bill'}
+                        </h4>
+                        <Show when={hasReceipt}>
+                          <button
+                            type="button"
+                            class="text-xs text-primary hover:underline font-semibold"
+                            onClick={() => setPreviewRecord({
+                              primaryImageId: rec.primaryImageId,
+                              receiptUrl: rec.receiptUrl,
+                              title: cat,
+                            })}
+                          >
+                            {currentLang() === 'ne' ? 'पूरा हेर्नुहोस्' : 'View Full Image'}
+                          </button>
+                        </Show>
+                      </div>
+
+                      <Show
+                        when={hasReceipt}
+                        fallback={
+                          <div class="p-6 rounded-xl border border-dashed border-gray-200 dark:border-neutral-800 text-center bg-gray-50/50 dark:bg-neutral-800/30">
+                            <span class="text-xs text-gray-400 dark:text-neutral-500">
+                              {currentLang() === 'ne' ? 'यस कारोबारमा कुनै रसिद संलग्न गरिएको छैन' : 'No receipt attached to this transaction'}
+                            </span>
+                          </div>
+                        }
+                      >
+                        <div
+                          class="rounded-xl overflow-hidden border border-gray-200 dark:border-neutral-800 bg-black/5 dark:bg-black/40 h-56 flex items-center justify-center cursor-pointer group relative"
+                          onClick={() => setPreviewRecord({
+                            primaryImageId: rec.primaryImageId,
+                            receiptUrl: rec.receiptUrl,
+                            title: cat,
+                          })}
+                          title="Click to view full image"
+                        >
+                          <BillImageViewer
+                            primaryImageId={rec.primaryImageId}
+                            imageUrl={rec.receiptUrl}
+                            alt={cat}
+                            class="w-full h-full"
+                            imgClass="w-full h-full object-contain"
+                          />
+                          <div class="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                            <span class="text-xs text-white bg-black/70 px-3 py-1.5 rounded-full font-medium shadow">
+                              {currentLang() === 'ne' ? 'पूरा आकारमा हेर्नुहोस्' : 'Click to expand'}
+                            </span>
+                          </div>
+                        </div>
+                      </Show>
+                    </div>
+
+                    {/* Bottom Actions */}
+                    <div class="flex items-center gap-3 pt-2">
+                      <button
+                        type="button"
+                        class="btn-primary flex-1 flex items-center justify-center gap-2 py-2 text-xs"
+                        onClick={() => {
+                          const target = rec;
+                          setSelectedDetailRecord(null);
+                          handleOpenEdit(target);
+                        }}
+                      >
+                        <IconEdit class="w-3.5 h-3.5" />
+                        <span>{currentLang() === 'ne' ? 'सम्पादन' : 'Edit'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        class="btn-danger flex-1 flex items-center justify-center gap-2 py-2 text-xs"
+                        onClick={() => {
+                          const target = rec;
+                          setSelectedDetailRecord(null);
+                          handleDelete(target.id, cat);
+                        }}
+                      >
+                        <IconTrash class="w-3.5 h-3.5" />
+                        <span>{currentLang() === 'ne' ? 'मेटाउनुहोस्' : 'Delete'}</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      </Show>
+
+      {/* Image Preview Modal - Using BillImageViewer for R2 private images */}
+      <Show when={previewRecord()}>
+        <div class="modal-overlay animate-fade-in" onClick={() => setPreviewRecord(null)}>
           <div
             class="max-w-xl max-h-[85vh] bg-black/90 p-2 rounded-2xl overflow-hidden shadow-2xl relative"
             onClick={(e) => e.stopPropagation()}
           >
             <button
-              onClick={() => setPreviewImageUrl(null)}
+              onClick={() => setPreviewRecord(null)}
               class="absolute top-4 right-4 z-10 bg-black/60 text-white rounded-full p-1.5 hover:bg-black"
             >
               <IconX class="w-5 h-5" />
             </button>
-            <img
-              src={previewImageUrl()!}
-              alt="Receipt Preview"
-              class="max-h-[80vh] w-auto mx-auto object-contain rounded-xl"
+            <BillImageViewer
+              primaryImageId={previewRecord()!.primaryImageId}
+              imageUrl={previewRecord()!.receiptUrl}
+              alt={previewRecord()!.title || 'Receipt Preview'}
+              class="max-h-[80vh] w-full mx-auto"
+              imgClass="max-h-[80vh] w-auto mx-auto object-contain rounded-xl"
             />
           </div>
         </div>

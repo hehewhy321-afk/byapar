@@ -238,6 +238,7 @@ export interface ExpenseRecord {
   note?: string;
   recipientName?: string;
   receiptUrl?: string;
+  primaryImageId?: string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -251,6 +252,7 @@ export interface IncomeRecord {
   note?: string;
   payerName?: string;
   receiptUrl?: string;
+  primaryImageId?: string;
   createdAt?: string;
   updatedAt?: string;
 }

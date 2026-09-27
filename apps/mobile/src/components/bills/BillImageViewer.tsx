@@ -5,21 +5,30 @@ import { BillImage } from '../../types';
 import { getBillImageUrl } from '../../services/billImageUploadService';
 
 interface Props {
-  bill: BillImage;
+  bill?: BillImage | { imageUri?: string; primaryImageId?: string };
+  primaryImageId?: string;
+  imageUri?: string;
   businessId: string;
   style?: StyleProp<ImageStyle>;
   containerStyle?: StyleProp<ViewStyle>;
   resizeMode?: 'cover' | 'contain';
+  onResolvedUri?: (uri: string) => void;
 }
 
 export const BillImageViewer: React.FC<Props> = ({
   bill,
+  primaryImageId,
+  imageUri,
   businessId,
   style,
   containerStyle,
   resizeMode = 'cover',
+  onResolvedUri,
 }) => {
-  const [resolvedUri, setResolvedUri] = useState<string>(bill.imageUri || '');
+  const targetImageUri = imageUri || bill?.imageUri || '';
+  const targetImageId = primaryImageId || bill?.primaryImageId;
+
+  const [resolvedUri, setResolvedUri] = useState<string>(targetImageUri);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [hasError, setHasError] = useState<boolean>(false);
 
@@ -27,20 +36,22 @@ export const BillImageViewer: React.FC<Props> = ({
     let isMounted = true;
 
     // 1. If local URI exists (e.g. file:///...), use it directly
-    if (bill.imageUri && (bill.imageUri.startsWith('file://') || bill.imageUri.startsWith('http'))) {
-      setResolvedUri(bill.imageUri);
+    if (targetImageUri && (targetImageUri.startsWith('file://') || targetImageUri.startsWith('http'))) {
+      setResolvedUri(targetImageUri);
+      if (onResolvedUri) onResolvedUri(targetImageUri);
       return;
     }
 
     // 2. If primaryImageId exists, resolve private signed GET URL
-    if (bill.primaryImageId && businessId) {
+    if (targetImageId && businessId) {
       setIsLoading(true);
       setHasError(false);
 
-      getBillImageUrl(bill.primaryImageId, businessId)
+      getBillImageUrl(targetImageId, businessId)
         .then((url) => {
           if (isMounted) {
             setResolvedUri(url);
+            if (onResolvedUri) onResolvedUri(url);
             setIsLoading(false);
           }
         })
@@ -56,7 +67,7 @@ export const BillImageViewer: React.FC<Props> = ({
     return () => {
       isMounted = false;
     };
-  }, [bill.imageUri, bill.primaryImageId, businessId]);
+  }, [targetImageUri, targetImageId, businessId]);
 
   if (isLoading) {
     return (

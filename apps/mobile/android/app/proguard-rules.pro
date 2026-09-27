@@ -32,12 +32,16 @@
 -keep class com.reactnativecommunity.asyncstorage.** { *; }
 -dontwarn com.reactnativecommunity.asyncstorage.**
 
-# 6. Expo Modules Core
+# 6. Expo Modules Core & Font/Asset Loaders
 -keep class expo.modules.** { *; }
+-keep class expo.modules.font.** { *; }
+-keep class expo.modules.asset.** { *; }
+-keep class com.facebook.react.common.assets.** { *; }
+-keep class com.oblador.vectoricons.** { *; }
 -dontwarn expo.modules.**
 
-# 7. Code Obfuscation & String/Method Shrinking
--repackageclasses 'com.byapar.obf'
+# 7. Code Optimization Rules
+-keep class com.byapar.** { *; }
 -allowaccessmodification
 -dontusemixedcaseclassnames
 -dontskipnonpubliclibraryclasses

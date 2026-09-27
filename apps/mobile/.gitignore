@@ -28,6 +28,8 @@ android/captures/
 android/local.properties
 android/.cxx/
 android/default/
+android/app/src/main/assets/fonts/
+*.ttf
 *.apk
 *.aab
 

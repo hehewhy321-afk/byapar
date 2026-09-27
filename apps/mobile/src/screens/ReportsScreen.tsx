@@ -1,5 +1,5 @@
-import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, FlatList } from 'react-native';
+import React, { useState, useMemo } from 'react';
+import { View, Text, StyleSheet, FlatList, RefreshControl } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { Theme } from '../theme';
 import { useApp } from '../context/AppContext';
@@ -10,8 +10,20 @@ import { FadeInView } from '../components/common/FadeInView';
 import { EmptyState } from '../components/common/EmptyState';
 
 export const ReportsScreen: React.FC = () => {
-  const { invoices, bills, parties, setActiveInvoice, activeInvoice, theme, themeMode } = useApp();
+  const { invoices, bills, parties, setActiveInvoice, activeInvoice, theme, themeMode, refreshData } = useApp();
   const styles = useMemo(() => createStyles(theme, themeMode), [theme, themeMode]);
+
+  const [refreshing, setRefreshing] = useState(false);
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refreshData();
+    } catch (e) {
+      console.warn('[ReportsScreen] Refresh error:', e);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   // Financial calculations
   const totalSales = invoices.reduce((acc, inv) => acc + (inv.total || 0), 0);
@@ -133,6 +145,14 @@ export const ReportsScreen: React.FC = () => {
         renderItem={renderInvoiceItem}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={theme.colors.primary}
+            colors={[theme.colors.primary]}
+          />
+        }
         ListHeaderComponent={
           <View style={styles.headerSection}>
             {/* HERO REVENUE TILE */}
