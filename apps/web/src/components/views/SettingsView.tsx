@@ -217,10 +217,6 @@ export const SettingsView: Component = () => {
       {/* Top Header Banner */}
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-orange-100/70 dark:border-orange-900/30">
         <div>
-          <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-gradient-to-r from-orange-50 to-amber-50 dark:from-orange-950/60 dark:to-amber-950/40 text-[#FF4500] text-xs font-bold border border-orange-200/80 dark:border-orange-900/50 mb-1.5 shadow-xs">
-            <span class="w-2 h-2 rounded-full bg-[#FF4500] animate-pulse" />
-            <span>{currentLang() === 'ne' ? 'पसल कन्फिगरेसन र सेटिङहरू' : 'Store Configuration & Preferences'}</span>
-          </div>
           <h1 class="text-2xl font-black font-heading text-gray-900 dark:text-white tracking-tight flex items-center gap-2">
             <span>{currentLang() === 'ne' ? 'सेटिङहरू' : 'System Settings'}</span>
           </h1>
@@ -229,24 +225,6 @@ export const SettingsView: Component = () => {
               ? 'आफ्नो पसल प्रोफाइल, Fonepay QR, थर्मल प्रिन्टर, सदस्यता तथा भाषा मिलाउनुहोस्'
               : 'Customize store identity, Fonepay counter standee, POS printer hardware, plans, and regional locales'}
           </p>
-        </div>
-
-        {/* Store identifier badge */}
-        <div class="flex items-center gap-2.5 px-4 py-2 rounded-2xl bg-gradient-to-r from-orange-50/80 via-white to-amber-50/60 dark:from-neutral-900 dark:via-[#1c1815] dark:to-neutral-900 border border-orange-200/80 dark:border-orange-900/40 text-xs shadow-sm self-start sm:self-auto">
-          <div class="w-7 h-7 rounded-xl bg-gradient-to-br from-[#FF4500] to-amber-500 text-white flex items-center justify-center font-bold shadow-xs">
-            <IconStore class="w-4 h-4" />
-          </div>
-          <div>
-            <div class="font-bold text-gray-900 dark:text-neutral-100 truncate max-w-[180px]">
-              {currentBusiness.nameEn || currentBusiness.name || 'My Store'}
-            </div>
-            <div class="text-[10px] text-gray-400 dark:text-neutral-500 font-mono">
-              {currentBusiness.pan ? `PAN: ${currentBusiness.pan}` : 'Single Counter Mode'}
-            </div>
-          </div>
-          <span class="ml-2 font-mono text-[10px] font-bold px-2 py-0.5 rounded-full uppercase bg-[#FF4500]/10 text-[#FF4500] dark:bg-orange-950/70 dark:text-orange-300 border border-orange-200 dark:border-orange-800">
-            {sub()?.planName || 'Free'}
-          </span>
         </div>
       </div>
 
@@ -494,33 +472,6 @@ export const SettingsView: Component = () => {
                       {currentBusiness.address || 'Kathmandu, Nepal'}
                     </div>
                   </div>
-                </div>
-
-                {/* Digital Visiting Card Studio Card */}
-                <div class="p-5 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-teal-500/5 to-transparent border border-emerald-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div class="flex items-center gap-3.5">
-                    <div class="w-11 h-11 rounded-2xl bg-emerald-600 text-white flex items-center justify-center font-bold shadow-md shadow-emerald-600/30">
-                      <IconBusinessCard class="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h4 class="font-bold text-sm text-gray-900 dark:text-white flex items-center gap-2">
-                        <span>{currentLang() === 'ne' ? 'डिजिटल भिजिटिङ कार्ड स्टुडियो' : 'Digital Visiting Card Studio'}</span>
-                        <span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">5 Themes</span>
-                      </h4>
-                      <p class="text-xs text-gray-500 dark:text-neutral-400 mt-0.5">
-                        Design professional visiting cards, download high-res PNG, or share to WhatsApp customers
-                      </p>
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('business-cards')}
-                    class="px-4 py-2.5 rounded-xl bg-white dark:bg-neutral-800 border border-emerald-300 dark:border-emerald-700 text-xs font-bold text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-neutral-700 transition flex items-center gap-1.5 self-start sm:self-auto shadow-xs active:scale-95 cursor-pointer"
-                  >
-                    <span>Open Card Studio</span>
-                    <IconChevronRight class="w-3.5 h-3.5" />
-                  </button>
                 </div>
               </div>
             </Show>
