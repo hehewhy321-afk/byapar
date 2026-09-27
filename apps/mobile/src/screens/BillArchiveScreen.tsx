@@ -307,10 +307,10 @@ export const BillArchiveScreen: React.FC = () => {
                     style={styles.thumbImage}
                     resizeMode="cover"
                   />
-                  <View style={styles.scanBadge}>
+                  {/* <View style={styles.scanBadge}>
                     <Feather name="shield" size={11} color={theme.colors.emerald} />
                     <Text style={styles.scanBadgeText}>Verified Scan</Text>
-                  </View>
+                  </View> */}
                 </View>
               ) : null}
 
@@ -443,10 +443,10 @@ export const BillArchiveScreen: React.FC = () => {
                     style={styles.previewFullImage}
                     resizeMode="contain"
                   />
-                  <View style={styles.imageZoomHintBadge}>
+                  {/* <View style={styles.imageZoomHintBadge}>
                     <Feather name="maximize-2" size={11} color="#FFFFFF" />
                     <Text style={styles.imageZoomHintText}>Tap to View Full</Text>
-                  </View>
+                  </View> */}
                 </TouchableOpacity>
               ) : null}
 
