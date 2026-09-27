@@ -3,6 +3,7 @@ import { signIn, signUp } from '../../db/auth';
 import { setCurrentPage, updateBusinessProfile } from '../../db/localDb';
 import { IconAlertCircle, IconCheck } from '../icons';
 import { BUSINESS_TYPES, BusinessType } from '@byapar/core';
+import { TurnstileWidget } from './TurnstileWidget';
 
 export const AuthPage: Component = () => {
   const [mode, setMode] = createSignal<'login' | 'signup'>('login');
@@ -23,6 +24,7 @@ export const AuthPage: Component = () => {
   const [signupPan, setSignupPan] = createSignal('');
   const [signupPass, setSignupPass] = createSignal('');
   const [signupConfirmPass, setSignupConfirmPass] = createSignal('');
+  const [turnstileToken, setTurnstileToken] = createSignal('');
 
   const handleLogin = async (e: Event) => {
     e.preventDefault();
@@ -251,6 +253,13 @@ export const AuthPage: Component = () => {
                   class="w-full px-4 py-2.5 rounded-full border border-stone-200 bg-stone-50/50 text-sm text-[#292524] placeholder-stone-400 font-heading transition-all focus:outline-none focus:ring-2 focus:ring-[#FFB7B2]/20 focus:border-[#FFB7B2]/40"
                 />
               </div>
+              
+              <TurnstileWidget
+                action="login"
+                theme="light"
+                onVerify={(token) => setTurnstileToken(token)}
+              />
+
               <button
                 type="submit"
                 disabled={loading()}
@@ -364,6 +373,12 @@ export const AuthPage: Component = () => {
                   />
                 </div>
               </div>
+
+              <TurnstileWidget
+                action="signup"
+                theme="light"
+                onVerify={(token) => setTurnstileToken(token)}
+              />
 
               <button
                 type="submit"

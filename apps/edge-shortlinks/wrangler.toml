@@ -1,0 +1,14 @@
+name = "byapar-edge-shortlinks"
+main = "src/index.ts"
+compatibility_date = "2026-09-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Cloudflare D1 Database Binding
+[[d1_databases]]
+binding = "DB"
+database_name = "byapar_shortlinks"
+database_id = "local-byapar-shortlinks-id"
+
+[vars]
+ENVIRONMENT = "production"
+APP_ORIGIN = "https://app.byapar.com"

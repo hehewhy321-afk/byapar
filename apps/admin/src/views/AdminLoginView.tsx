@@ -1,5 +1,6 @@
 import { Component, createSignal } from 'solid-js';
 import { loginAdmin, isAuthLoading, bypassLoginDev } from '../services/adminAuth';
+import { TurnstileWidget } from '../components/TurnstileWidget';
 
 interface AdminLoginViewProps {
   onSuccess: () => void;
@@ -8,6 +9,7 @@ interface AdminLoginViewProps {
 export const AdminLoginView: Component<AdminLoginViewProps> = (props) => {
   const [email, setEmail] = createSignal('');
   const [password, setPassword] = createSignal('');
+  const [turnstileToken, setTurnstileToken] = createSignal('');
   const [errorMessage, setErrorMessage] = createSignal<string | null>(null);
 
   const handleSubmit = async (e: Event) => {
@@ -82,6 +84,12 @@ export const AdminLoginView: Component<AdminLoginViewProps> = (props) => {
               class="w-full px-3.5 py-2.5 rounded-lg border border-gray-300 text-gray-900 placeholder-gray-400 text-xs focus:outline-none focus:border-[#FF4500] focus:ring-1 focus:ring-[#FF4500] transition-colors"
             />
           </div>
+
+          <TurnstileWidget
+            action="admin-login"
+            theme="light"
+            onVerify={(token) => setTurnstileToken(token)}
+          />
 
           <button
             type="submit"

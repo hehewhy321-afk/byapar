@@ -4,6 +4,8 @@ import { formatNepaliCurrency, toNepaliDigits } from '@byapar/core';
 import { currentBusiness, settings } from '../db/localDb';
 import { IconPrinter, IconWhatsApp, IconX } from './icons';
 
+import { buildWhatsAppInvoiceMessage } from '../services/edgeShortlinkService';
+
 interface ReceiptModalProps {
   invoice: Invoice;
   onClose: () => void;
@@ -14,16 +16,9 @@ export const ReceiptModal: Component<ReceiptModalProps> = (props) => {
     window.print();
   };
 
-  const handleShareWhatsApp = () => {
-    const text = encodeURIComponent(
-      `*${currentBusiness.name}*\n` +
-      `Invoice #: ${props.invoice.invoiceNumber}\n` +
-      `Date: ${props.invoice.invoiceDateAd}\n` +
-      `Total Amount: Rs. ${props.invoice.totalAmount}\n` +
-      `Payment Mode: ${props.invoice.paymentMode}\n` +
-      (props.invoice.dueAmount > 0 ? `*Balance Due: Rs. ${props.invoice.dueAmount}*\n` : '') +
-      `Thank you for your business!`
-    );
+  const handleShareWhatsApp = async () => {
+    const rawText = await buildWhatsAppInvoiceMessage(props.invoice);
+    const text = encodeURIComponent(rawText);
     window.open(`https://wa.me/?text=${text}`, '_blank');
   };
 

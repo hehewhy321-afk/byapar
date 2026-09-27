@@ -3,12 +3,14 @@ import { signIn, signUp } from '../../db/auth';
 import { showAuthModal, setShowAuthModal, updateBusinessProfile } from '../../db/localDb';
 import { IconX, IconAlertCircle, IconCheck } from '../icons';
 import { BUSINESS_TYPES, BusinessType } from '@byapar/core';
+import { TurnstileWidget } from './TurnstileWidget';
 
 export const AuthModal: Component = () => {
   const [mode, setMode] = createSignal<'login' | 'signup'>('login');
   const [loading, setLoading] = createSignal(false);
   const [errorMsg, setErrorMsg] = createSignal('');
   const [successMsg, setSuccessMsg] = createSignal('');
+  const [turnstileToken, setTurnstileToken] = createSignal('');
 
   // Login form
   const [loginEmail, setLoginEmail] = createSignal('');
@@ -169,6 +171,11 @@ export const AuthModal: Component = () => {
                 />
               </div>
 
+              <TurnstileWidget
+                action="modal-login"
+                onVerify={(token) => setTurnstileToken(token)}
+              />
+
               <button
                 type="submit"
                 disabled={loading()}
@@ -289,6 +296,11 @@ export const AuthModal: Component = () => {
                   />
                 </div>
               </div>
+
+              <TurnstileWidget
+                action="modal-signup"
+                onVerify={(token) => setTurnstileToken(token)}
+              />
 
               <button
                 type="submit"
