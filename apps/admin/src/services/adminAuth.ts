@@ -25,18 +25,9 @@ export interface AdminUser {
 
 const ADMIN_STORAGE_KEY = 'byapar_admin_session';
 
-function getStoredAdmin(): AdminUser | null {
-  try {
-    const raw = localStorage.getItem(ADMIN_STORAGE_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch (err) {
-    console.error('Failed to parse admin session', err);
-  }
-  return null;
-}
-
-export const [currentAdmin, setCurrentAdmin] = createSignal<AdminUser | null>(getStoredAdmin());
+export const [currentAdmin, setCurrentAdmin] = createSignal<AdminUser | null>(null);
 export const [isAuthLoading, setIsAuthLoading] = createSignal<boolean>(false);
+export const [isInitializingSession, setIsInitializingSession] = createSignal<boolean>(true);
 
 export async function checkAndSetAdminProfile(user: User): Promise<AdminUser | null> {
   try {
@@ -47,12 +38,12 @@ export async function checkAndSetAdminProfile(user: User): Promise<AdminUser | n
       .single();
 
     if (error || !profile) {
-      console.warn('Profile fetch failed:', error);
+      console.warn('[AdminSecurity] Profile fetch failed or not found:', error?.message);
       return null;
     }
 
     if (!profile.is_admin) {
-      console.warn('User is not authorized as platform admin');
+      console.warn('[AdminSecurity] Unauthorized access attempt: Account is not a platform admin:', user.id);
       return null;
     }
 
@@ -68,7 +59,7 @@ export async function checkAndSetAdminProfile(user: User): Promise<AdminUser | n
     setCurrentAdmin(admin);
     return admin;
   } catch (err) {
-    console.error('Admin profile verification error:', err);
+    console.error('[AdminSecurity] Admin profile verification error:', err);
     return null;
   }
 }
@@ -77,7 +68,7 @@ export async function loginAdmin(email: string, pass: string): Promise<{ success
   setIsAuthLoading(true);
   try {
     const { data, error } = await supabase.auth.signInWithPassword({
-      email,
+      email: email.trim().toLowerCase(),
       password: pass,
     });
 
@@ -91,6 +82,8 @@ export async function loginAdmin(email: string, pass: string): Promise<{ success
 
     if (!admin) {
       await supabase.auth.signOut();
+      localStorage.removeItem(ADMIN_STORAGE_KEY);
+      setCurrentAdmin(null);
       return { success: false, error: 'Access denied: Your account is not configured as a Platform Admin.' };
     }
 
@@ -111,32 +104,42 @@ export async function logoutAdmin(): Promise<void> {
   setCurrentAdmin(null);
 }
 
-// Auto-check active session on mount
+// Auto-check active session cryptographically on mount
 export async function initAdminSession(): Promise<void> {
+  setIsInitializingSession(true);
   try {
     const { data: { session } } = await supabase.auth.getSession();
     if (session?.user) {
-      await checkAndSetAdminProfile(session.user);
-    } else {
-      const stored = getStoredAdmin();
-      if (stored) {
-        setCurrentAdmin(stored);
+      const admin = await checkAndSetAdminProfile(session.user);
+      if (!admin) {
+        // Logged in with Supabase but not an admin -> kick out
+        await supabase.auth.signOut();
+        localStorage.removeItem(ADMIN_STORAGE_KEY);
+        setCurrentAdmin(null);
       }
+    } else {
+      // No active JWT session -> wipe any stale/spoofed local storage
+      localStorage.removeItem(ADMIN_STORAGE_KEY);
+      setCurrentAdmin(null);
     }
   } catch (err) {
-    console.error('Session check error:', err);
+    console.error('[AdminSecurity] Session check error:', err);
+    localStorage.removeItem(ADMIN_STORAGE_KEY);
+    setCurrentAdmin(null);
+  } finally {
+    setIsInitializingSession(false);
   }
 }
 
-export function bypassLoginDev(): AdminUser {
-  const admin: AdminUser = {
-    id: '33089d12-bb73-4d71-bb8c-f8ef0a3196d7',
-    email: 'hehewhy.321@gmail.com',
-    fullName: 'Platform Super Admin',
-    isAdmin: true,
-  };
-  localStorage.setItem(ADMIN_STORAGE_KEY, JSON.stringify(admin));
-  setCurrentAdmin(admin);
-  return admin;
-}
+// Listen to auth state transitions
+supabase.auth.onAuthStateChange(async (event, session) => {
+  if (event === 'SIGNED_OUT' || !session) {
+    localStorage.removeItem(ADMIN_STORAGE_KEY);
+    setCurrentAdmin(null);
+  } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+    if (session?.user) {
+      await checkAndSetAdminProfile(session.user);
+    }
+  }
+});
 

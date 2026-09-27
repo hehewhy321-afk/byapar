@@ -1,5 +1,5 @@
 import { Component, createSignal, Show, Switch, Match, onSettled } from 'solid-js';
-import { currentAdmin, initAdminSession } from './services/adminAuth';
+import { currentAdmin, initAdminSession, isInitializingSession } from './services/adminAuth';
 import { AdminSidebar, AdminTab } from './components/layout/AdminSidebar';
 import { AdminTopBar } from './components/layout/AdminTopBar';
 import { CommandPalette } from './components/CommandPalette';
@@ -97,9 +97,20 @@ export const App: Component = () => {
 
   return (
     <Show
-      when={currentAdmin()}
-      fallback={<AdminLoginView onSuccess={() => setActiveTab('dashboard')} />}
+      when={!isInitializingSession()}
+      fallback={
+        <div class="min-h-screen bg-[#f8fafc] flex items-center justify-center">
+          <div class="flex flex-col items-center gap-3">
+            <div class="w-10 h-10 border-3 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+            <span class="text-xs text-gray-400 font-medium tracking-wide">Verifying admin session...</span>
+          </div>
+        </div>
+      }
     >
+      <Show
+        when={currentAdmin()}
+        fallback={<AdminLoginView onSuccess={() => setActiveTab('dashboard')} />}
+      >
       <div class="flex min-h-screen bg-[#f8fafc] text-gray-900 font-sans antialiased">
         {/* Left Sidebar */}
         <AdminSidebar activeTab={activeTab()} setActiveTab={setActiveTab} />
@@ -185,6 +196,7 @@ export const App: Component = () => {
         />
       </div>
     </Show>
+  </Show>
   );
 };
 
