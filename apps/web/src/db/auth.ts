@@ -67,7 +67,7 @@ export const [showCreateStoreModal, setShowCreateStoreModal] = createSignal(fals
 export async function syncUserBusiness(user: User): Promise<AuthUser> {
   let name = user.user_metadata?.full_name || user.email?.split('@')[0] || 'व्यापारी';
   let businessId = 'a0000000-0000-0000-0000-000000000001';
-  let businessName = user.user_metadata?.business_name || 'Shrestha Mart & General Store';
+  let businessName = user.user_metadata?.business_name || '';
   let businessType: BusinessType = (user.user_metadata?.business_type as BusinessType) || 'general';
   let phone = user.phone || user.user_metadata?.phone || '';
   let pan = user.user_metadata?.pan || '';
@@ -163,7 +163,7 @@ export async function syncUserBusiness(user: User): Promise<AuthUser> {
     }));
     localStorage.setItem('byapar_current_business', JSON.stringify(currentBusiness));
     syncFromCloud();
-    initRealtimeSync();
+    initRealtimeSync(businessId);
   });
 
   return authUser;
@@ -193,7 +193,7 @@ export async function switchUserStore(targetBusinessId: string) {
   }));
   localStorage.setItem('byapar_current_business', JSON.stringify(currentBusiness));
   syncFromCloud();
-  initRealtimeSync();
+  initRealtimeSync(targetBusinessId);
 }
 
 export async function createNewUserStore(params: {

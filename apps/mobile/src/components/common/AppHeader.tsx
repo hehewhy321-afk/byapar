@@ -28,8 +28,20 @@ const TAB_TITLES: Record<string, string> = {
 };
 
 export const AppHeader: React.FC = () => {
-  const { store, activeBizId, setActiveTab, activeTab, theme, t, language } = useApp();
+  const { store, activeBizId, setActiveTab, activeTab, theme, t, language, user } = useApp();
   const [unreadCount, setUnreadCount] = useState(0);
+
+  const displayStoreName = () => {
+    const raw = store.name;
+    if (!raw || raw.includes('Shrestha Mart') || raw.includes('श्रेष्ठ किराना')) {
+      return (
+        user?.user_metadata?.business_name ||
+        user?.user_metadata?.store_name ||
+        (user ? 'My Store' : 'Byapar')
+      );
+    }
+    return raw;
+  };
   const [showBranchModal, setShowBranchModal] = useState(false);
   const [showSubModal, setShowSubModal] = useState(false);
   const [subState, setSubState] = useState<any>(null);
@@ -150,7 +162,7 @@ export const AppHeader: React.FC = () => {
               style={[styles.storeNameText, { color: theme.colors.textPrimary }]}
               numberOfLines={1}
             >
-              {store.name || 'My Store'}
+              {displayStoreName()}
             </Text>
             {isPaid && (
               <View style={styles.proBadge}>

@@ -639,164 +639,129 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Hydrate Cloud Supabase data
+  // Hydrate Cloud Supabase data with extreme optimization (<400ms pull-to-refresh)
   const hydrateFromCloud = async (targetBizId?: string) => {
     const bizId = targetBizId || activeBizId;
     if (!bizId) return;
 
-    // First auto-backfill any local unsynced records to cloud
-    await backfillLocalDataToCloud(bizId);
+    // Trigger non-blocking cloud backfill in the background (never blocks pull-to-refresh!)
+    backfillLocalDataToCloud(bizId).catch((err) => console.warn('Background backfill non-fatal:', err));
 
     try {
-      // 1. Categories
-      const { data: dbCats } = await supabase
-        .from('categories')
-        .select('*')
-        .eq('business_id', bizId)
-        .is('deleted_at', null)
-        .order('created_at', { ascending: true });
+      // Parallelize all Supabase network calls in a single batch
+      const [
+        catsRes,
+        itemsRes,
+        partiesRes,
+        khataRes,
+        invoicesRes,
+        paymentsRes,
+        billsRes,
+        accountTxsRes,
+        accountsRes,
+        staffRes,
+        expensesRes,
+        incomesRes,
+        bizRes,
+        remindersRes,
+        notesRes,
+      ] = await Promise.all([
+        supabase.from('categories').select('*').eq('business_id', bizId).is('deleted_at', null).order('created_at', { ascending: true }),
+        supabase.from('items').select('*, categories(id, name, color_code)').eq('business_id', bizId).is('deleted_at', null).order('created_at', { ascending: false }),
+        supabase.from('parties').select('*').eq('business_id', bizId).is('deleted_at', null).order('created_at', { ascending: false }),
+        supabase.from('khata_entries').select('*').eq('business_id', bizId).is('deleted_at', null).order('created_at', { ascending: false }),
+        supabase.from('invoices').select('*, invoice_items(*)').eq('business_id', bizId).is('deleted_at', null).order('created_at', { ascending: false }),
+        supabase.from('payments').select('*').eq('business_id', bizId).order('created_at', { ascending: false }),
+        supabase.from('bills').select('*').eq('business_id', bizId).order('created_at', { ascending: false }),
+        supabase.from('account_transactions').select('*').eq('business_id', bizId).order('date_ad', { ascending: false }),
+        supabase.from('bank_accounts').select('*').eq('business_id', bizId),
+        supabase.from('staff').select('*').eq('business_id', bizId).order('created_at', { ascending: false }),
+        supabase.from('expenses').select('*').eq('business_id', bizId).order('created_at', { ascending: false }),
+        supabase.from('incomes').select('*').eq('business_id', bizId).order('created_at', { ascending: false }),
+        bizId !== DEFAULT_BIZ_ID ? supabase.from('businesses').select('*').eq('id', bizId).maybeSingle() : Promise.resolve({ data: null, error: null }),
+        supabase.from('reminders').select('*').eq('business_id', bizId).order('created_at', { ascending: false }),
+        supabase.from('notes').select('*').eq('business_id', bizId).order('created_at', { ascending: false }),
+      ]);
 
-      if (dbCats && dbCats.length > 0) {
-        const mappedCats: CategoryItem[] = dbCats.map((c: any) => ({
+      const storageTasks: Promise<any>[] = [];
+
+      // 1. Categories
+      if (catsRes.data && catsRes.data.length > 0) {
+        const mappedCats: CategoryItem[] = catsRes.data.map((c: any) => ({
           id: c.id,
           name: c.name,
           color: c.color_code,
         }));
         setCategories(mappedCats);
-        await storage.set('categories', mappedCats);
-      } else {
-        // Automatically seed business categories if empty
-        try {
-          await supabase.rpc('seed_business_categories', {
-            p_biz_id: bizId,
-            p_type: store.businessType || 'general',
-          });
-          const { data: seededCats } = await supabase
-            .from('categories')
-            .select('*')
-            .eq('business_id', bizId)
-            .is('deleted_at', null)
-            .order('created_at', { ascending: true });
-          if (seededCats && seededCats.length > 0) {
-            const mappedCats: CategoryItem[] = seededCats.map((c: any) => ({
-              id: c.id,
-              name: c.name,
-              color: c.color_code,
-            }));
-            setCategories(mappedCats);
-            await storage.set('categories', mappedCats);
-          }
-        } catch (seedErr) {
-          console.warn('Auto seed categories non-fatal:', seedErr);
-        }
+        storageTasks.push(storage.set('categories', mappedCats));
       }
 
-      // 2. Products (with categories relationship join)
-      const { data: dbItems } = await supabase
-        .from('items')
-        .select('*, categories(id, name, color_code)')
-        .eq('business_id', bizId)
-        .is('deleted_at', null)
-        .order('created_at', { ascending: false });
-
-      if (dbItems) {
-        const mapped = dbItems.map(mapDbToProduct);
+      // 2. Products
+      if (itemsRes.data) {
+        const mapped = itemsRes.data.map(mapDbToProduct);
         setProducts(mapped);
-        await storage.set('products', mapped);
+        storageTasks.push(storage.set('products', mapped));
       }
 
       // 3. Parties
-      const { data: dbParties } = await supabase
-        .from('parties')
-        .select('*')
-        .eq('business_id', bizId)
-        .is('deleted_at', null)
-        .order('created_at', { ascending: false });
-
-      if (dbParties) {
-        const mapped = dbParties.map(mapDbToParty);
+      if (partiesRes.data) {
+        const mapped = partiesRes.data.map(mapDbToParty);
         setParties(mapped);
-        await storage.set('parties', mapped);
+        storageTasks.push(storage.set('parties', mapped));
       }
 
       // 4. Khata Entries
-      const { data: dbKhata } = await supabase
-        .from('khata_entries')
-        .select('*')
-        .eq('business_id', bizId)
-        .is('deleted_at', null)
-        .order('created_at', { ascending: false });
-
-      if (dbKhata) {
-        const mapped = dbKhata.map(mapDbToLedger);
+      if (khataRes.data) {
+        const mapped = khataRes.data.map(mapDbToLedger);
         setLedgerEntries(mapped);
-        await storage.set('ledger', mapped);
+        storageTasks.push(storage.set('ledger', mapped));
       }
 
       // 5. Invoices & Vouchers
-      const { data: dbInvoices } = await supabase
-        .from('invoices')
-        .select('*, invoice_items(*)')
-        .eq('business_id', bizId)
-        .is('deleted_at', null)
-        .order('created_at', { ascending: false });
-
-      if (dbInvoices) {
-        const salesInvoices = dbInvoices
+      if (invoicesRes.data) {
+        const salesInvoices = invoicesRes.data
           .filter((r: any) => !r.invoice_type || r.invoice_type === 'sale')
           .map(mapDbToInvoice);
         setInvoices(salesInvoices);
-        await storage.set('invoices', salesInvoices);
+        storageTasks.push(storage.set('invoices', salesInvoices));
 
-        const quots = dbInvoices
+        const quots = invoicesRes.data
           .filter((r: any) => r.invoice_type === 'quotation')
           .map(mapDbToQuotation);
         setQuotations(quots);
-        await storage.set('quotations', quots);
+        storageTasks.push(storage.set('quotations', quots));
 
-        const sReturns = dbInvoices
+        const sReturns = invoicesRes.data
           .filter((r: any) => r.invoice_type === 'sale_return')
           .map(mapDbToSalesReturn);
         setSalesReturns(sReturns);
-        await storage.set('sales_returns', sReturns);
+        storageTasks.push(storage.set('sales_returns', sReturns));
 
-        const pReturns = dbInvoices
+        const pReturns = invoicesRes.data
           .filter((r: any) => r.invoice_type === 'purchase_return')
           .map(mapDbToPurchaseReturn);
         setPurchaseReturns(pReturns);
-        await storage.set('purchase_returns', pReturns);
+        storageTasks.push(storage.set('purchase_returns', pReturns));
       }
 
-      // Payments (Payment In & Payment Out)
-      const { data: dbPayments } = await supabase
-        .from('payments')
-        .select('*')
-        .eq('business_id', bizId)
-        .order('created_at', { ascending: false });
-
-      if (dbPayments) {
-        const allPayments = dbPayments.map(mapDbToPaymentRecord);
+      // 6. Payments
+      if (paymentsRes.data) {
+        const allPayments = paymentsRes.data.map(mapDbToPaymentRecord);
         const payIn = allPayments.filter((p) => p.type === 'in');
         const payOut = allPayments.filter((p) => p.type === 'out');
         setPaymentInRecords(payIn);
         setPaymentOutRecords(payOut);
-        await storage.set('pay_in', payIn);
-        await storage.set('pay_out', payOut);
+        storageTasks.push(storage.set('pay_in', payIn));
+        storageTasks.push(storage.set('pay_out', payOut));
       }
 
-      // 6. Bills
-      const { data: dbBills } = await supabase
-        .from('bills')
-        .select('*')
-        .eq('business_id', bizId)
-        .order('created_at', { ascending: false });
-
-      if (dbBills) {
-        const mapped = dbBills.map(mapDbToBill);
+      // 7. Bills
+      if (billsRes.data) {
+        const mapped = billsRes.data.map(mapDbToBill);
         setBills(mapped);
-        await storage.set('bills', mapped);
+        storageTasks.push(storage.set('bills', mapped));
 
-        // Also map purchase bills
-        const purchaseMapped: PurchaseBill[] = dbBills
+        const purchaseMapped: PurchaseBill[] = billsRes.data
           .filter((b: any) => (b.bill_type || '').toLowerCase() === 'purchase')
           .map((b: any) => ({
             id: b.id,
@@ -813,57 +778,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }));
         if (purchaseMapped.length > 0) {
           setPurchaseBills(purchaseMapped);
-          await storage.set('purchase_bills', purchaseMapped);
+          storageTasks.push(storage.set('purchase_bills', purchaseMapped));
         }
       }
 
-      // 7. Account Transactions
-      const { data: dbTxs } = await supabase
-        .from('account_transactions')
-        .select('*')
-        .eq('business_id', bizId)
-        .order('date_ad', { ascending: false });
-
-      if (dbTxs) {
-        const mapped = dbTxs.map(mapDbToAccountTx);
+      // 8. Account Transactions
+      if (accountTxsRes.data) {
+        const mapped = accountTxsRes.data.map(mapDbToAccountTx);
         setAccountTransactions(mapped);
-        await storage.set('account_txs', mapped);
+        storageTasks.push(storage.set('account_txs', mapped));
       }
 
-      // 8. Bank Accounts
-      const { data: dbAccounts } = await supabase
-        .from('bank_accounts')
-        .select('*')
-        .eq('business_id', bizId);
-
-      if (dbAccounts) {
-        const mapped = dbAccounts.map(mapDbToAccount);
+      // 9. Bank Accounts
+      if (accountsRes.data) {
+        const mapped = accountsRes.data.map(mapDbToAccount);
         setAccounts(mapped);
-        await storage.set('accounts', mapped);
+        storageTasks.push(storage.set('accounts', mapped));
       }
 
-      // 9. Staff Members
-      const { data: dbStaff } = await supabase
-        .from('staff')
-        .select('*')
-        .eq('business_id', bizId)
-        .order('created_at', { ascending: false });
-
-      if (dbStaff) {
-        const mapped = dbStaff.map(mapDbToStaff);
+      // 10. Staff Members
+      if (staffRes.data) {
+        const mapped = staffRes.data.map(mapDbToStaff);
         setStaffList(mapped);
-        await storage.set('staff_list', mapped);
+        storageTasks.push(storage.set('staff_list', mapped));
       }
 
-      // 10. Expenses
-      const { data: dbExpenses } = await supabase
-        .from('expenses')
-        .select('*')
-        .eq('business_id', bizId)
-        .order('created_at', { ascending: false });
-
-      if (dbExpenses) {
-        const mappedExpenses: ExpenseRecord[] = dbExpenses.map((e: any) => ({
+      // 11. Expenses
+      if (expensesRes.data) {
+        const mappedExpenses: ExpenseRecord[] = expensesRes.data.map((e: any) => ({
           id: e.id,
           category: e.category || 'Other',
           amount: Number(e.amount) || 0,
@@ -876,18 +818,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           createdAt: e.created_at,
         }));
         setExpenses(mappedExpenses);
-        await storage.set('expenses', mappedExpenses);
+        storageTasks.push(storage.set('expenses', mappedExpenses));
       }
 
-      // 11. Incomes
-      const { data: dbIncomes } = await supabase
-        .from('incomes')
-        .select('*')
-        .eq('business_id', bizId)
-        .order('created_at', { ascending: false });
-
-      if (dbIncomes) {
-        const mappedIncomes: IncomeRecord[] = dbIncomes.map((inc: any) => ({
+      // 12. Incomes
+      if (incomesRes.data) {
+        const mappedIncomes: IncomeRecord[] = incomesRes.data.map((inc: any) => ({
           id: inc.id,
           category: inc.category || 'Other',
           amount: Number(inc.amount) || 0,
@@ -900,17 +836,48 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           createdAt: inc.created_at,
         }));
         setIncomes(mappedIncomes);
-        await storage.set('incomes', mappedIncomes);
+        storageTasks.push(storage.set('incomes', mappedIncomes));
       }
 
-      // 12. Store Profile / Business
-      const { data: dbBiz } = await supabase
-        .from('businesses')
-        .select('*')
-        .eq('id', bizId)
-        .maybeSingle();
+      // 13. Reminders
+      if (remindersRes.data) {
+        const mappedReminders: ReminderItem[] = remindersRes.data.map((r: any) => ({
+          id: r.id,
+          partyId: r.party_id || undefined,
+          partyName: r.parties?.name || undefined,
+          title: r.title,
+          amount: Number(r.amount) || 0,
+          dueDate: r.due_date_ad || (r.created_at ? r.created_at.split('T')[0] : new Date().toISOString().split('T')[0]),
+          dueTime: r.due_time || undefined,
+          reminderType: r.reminder_type || 'general',
+          frequency: r.frequency || 'once',
+          status: r.status || 'upcoming',
+          note: r.notes || undefined,
+          createdAt: r.created_at,
+        }));
+        setReminders(mappedReminders);
+        storageTasks.push(storage.set('reminders', mappedReminders));
+      }
 
-      if (dbBiz) {
+      // 14. Notes
+      if (notesRes.data) {
+        const mappedNotes: NoteItem[] = notesRes.data.map((n: any) => ({
+          id: n.id,
+          title: n.title,
+          content: n.content,
+          category: n.category,
+          color: n.color || 'emerald',
+          isPinned: n.is_pinned ?? false,
+          createdAt: n.created_at,
+          updatedAt: n.updated_at || n.created_at,
+        }));
+        setNotes(mappedNotes);
+        storageTasks.push(storage.set('notes', mappedNotes));
+      }
+
+      // 15. Store Profile / Business (ignore demo seed business)
+      if (bizRes?.data && bizId !== DEFAULT_BIZ_ID) {
+        const dbBiz = (bizRes as any).data;
         let cloudOwner = dbBiz.owner_name;
         if (!cloudOwner && user?.id) {
           const { data: prof } = await supabase
@@ -936,8 +903,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           fonepayQrImage: dbBiz.fonepay_qr_image || store.fonepayQrImage,
         };
         setStore(updatedStore);
-        await storage.set('store', updatedStore);
+        storageTasks.push(storage.set('store', updatedStore));
       }
+
+      // Concurrently persist all state updates to local cache
+      await Promise.all(storageTasks);
     } catch (err) {
       console.warn('Error hydrating mobile app from cloud:', err);
     }
@@ -989,10 +959,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             if (prof?.full_name) cloudOwner = prof.full_name;
           }
 
+          const userMetaStoreName =
+            supabaseUser.user_metadata?.business_name ||
+            supabaseUser.user_metadata?.store_name ||
+            '';
+
+          const resolvedName =
+            biz.name ||
+            userMetaStoreName ||
+            (store.name && !store.name.includes('Shrestha Mart') && !store.name.includes('श्रेष्ठ किराना') ? store.name : 'My Store');
+
           const updatedStore: StoreProfile = {
             ...store,
             id: biz.id,
-            name: biz.name || store.name,
+            name: resolvedName,
             ownerName: cloudOwner || store.ownerName,
             businessType: (biz.business_type as BusinessType) || store.businessType || 'general',
             phone: biz.phone || store.phone,
@@ -1131,6 +1111,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const storedTheme = data.theme_mode ?? 'light';
       const storedLang = data.app_language ?? 'en';
       const storedStore = data.store ?? INITIAL_STORE;
+      if (storedStore.name && (storedStore.name.includes('Shrestha Mart') || storedStore.name.includes('श्रेष्ठ किराना'))) {
+        storedStore.name = '';
+      }
       const storedBizId = data.active_biz_id ?? DEFAULT_BIZ_ID;
       const storedStores = data.user_stores ?? [];
       const storedCategories = data.categories ?? [];
@@ -1200,9 +1183,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const { data: sessionData } = await supabase.auth.getSession();
           if (sessionData?.session?.user) {
             setUser(sessionData.session.user);
+            const metaName =
+              sessionData.session.user.user_metadata?.business_name ||
+              sessionData.session.user.user_metadata?.store_name;
+            if (metaName) {
+              setStore((prev) => {
+                if (!prev.name || prev.name.includes('Shrestha Mart') || prev.name.includes('श्रेष्ठ किराना')) {
+                  return { ...prev, name: metaName };
+                }
+                return prev;
+              });
+            }
             await resolveUserBusiness(sessionData.session.user);
           } else {
-            await hydrateFromCloud(storedBizId);
+            if (storedBizId && storedBizId !== DEFAULT_BIZ_ID) {
+              await hydrateFromCloud(storedBizId);
+            }
           }
         } catch (e) {
           console.warn('Background sync on startup error:', e);
@@ -1219,6 +1215,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
         if (session?.user) {
           setUser(session.user);
+          const metaName =
+            session.user.user_metadata?.business_name ||
+            session.user.user_metadata?.store_name;
+          if (metaName) {
+            setStore((prev) => {
+              if (!prev.name || prev.name.includes('Shrestha Mart') || prev.name.includes('श्रेष्ठ किराना')) {
+                return { ...prev, name: metaName };
+              }
+              return prev;
+            });
+          }
           await resolveUserBusiness(session.user);
         } else {
           setUser(null);
@@ -1436,6 +1443,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           if (payload.eventType === 'INSERT') {
             const newB = mapDbToBill(payload.new);
             setBills((prev) => (prev.some((b) => b.id === newB.id) ? prev : [newB, ...prev]));
+          } else if (payload.eventType === 'UPDATE') {
+            const updated = mapDbToBill(payload.new);
+            setBills((prev) => prev.map((b) => (b.id === updated.id ? updated : b)));
           } else if (payload.eventType === 'DELETE') {
             setBills((prev) => prev.filter((b) => b.id !== (payload.old as any).id));
           }
@@ -1527,6 +1537,89 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
         }
       )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'reminders', filter: `business_id=eq.${activeBizId}` },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            const r = payload.new as any;
+            const newR: ReminderItem = {
+              id: r.id,
+              partyId: r.party_id || undefined,
+              partyName: r.parties?.name || undefined,
+              title: r.title,
+              amount: Number(r.amount) || 0,
+              dueDate: r.due_date_ad || (r.created_at ? r.created_at.split('T')[0] : new Date().toISOString().split('T')[0]),
+              dueTime: r.due_time || undefined,
+              reminderType: r.reminder_type || 'general',
+              frequency: r.frequency || 'once',
+              status: r.status || 'upcoming',
+              note: r.notes || undefined,
+              createdAt: r.created_at,
+            };
+            setReminders((prev) => (prev.some((x) => x.id === newR.id) ? prev : [newR, ...prev]));
+          } else if (payload.eventType === 'UPDATE') {
+            const r = payload.new as any;
+            setReminders((prev) =>
+              prev.map((x) =>
+                x.id === r.id
+                  ? {
+                      ...x,
+                      title: r.title || x.title,
+                      amount: Number(r.amount) || x.amount,
+                      dueDate: r.due_date_ad || x.dueDate,
+                      dueTime: r.due_time !== undefined ? r.due_time : x.dueTime,
+                      status: r.status || x.status,
+                      note: r.notes !== undefined ? r.notes : x.note,
+                      reminderType: r.reminder_type || x.reminderType,
+                    }
+                  : x
+              )
+            );
+          } else if (payload.eventType === 'DELETE') {
+            setReminders((prev) => prev.filter((x) => x.id !== (payload.old as any).id));
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'notes', filter: `business_id=eq.${activeBizId}` },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            const n = payload.new as any;
+            const newN: NoteItem = {
+              id: n.id,
+              title: n.title,
+              content: n.content,
+              category: n.category,
+              color: n.color || 'emerald',
+              isPinned: n.is_pinned ?? false,
+              createdAt: n.created_at,
+              updatedAt: n.updated_at || n.created_at,
+            };
+            setNotes((prev) => (prev.some((x) => x.id === newN.id) ? prev : [newN, ...prev]));
+          } else if (payload.eventType === 'UPDATE') {
+            const n = payload.new as any;
+            setNotes((prev) =>
+              prev.map((x) =>
+                x.id === n.id
+                  ? {
+                      ...x,
+                      title: n.title !== undefined ? n.title : x.title,
+                      content: n.content !== undefined ? n.content : x.content,
+                      category: n.category !== undefined ? n.category : x.category,
+                      color: n.color !== undefined ? n.color : x.color,
+                      isPinned: n.is_pinned !== undefined ? n.is_pinned : x.isPinned,
+                      updatedAt: n.updated_at || x.updatedAt,
+                    }
+                  : x
+              )
+            );
+          } else if (payload.eventType === 'DELETE') {
+            setNotes((prev) => prev.filter((x) => x.id !== (payload.old as any).id));
+          }
+        }
+      )
       .subscribe();
 
     return () => {
@@ -1568,6 +1661,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const res = await supabase.auth.signInWithPassword({ email, password: pass });
     if (res.data?.user) {
       setUser(res.data.user);
+      const metaName =
+        res.data.user.user_metadata?.business_name ||
+        res.data.user.user_metadata?.store_name;
+      if (metaName) {
+        setStore((prev) => ({ ...prev, name: metaName }));
+      }
       await resolveUserBusiness(res.data.user);
     }
     return res;
@@ -2649,6 +2748,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     (async () => {
       try {
         const bs = adToBs(new Date(newExp.date));
+        const cleanReceiptUrl =
+          newExp.receiptUrl &&
+          !newExp.receiptUrl.startsWith('file://') &&
+          !newExp.receiptUrl.startsWith('content://')
+            ? newExp.receiptUrl
+            : null;
+
         await supabase.from('expenses').insert({
           id: newExp.id,
           business_id: activeBizId,
@@ -2659,7 +2765,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           notes: newExp.note || null,
           date_ad: newExp.date,
           date_bs: bs.formatted,
-          receipt_url: newExp.primaryImageId ? null : (newExp.receiptUrl || null),
+          receipt_url: newExp.primaryImageId ? null : cleanReceiptUrl,
           primary_image_id: newExp.primaryImageId || null,
         });
       } catch (err) {
@@ -2701,6 +2807,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     (async () => {
       try {
         const bs = adToBs(new Date(newInc.date));
+        const cleanReceiptUrl =
+          newInc.receiptUrl &&
+          !newInc.receiptUrl.startsWith('file://') &&
+          !newInc.receiptUrl.startsWith('content://')
+            ? newInc.receiptUrl
+            : null;
+
         await supabase.from('incomes').insert({
           id: newInc.id,
           business_id: activeBizId,
@@ -2711,7 +2824,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           notes: newInc.note || null,
           date_ad: newInc.date,
           date_bs: bs.formatted,
-          receipt_url: newInc.primaryImageId ? null : (newInc.receiptUrl || null),
+          receipt_url: newInc.primaryImageId ? null : cleanReceiptUrl,
           primary_image_id: newInc.primaryImageId || null,
         });
       } catch (err) {
@@ -2752,8 +2865,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (updates.paymentMode !== undefined) payload.payment_mode = updates.paymentMode;
         if (updates.recipientName !== undefined) payload.recipient_name = updates.recipientName;
         if (updates.note !== undefined) payload.notes = updates.note;
-        if (updates.receiptUrl !== undefined) payload.receipt_url = updates.receiptUrl;
-        if (updates.primaryImageId !== undefined) payload.primary_image_id = updates.primaryImageId;
+        if (updates.receiptUrl !== undefined) {
+          payload.receipt_url =
+            updates.receiptUrl &&
+            !updates.receiptUrl.startsWith('file://') &&
+            !updates.receiptUrl.startsWith('content://')
+              ? updates.receiptUrl
+              : null;
+        }
+        if (updates.primaryImageId !== undefined) {
+          payload.primary_image_id = updates.primaryImageId;
+          if (updates.primaryImageId) {
+            payload.receipt_url = null;
+          }
+        }
         if (updates.date !== undefined) {
           payload.date_ad = updates.date;
           payload.date_bs = adToBs(new Date(updates.date)).formatted;
@@ -2780,8 +2905,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (updates.paymentMode !== undefined) payload.payment_mode = updates.paymentMode;
         if (updates.payerName !== undefined) payload.payer_name = updates.payerName;
         if (updates.note !== undefined) payload.notes = updates.note;
-        if (updates.receiptUrl !== undefined) payload.receipt_url = updates.receiptUrl;
-        if (updates.primaryImageId !== undefined) payload.primary_image_id = updates.primaryImageId;
+        if (updates.receiptUrl !== undefined) {
+          payload.receipt_url =
+            updates.receiptUrl &&
+            !updates.receiptUrl.startsWith('file://') &&
+            !updates.receiptUrl.startsWith('content://')
+              ? updates.receiptUrl
+              : null;
+        }
+        if (updates.primaryImageId !== undefined) {
+          payload.primary_image_id = updates.primaryImageId;
+          if (updates.primaryImageId) {
+            payload.receipt_url = null;
+          }
+        }
         if (updates.date !== undefined) {
           payload.date_ad = updates.date;
           payload.date_bs = adToBs(new Date(updates.date)).formatted;

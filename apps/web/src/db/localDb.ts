@@ -482,22 +482,55 @@ export const [showHelpModal, setShowHelpModal] = createSignal(false);
 export const [showTutorialsModal, setShowTutorialsModal] = createSignal(false);
 export const [showWhatsNewModal, setShowWhatsNewModal] = createSignal(false);
 
-export const [currentBusiness, setCurrentBusiness] = createStore({
-  id: 'a0000000-0000-0000-0000-000000000001',
-  name: 'Shrestha Mart & General Store',
-  nameEn: 'Shrestha Mart & General Store',
-  ownerName: 'Suman Shrestha',
-  pan: '302918274',
-  address: 'New Road, Kathmandu',
-  phone: '9841234567',
-  businessType: 'general' as BusinessType,
-  isVatRegistered: true,
-  fonepayQrImage: '',
-  fonepayMerchantId: '',
-  fonepayMerchantName: '',
-  fonepayQrPayload: '',
-  ...loadStored('current_business', {}),
-});
+function getInitialBusiness() {
+  let authBiz: any = null;
+  try {
+    const rawAuth = localStorage.getItem('byapar_auth_user');
+    if (rawAuth) {
+      const parsed = JSON.parse(rawAuth);
+      if (parsed?.businessId && parsed.businessId !== 'a0000000-0000-0000-0000-000000000001') {
+        authBiz = {
+          id: parsed.businessId,
+          name: parsed.businessName || '',
+          nameEn: parsed.businessName || '',
+          ownerName: parsed.name || '',
+          phone: parsed.phone || '',
+          pan: parsed.pan || '',
+          address: parsed.address || '',
+          businessType: (parsed.businessType as BusinessType) || 'general',
+          isVatRegistered: !!parsed.pan,
+        };
+      }
+    }
+  } catch (e) {}
+
+  const storedBiz: Record<string, any> = loadStored('current_business', {});
+  if (storedBiz.name === 'Shrestha Mart & General Store' || storedBiz.name === 'श्री श्रेष्ठ किराना तथा जनरल स्टोर') {
+    delete storedBiz.name;
+    delete storedBiz.nameEn;
+    delete storedBiz.ownerName;
+  }
+
+  return {
+    id: authBiz?.id || storedBiz.id || 'a0000000-0000-0000-0000-000000000001',
+    name: authBiz?.name || storedBiz.name || '',
+    nameEn: authBiz?.nameEn || storedBiz.nameEn || storedBiz.name || '',
+    ownerName: authBiz?.ownerName || storedBiz.ownerName || '',
+    pan: authBiz?.pan || storedBiz.pan || '',
+    address: authBiz?.address || storedBiz.address || '',
+    phone: authBiz?.phone || storedBiz.phone || '',
+    businessType: (authBiz?.businessType || storedBiz.businessType || 'general') as BusinessType,
+    isVatRegistered: authBiz?.isVatRegistered ?? storedBiz.isVatRegistered ?? false,
+    fonepayQrImage: '',
+    fonepayMerchantId: '',
+    fonepayMerchantName: '',
+    fonepayQrPayload: '',
+    ...storedBiz,
+    ...(authBiz || {}),
+  };
+}
+
+export const [currentBusiness, setCurrentBusiness] = createStore(getInitialBusiness());
 
 export function resetAllLocalData() {
   setItems(reconcile([]));
@@ -511,9 +544,9 @@ export function resetAllLocalData() {
   setCurrentBusiness((prev) => ({
     ...prev,
     id: 'a0000000-0000-0000-0000-000000000001',
-    name: 'Shrestha Mart & General Store',
-    nameEn: 'Shrestha Mart & General Store',
-    ownerName: 'Suman Shrestha',
+    name: '',
+    nameEn: '',
+    ownerName: '',
     pan: '',
     address: '',
     phone: '',
@@ -951,7 +984,10 @@ function mapDbExpense(e: any): ExpenseRecord {
     date: e.date_ad || (e.created_at ? e.created_at.split('T')[0] : new Date().toISOString().split('T')[0]),
     recipientName: e.recipient_name,
     note: e.notes,
+    receiptUrl: e.receipt_url || undefined,
+    primaryImageId: e.primary_image_id || undefined,
     createdAt: e.created_at || new Date().toISOString(),
+    updatedAt: e.updated_at || undefined,
   };
 }
 
@@ -964,7 +1000,10 @@ function mapDbIncome(inc: any): IncomeRecord {
     date: inc.date_ad || (inc.created_at ? inc.created_at.split('T')[0] : new Date().toISOString().split('T')[0]),
     payerName: inc.payer_name,
     note: inc.notes,
+    receiptUrl: inc.receipt_url || undefined,
+    primaryImageId: inc.primary_image_id || undefined,
     createdAt: inc.created_at || new Date().toISOString(),
+    updatedAt: inc.updated_at || undefined,
   };
 }
 
@@ -1247,12 +1286,14 @@ export async function syncFromCloud() {
 // Subscribe to Supabase Realtime changes
 let realtimeSubscription: any = null;
 
-export function initRealtimeSync() {
+export function initRealtimeSync(targetBizId?: string) {
   if (realtimeSubscription) {
     supabase.removeChannel(realtimeSubscription);
+    realtimeSubscription = null;
   }
 
-  const bizId = currentBusiness.id;
+  const bizId = targetBizId || currentBusiness.id;
+  if (!bizId) return;
   const channel = supabase
     .channel(`realtime_biz_${bizId}`)
     .on(
@@ -1519,7 +1560,9 @@ export function initRealtimeSync() {
         if (payload.eventType === 'INSERT') {
           const newBill = mapDbBill(payload.new);
           setBills((draft) => {
-            if (!draft.some((b) => b.id === newBill.id)) draft.unshift(newBill);
+            const idx = draft.findIndex((b) => b.id === newBill.id);
+            if (idx >= 0) draft[idx] = newBill;
+            else draft.unshift(newBill);
           });
           if (((payload.new as any).bill_type || '').toLowerCase() === 'purchase') {
             const row = payload.new as any;
@@ -1540,9 +1583,18 @@ export function initRealtimeSync() {
               createdAt: row.created_at,
             };
             setPurchaseBills((draft) => {
-              if (!draft.some((b) => b.id === pb.id)) draft.unshift(pb);
+              const idx = draft.findIndex((b) => b.id === pb.id);
+              if (idx >= 0) draft[idx] = pb;
+              else draft.unshift(pb);
             });
           }
+        } else if (payload.eventType === 'UPDATE') {
+          const updated = mapDbBill(payload.new);
+          setBills((draft) => {
+            const idx = draft.findIndex((b) => b.id === updated.id);
+            if (idx >= 0) draft[idx] = updated;
+            else draft.unshift(updated);
+          });
         } else if (payload.eventType === 'DELETE') {
           setBills((draft) => {
             const idx = draft.findIndex((b) => b.id === (payload.old as any).id);
@@ -1563,7 +1615,16 @@ export function initRealtimeSync() {
         if (payload.eventType === 'INSERT') {
           const newExp = mapDbExpense(payload.new);
           setExpenses((draft) => {
-            if (!draft.some((e) => e.id === newExp.id)) draft.unshift(newExp);
+            const idx = draft.findIndex((e) => e.id === newExp.id);
+            if (idx >= 0) draft[idx] = newExp;
+            else draft.unshift(newExp);
+          });
+        } else if (payload.eventType === 'UPDATE') {
+          const updated = mapDbExpense(payload.new);
+          setExpenses((draft) => {
+            const idx = draft.findIndex((e) => e.id === updated.id);
+            if (idx >= 0) draft[idx] = updated;
+            else draft.unshift(updated);
           });
         } else if (payload.eventType === 'DELETE') {
           setExpenses((draft) => {
@@ -1581,7 +1642,16 @@ export function initRealtimeSync() {
         if (payload.eventType === 'INSERT') {
           const newInc = mapDbIncome(payload.new);
           setIncomes((draft) => {
-            if (!draft.some((i) => i.id === newInc.id)) draft.unshift(newInc);
+            const idx = draft.findIndex((i) => i.id === newInc.id);
+            if (idx >= 0) draft[idx] = newInc;
+            else draft.unshift(newInc);
+          });
+        } else if (payload.eventType === 'UPDATE') {
+          const updated = mapDbIncome(payload.new);
+          setIncomes((draft) => {
+            const idx = draft.findIndex((i) => i.id === updated.id);
+            if (idx >= 0) draft[idx] = updated;
+            else draft.unshift(updated);
           });
         } else if (payload.eventType === 'DELETE') {
           setIncomes((draft) => {

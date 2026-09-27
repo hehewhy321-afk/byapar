@@ -672,7 +672,7 @@ export const ExpenseIncomeView: Component<ExpenseIncomeViewProps> = (props) => {
                   {/* Right actions & amount */}
                   <div class="flex items-center gap-4 ml-auto sm:ml-0">
                     {/* Receipt thumbnail if uploaded */}
-                    <Show when={rec.primaryImageId || rec.receiptUrl}>
+                    <Show when={rec.primaryImageId || (rec.receiptUrl && !rec.receiptUrl.startsWith('file://') && !rec.receiptUrl.startsWith('content://'))}>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -1135,7 +1135,7 @@ export const ExpenseIncomeView: Component<ExpenseIncomeViewProps> = (props) => {
               const isRecExpense = () => 'category' in rec || isExpense();
               const cat = isRecExpense() ? (rec as ExpenseRecord).category : (rec as IncomeRecord).source;
               const party = isRecExpense() ? (rec as ExpenseRecord).recipientName : (rec as IncomeRecord).payerName;
-              const hasReceipt = Boolean(rec.primaryImageId || rec.receiptUrl);
+              const hasReceipt = Boolean(rec.primaryImageId || (rec.receiptUrl && !rec.receiptUrl.startsWith('file://') && !rec.receiptUrl.startsWith('content://')));
 
               return (
                 <div>

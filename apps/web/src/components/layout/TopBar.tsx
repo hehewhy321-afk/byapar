@@ -71,9 +71,27 @@ export const TopBar: Component = () => {
   };
 
 
+  const displayName = () => {
+    const user = currentUser();
+    const raw = currentBusiness.ownerName || user?.name || currentBusiness.nameEn || currentBusiness.name;
+    if (!raw || raw.includes('Shrestha Mart') || raw.includes('श्रेष्ठ किराना')) {
+      return user?.name || user?.businessName || (user ? 'My Store' : 'Byapar');
+    }
+    return raw;
+  };
+
+  const displayStoreName = () => {
+    const user = currentUser();
+    const raw = user?.businessName || currentBusiness.nameEn || currentBusiness.name;
+    if (!raw || raw.includes('Shrestha Mart') || raw.includes('श्रेष्ठ किराना')) {
+      return user?.businessName || (user ? 'My Store' : 'Byapar');
+    }
+    return raw;
+  };
+
   const userInitial = () => {
-    const name = currentUser()?.name || currentBusiness.ownerName || currentBusiness.name || 'Y';
-    return name.charAt(0).toUpperCase();
+    const name = displayName();
+    return (name || 'Y').charAt(0).toUpperCase();
   };
 
   return (
@@ -356,7 +374,7 @@ export const TopBar: Component = () => {
                 {userInitial()}
               </div>
               <span class="text-xs font-medium text-gray-700 dark:text-neutral-200 hidden md:block truncate max-w-[140px]">
-                {currentBusiness.ownerName || currentUser()?.name || currentBusiness.nameEn || currentBusiness.name}
+                {displayName()}
               </span>
               <IconChevronDown class="w-3.5 h-3.5 text-gray-400 shrink-0" />
             </button>
@@ -369,7 +387,7 @@ export const TopBar: Component = () => {
               <div class="absolute right-0 top-full mt-1 w-56 bg-white dark:bg-black rounded-2xl shadow-2xl border border-gray-100 dark:border-neutral-800 py-2 animate-fade-in z-50">
                 <div class="px-3.5 py-2 border-b border-gray-100 dark:border-neutral-800">
                   <p class="text-xs font-bold text-gray-900 dark:text-white truncate">
-                    {currentBusiness.nameEn || currentBusiness.name || currentUser()?.businessName || 'My Store'}
+                    {displayStoreName()}
                   </p>
                   <p class="text-[11px] text-gray-400 dark:text-neutral-500 truncate">
                     {currentBusiness.ownerName ? `Owner: ${currentBusiness.ownerName}` : (currentUser()?.email || (currentBusiness.pan ? 'PAN: ' + currentBusiness.pan : 'Store Profile'))}

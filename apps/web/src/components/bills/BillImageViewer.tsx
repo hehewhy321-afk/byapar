@@ -24,8 +24,14 @@ export const BillImageViewer: Component<Props> = (props) => {
       bizId: props.businessId || currentBusiness.id,
     }),
     ({ directUrl, imageId, bizId }) => {
-      // 1. Direct image URL (e.g. blob:, http:, or data:)
-      if (directUrl && directUrl.trim().length > 0) {
+      // 1. Direct image URL (e.g. blob:, http:, or data:) - ignore local mobile file paths
+      const isUsableDirectUrl =
+        directUrl &&
+        directUrl.trim().length > 0 &&
+        !directUrl.startsWith('file://') &&
+        !directUrl.startsWith('content://');
+
+      if (isUsableDirectUrl) {
         setResolvedUrl(directUrl);
         setLoading(false);
         setHasError(false);
