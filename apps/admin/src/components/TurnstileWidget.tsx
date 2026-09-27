@@ -90,34 +90,36 @@ export const TurnstileWidget: Component<TurnstileWidgetProps> = (props) => {
     import.meta.env.VITE_CLOUDFLARE_TURNSTILE_SITE_KEY ||
     DEFAULT_TEST_SITE_KEY;
 
-  onSettled(async () => {
-    try {
-      await loadTurnstileScript();
-      if (!containerRef || !window.turnstile) return;
+  onSettled(() => {
+    (async () => {
+      try {
+        await loadTurnstileScript();
+        if (!containerRef || !window.turnstile) return;
 
-      widgetId = window.turnstile.render(containerRef, {
-        sitekey: effectiveSiteKey(),
-        action: props.action || 'admin-auth',
-        theme: props.theme || 'light',
-        size: 'flexible',
-        callback: (token: string) => {
-          setError(false);
-          props.onVerify(token);
-        },
-        'error-callback': (err: any) => {
-          console.warn('[Cloudflare Turnstile] Admin challenge warning:', err);
-          setError(true);
-          props.onError?.(err);
-        },
-        'expired-callback': () => {
-          props.onExpire?.();
-        },
-      });
-    } catch (e) {
-      console.warn('[Cloudflare Turnstile] Offline fallback enabled for admin:', e);
-      setError(true);
-      props.onVerify('turnstile_offline_fallback');
-    }
+        widgetId = window.turnstile.render(containerRef, {
+          sitekey: effectiveSiteKey(),
+          action: props.action || 'admin-auth',
+          theme: props.theme || 'light',
+          size: 'flexible',
+          callback: (token: string) => {
+            setError(false);
+            props.onVerify(token);
+          },
+          'error-callback': (err: any) => {
+            console.warn('[Cloudflare Turnstile] Admin challenge warning:', err);
+            setError(true);
+            props.onError?.(err);
+          },
+          'expired-callback': () => {
+            props.onExpire?.();
+          },
+        });
+      } catch (e) {
+        console.warn('[Cloudflare Turnstile] Offline fallback enabled for admin:', e);
+        setError(true);
+        props.onVerify('turnstile_offline_fallback');
+      }
+    })();
   });
 
   onCleanup(() => {

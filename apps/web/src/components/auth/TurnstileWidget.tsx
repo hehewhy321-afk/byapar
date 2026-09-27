@@ -92,39 +92,41 @@ export const TurnstileWidget: Component<TurnstileWidgetProps> = (props) => {
     import.meta.env.VITE_CLOUDFLARE_TURNSTILE_SITE_KEY ||
     DEFAULT_TEST_SITE_KEY;
 
-  onSettled(async () => {
-    try {
-      await loadTurnstileScript();
-      if (!containerRef || !window.turnstile) return;
+  onSettled(() => {
+    (async () => {
+      try {
+        await loadTurnstileScript();
+        if (!containerRef || !window.turnstile) return;
 
-      widgetId = window.turnstile.render(containerRef, {
-        sitekey: effectiveSiteKey(),
-        action: props.action || 'auth',
-        theme: props.theme || 'auto',
-        size: 'flexible',
-        callback: (token: string) => {
-          setLoading(false);
-          setError(false);
-          props.onVerify(token);
-        },
-        'error-callback': (err: any) => {
-          console.warn('[Cloudflare Turnstile] Challenge failed/rejected:', err);
-          setLoading(false);
-          setError(true);
-          props.onError?.(err);
-        },
-        'expired-callback': () => {
-          props.onExpire?.();
-        },
-      });
-      setLoading(false);
-    } catch (e) {
-      console.warn('[Cloudflare Turnstile] Failed to load challenge script:', e);
-      setLoading(false);
-      setError(true);
-      // Auto-pass in environments where external scripts are blocked so users are not trapped
-      props.onVerify('turnstile_offline_fallback');
-    }
+        widgetId = window.turnstile.render(containerRef, {
+          sitekey: effectiveSiteKey(),
+          action: props.action || 'auth',
+          theme: props.theme || 'auto',
+          size: 'flexible',
+          callback: (token: string) => {
+            setLoading(false);
+            setError(false);
+            props.onVerify(token);
+          },
+          'error-callback': (err: any) => {
+            console.warn('[Cloudflare Turnstile] Challenge failed/rejected:', err);
+            setLoading(false);
+            setError(true);
+            props.onError?.(err);
+          },
+          'expired-callback': () => {
+            props.onExpire?.();
+          },
+        });
+        setLoading(false);
+      } catch (e) {
+        console.warn('[Cloudflare Turnstile] Failed to load challenge script:', e);
+        setLoading(false);
+        setError(true);
+        // Auto-pass in environments where external scripts are blocked so users are not trapped
+        props.onVerify('turnstile_offline_fallback');
+      }
+    })();
   });
 
   onCleanup(() => {
