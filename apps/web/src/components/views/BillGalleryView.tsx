@@ -1,18 +1,110 @@
-import { Component, createSignal, createMemo, For, Show } from 'solid-js';
+import { Component, createSignal, createMemo, createEffect, onCleanup, For, Show } from 'solid-js';
 import { bills, addBill, updateBillPrimaryImage, deleteBill, setActiveTab, currentBusiness, setShowSubscriptionModal, type BillItem } from '../../db/localDb';
 import { isAuthenticated } from '../../db/auth';
 import { formatNepaliCurrency } from '@byapar/core';
 import { checkBillUploadLimit } from '../../services/planLimits';
-import { uploadBillImageWeb } from '../../services/billImageUploadService';
+import { uploadBillImageWeb, getBillImageUrl } from '../../services/billImageUploadService';
 import { compressWebImage, WebCompressedImageResult } from '../../services/imageCompressionService';
 import { BillImageViewer } from '../bills/BillImageViewer';
-import { IconBillGallery, IconUpload, IconFileText, IconEye, IconTrash, IconX, IconPlus, IconSearch } from '../icons';
+import {
+  IconBillGallery,
+  IconUpload,
+  IconFileText,
+  IconEye,
+  IconTrash,
+  IconX,
+  IconPlus,
+  IconSearch,
+  IconDownload,
+  IconMaximize,
+  IconArrowLeft,
+  IconZoomIn,
+  IconZoomOut,
+} from '../icons';
 
 export const BillGalleryView: Component = () => {
   const [showUploadModal, setShowUploadModal] = createSignal(false);
   const [previewBill, setPreviewBill] = createSignal<BillItem | null>(null);
+  const [fullScreenBill, setFullScreenBill] = createSignal<BillItem | null>(null);
+  const [zoomScale, setZoomScale] = createSignal<number>(1);
+  const [isDownloading, setIsDownloading] = createSignal<boolean>(false);
   const [selectedCategory, setSelectedCategory] = createSignal('All');
   const [searchQuery, setSearchQuery] = createSignal('');
+
+  // Close modals on Escape key
+  createEffect(
+    () => fullScreenBill() || previewBill(),
+    (activeModal) => {
+      if (activeModal) {
+        const handleKeyDown = (e: KeyboardEvent) => {
+          if (e.key === 'Escape') {
+            if (fullScreenBill()) {
+              setFullScreenBill(null);
+            } else if (previewBill()) {
+              setPreviewBill(null);
+            }
+          }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        onCleanup(() => window.removeEventListener('keydown', handleKeyDown));
+      }
+    }
+  );
+
+  const handleDownloadBill = async (bill: BillItem | null) => {
+    if (!bill || isDownloading()) return;
+    setIsDownloading(true);
+    try {
+      let sourceUrl = bill.imageUrl;
+      const isUsableDirect =
+        sourceUrl &&
+        sourceUrl.trim().length > 0 &&
+        !sourceUrl.startsWith('file://') &&
+        !sourceUrl.startsWith('content://');
+
+      if (!isUsableDirect && bill.primaryImageId) {
+        sourceUrl = await getBillImageUrl(bill.primaryImageId, currentBusiness.id);
+      }
+
+      if (!sourceUrl) {
+        alert('No downloadable receipt image found for this bill.');
+        return;
+      }
+
+      const cleanVendor = (bill.vendorName || 'bill').replace(/[^a-zA-Z0-9_-]/g, '_');
+      const cleanInv = (bill.invoiceNumber || 'receipt').replace(/[^a-zA-Z0-9_-]/g, '_');
+      const filename = `${cleanVendor}_${cleanInv}.jpg`;
+
+      // Try fetching as blob for direct browser save
+      try {
+        const res = await fetch(sourceUrl);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const blob = await res.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = objectUrl;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+      } catch {
+        // Fallback for cross-origin: open anchor with download target
+        const link = document.createElement('a');
+        link.href = sourceUrl;
+        link.target = '_blank';
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+    } catch (err: any) {
+      console.error('[handleDownloadBill] Download failed:', err);
+      alert('Failed to download bill image: ' + (err?.message || 'Error'));
+    } finally {
+      setIsDownloading(false);
+    }
+  };
 
   // Form State
   const [vendorName, setVendorName] = createSignal('');
@@ -516,15 +608,28 @@ export const BillGalleryView: Component = () => {
             </div>
 
             <Show when={previewBill()?.imageUrl || previewBill()?.primaryImageId}>
-              <div class="rounded-xl overflow-hidden border border-gray-200 dark:border-neutral-800 mb-4 max-h-80 flex items-center justify-center bg-gray-50 dark:bg-neutral-900">
+              <div
+                class="relative group rounded-xl overflow-hidden border border-gray-200 dark:border-neutral-800 mb-4 max-h-80 flex items-center justify-center bg-gray-50 dark:bg-neutral-900 cursor-pointer"
+                onClick={() => {
+                  setZoomScale(1);
+                  setFullScreenBill(previewBill());
+                }}
+                title="Click to view full actual size"
+              >
                 <BillImageViewer
                   imageUrl={previewBill()?.imageUrl}
                   primaryImageId={previewBill()?.primaryImageId}
                   businessId={currentBusiness.id}
                   alt={previewBill()?.invoiceNumber}
                   class="max-h-80 w-full"
-                  imgClass="max-h-80 object-contain w-full"
+                  imgClass="max-h-80 object-contain w-full transition group-hover:scale-[1.02]"
                 />
+                <div class="absolute inset-0 bg-black/0 group-hover:bg-black/25 transition-all flex items-center justify-center pointer-events-none">
+                  <span class="opacity-0 group-hover:opacity-100 transition-opacity bg-black/75 text-white text-[11px] font-medium px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-lg backdrop-blur-xs">
+                    <IconMaximize class="w-3.5 h-3.5" />
+                    <span>View Full Size</span>
+                  </span>
+                </div>
               </div>
             </Show>
 
@@ -545,9 +650,166 @@ export const BillGalleryView: Component = () => {
               </Show>
             </div>
 
-            <div class="flex justify-end gap-2 pt-3 border-t border-gray-100 dark:border-neutral-800">
-              <button class="btn-outline text-xs" onClick={() => setPreviewBill(null)}>Close</button>
+            <div class="flex items-center gap-2 pt-3 border-t border-gray-100 dark:border-neutral-800">
+              <button
+                type="button"
+                onClick={() => handleDownloadBill(previewBill())}
+                disabled={isDownloading()}
+                class="btn-outline flex-1 justify-center text-xs flex items-center gap-1.5 py-2 font-medium border-emerald-500/40 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 disabled:opacity-50"
+              >
+                <Show when={isDownloading()} fallback={<IconDownload class="w-4 h-4" />}>
+                  <span class="w-3.5 h-3.5 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+                </Show>
+                <span>{isDownloading() ? 'Downloading...' : 'Download'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setZoomScale(1);
+                  setFullScreenBill(previewBill());
+                }}
+                class="btn-primary flex-1 justify-center text-xs flex items-center gap-1.5 py-2 font-medium"
+              >
+                <IconMaximize class="w-4 h-4" />
+                <span>View Full</span>
+              </button>
             </div>
+          </div>
+        </div>
+      </Show>
+
+      {/* Full-Screen Actual Size Image Viewer Modal */}
+      <Show when={fullScreenBill()}>
+        <div
+          class="fixed inset-0 z-50 bg-black/95 flex flex-col text-white backdrop-blur-md animate-fade-in select-none"
+          onClick={() => setFullScreenBill(null)}
+        >
+          {/* Top Navigation & Action Header */}
+          <div
+            class="flex items-center justify-between px-4 py-3 bg-neutral-900/90 border-b border-neutral-800 shrink-0 z-10"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div class="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setFullScreenBill(null)}
+                class="p-1.5 rounded-lg text-neutral-300 hover:text-white hover:bg-neutral-800 transition"
+                title="Back to Gallery (Esc)"
+              >
+                <IconArrowLeft class="w-5 h-5" />
+              </button>
+              <div>
+                <h3 class="font-bold text-sm text-white leading-tight">
+                  {fullScreenBill()?.vendorName || fullScreenBill()?.title}
+                </h3>
+                <p class="text-xs text-neutral-400 font-mono">
+                  {formatNepaliCurrency(fullScreenBill()?.amount || 0)} • Invoice #{fullScreenBill()?.invoiceNumber} • {fullScreenBill()?.billDate}
+                </p>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-2">
+              {/* Zoom Controls */}
+              <div class="flex items-center bg-neutral-800 rounded-lg p-0.5 border border-neutral-700">
+                <button
+                  type="button"
+                  onClick={() => setZoomScale((prev) => Math.max(0.25, Math.round((prev - 0.25) * 100) / 100))}
+                  class="p-1.5 text-neutral-300 hover:text-white hover:bg-neutral-700 rounded transition"
+                  title="Zoom Out"
+                >
+                  <IconZoomOut class="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setZoomScale(1)}
+                  class="px-2 py-1 text-[11px] font-mono font-medium text-neutral-300 hover:text-white hover:bg-neutral-700 rounded transition"
+                  title="Reset to 100% (Actual Size)"
+                >
+                  {Math.round(zoomScale() * 100)}%
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setZoomScale((prev) => Math.min(3, Math.round((prev + 0.25) * 100) / 100))}
+                  class="p-1.5 text-neutral-300 hover:text-white hover:bg-neutral-700 rounded transition"
+                  title="Zoom In"
+                >
+                  <IconZoomIn class="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Download Button */}
+              <button
+                type="button"
+                onClick={() => handleDownloadBill(fullScreenBill())}
+                disabled={isDownloading()}
+                class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow transition disabled:opacity-50"
+                title="Download Bill Image"
+              >
+                <Show when={isDownloading()} fallback={<IconDownload class="w-4 h-4" />}>
+                  <span class="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                </Show>
+                <span>Download</span>
+              </button>
+
+              {/* Close Button */}
+              <button
+                type="button"
+                onClick={() => setFullScreenBill(null)}
+                class="p-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-800 transition"
+                title="Close (Esc)"
+              >
+                <IconX class="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Full Resolution Scrollable Viewport */}
+          <div
+            class="flex-1 overflow-auto p-4 flex items-center justify-center cursor-zoom-in"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                setFullScreenBill(null);
+              }
+            }}
+          >
+            <div
+              class="transition-transform duration-150 ease-out origin-center inline-block"
+              style={{
+                transform: `scale(${zoomScale()})`,
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                // Toggle between 100% actual size and 150% on image click
+                setZoomScale((prev) => (prev === 1 ? 1.5 : 1));
+              }}
+              title="Click to toggle zoom"
+            >
+              <BillImageViewer
+                imageUrl={fullScreenBill()?.imageUrl}
+                primaryImageId={fullScreenBill()?.primaryImageId}
+                businessId={currentBusiness.id}
+                alt={fullScreenBill()?.invoiceNumber}
+                class="shadow-2xl rounded-lg overflow-hidden max-w-none"
+                imgClass="max-w-none max-h-[82vh] object-contain rounded-lg shadow-2xl"
+              />
+            </div>
+          </div>
+
+          {/* Bottom Status / Hint Bar */}
+          <div
+            class="px-4 py-2 bg-neutral-900/90 border-t border-neutral-800 text-center text-xs text-neutral-400 shrink-0 flex items-center justify-between"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <span class="text-[11px] text-neutral-400">
+              <Show when={fullScreenBill()?.notes}>
+                <span class="font-medium text-neutral-300">Note:</span> {fullScreenBill()?.notes} •{' '}
+              </Show>
+              <span>Actual high-resolution view</span>
+            </span>
+            <span class="text-[11px] text-neutral-500">
+              Use controls to zoom • Click image to toggle • Press Esc to exit
+            </span>
           </div>
         </div>
       </Show>

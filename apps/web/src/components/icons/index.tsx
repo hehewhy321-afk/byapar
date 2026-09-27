@@ -611,3 +611,38 @@ export const IconTrendingUp: Component<IconProps> = (props) => (
     <polyline points="17 6 23 6 23 12" />
   </svg>
 );
+
+
+export const IconMaximize: Component<IconProps> = (props) => (
+  <svg {...base(props)}>
+    <polyline points="15 3 21 3 21 9" />
+    <polyline points="9 21 3 21 3 15" />
+    <line x1="21" y1="3" x2="14" y2="10" />
+    <line x1="3" y1="21" x2="10" y2="14" />
+  </svg>
+);
+
+export const IconArrowLeft: Component<IconProps> = (props) => (
+  <svg {...base(props)}>
+    <line x1="19" y1="12" x2="5" y2="12" />
+    <polyline points="12 19 5 12 12 5" />
+  </svg>
+);
+
+export const IconZoomIn: Component<IconProps> = (props) => (
+  <svg {...base(props)}>
+    <circle cx="11" cy="11" r="8" />
+    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+    <line x1="11" y1="8" x2="11" y2="14" />
+    <line x1="8" y1="11" x2="14" y2="11" />
+  </svg>
+);
+
+export const IconZoomOut: Component<IconProps> = (props) => (
+  <svg {...base(props)}>
+    <circle cx="11" cy="11" r="8" />
+    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+    <line x1="8" y1="11" x2="14" y2="11" />
+  </svg>
+);
+
