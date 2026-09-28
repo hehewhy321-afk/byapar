@@ -771,6 +771,7 @@ function mapDbInvoice(row: any): Invoice {
     itemName: ii.item_name,
     quantity: Number(ii.quantity) || 1,
     unitPrice: Number(ii.unit_price) || 0,
+    costPrice: Number(ii.cost_price) || 0,
     discountAmount: Number(ii.discount_amount) || 0,
     taxRate: Number(ii.tax_rate) || 0,
     taxAmount: Number(ii.tax_amount) || 0,
@@ -2740,6 +2741,16 @@ export function updateCartQuantity(itemId: string, delta: number) {
   }
 }
 
+export function updateCartItemPrice(itemId: string, newPrice: number) {
+  const idx = cart.findIndex((c) => c.id === itemId);
+  if (idx < 0) return;
+  setCart((draft) => {
+    const target = draft[idx];
+    target.selectedPrice = Math.max(0, newPrice);
+    target.lineTotal = Math.max(0, target.cartQuantity * target.selectedPrice - target.customDiscount);
+  });
+}
+
 export function clearCart() {
   setCart((draft) => {
     draft.length = 0;
@@ -2818,6 +2829,7 @@ export async function checkoutInvoice(params: {
       taxRate: c.taxRate,
       taxAmount: c.taxRate > 0 ? (c.lineTotal * c.taxRate) / (100 + c.taxRate) : 0,
       totalAmount: c.lineTotal,
+      costPrice: c.purchaseCost ?? c.costPrice ?? 0,
     })),
     notes: params.notes,
     createdAt: now.toISOString(),
@@ -2920,6 +2932,7 @@ export async function checkoutInvoice(params: {
         tax_rate: i.taxRate,
         tax_amount: i.taxAmount,
         total_amount: i.totalAmount,
+        cost_price: i.costPrice || 0,
       }))
     );
   }

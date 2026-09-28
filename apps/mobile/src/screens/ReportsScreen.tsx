@@ -10,7 +10,7 @@ import { FadeInView } from '../components/common/FadeInView';
 import { EmptyState } from '../components/common/EmptyState';
 
 export const ReportsScreen: React.FC = () => {
-  const { invoices, bills, parties, setActiveInvoice, activeInvoice, theme, themeMode, refreshData } = useApp();
+  const { invoices, bills, parties, products, setActiveInvoice, activeInvoice, theme, themeMode, refreshData } = useApp();
   const styles = useMemo(() => createStyles(theme, themeMode), [theme, themeMode]);
 
   const [refreshing, setRefreshing] = useState(false);
@@ -34,6 +34,23 @@ export const ReportsScreen: React.FC = () => {
   const totalPayables = parties
     .filter((p) => p.balance < 0)
     .reduce((acc, p) => acc + Math.abs(p.balance), 0);
+
+  // Exact Cost of Goods Sold from snapshot cost prices
+  const totalCOGS = useMemo(() => {
+    let cost = 0;
+    invoices.forEach((inv) => {
+      (inv.items || []).forEach((it: any) => {
+        const prod = products.find((p) => p.name === it.name || p.id === it.id);
+        const buyRate = (it.costPrice && it.costPrice > 0)
+          ? it.costPrice
+          : (prod?.costPrice || (it.price || 0) * 0.75);
+        cost += buyRate * (it.qty || 1);
+      });
+    });
+    return cost;
+  }, [invoices, products]);
+
+  const grossProfit = Math.max(0, totalSales - totalCOGS);
 
   // Payment channel distribution
   const paymentBreakdown = invoices.reduce(
@@ -181,6 +198,27 @@ export const ReportsScreen: React.FC = () => {
               </View>
             </View>
 
+            {/* GROSS PROFIT & COGS TILES */}
+            <View style={styles.metricsGrid}>
+              <View style={styles.metricCard}>
+                <Text style={styles.metricLabel}>GROSS PROFIT</Text>
+                <Text style={[styles.metricVal, { color: '#10B981' }]}>
+                  Rs. {grossProfit.toLocaleString()}
+                </Text>
+                <Text style={styles.metricSub}>
+                  {totalSales > 0 ? Math.round((grossProfit / totalSales) * 100) : 0}% Margin
+                </Text>
+              </View>
+
+              <View style={styles.metricCard}>
+                <Text style={styles.metricLabel}>COST OF GOODS (COGS)</Text>
+                <Text style={[styles.metricVal, { color: theme.colors.textSecondary }]}>
+                  Rs. {totalCOGS.toLocaleString()}
+                </Text>
+                <Text style={styles.metricSub}>Historical cost basis</Text>
+              </View>
+            </View>
+
             <View style={styles.metricsGrid}>
               <View style={styles.metricCard}>
                 <Text style={styles.metricLabel}>EXPENSES</Text>
@@ -193,9 +231,9 @@ export const ReportsScreen: React.FC = () => {
               <View style={styles.metricCard}>
                 <Text style={styles.metricLabel}>NET ESTIMATE</Text>
                 <Text style={[styles.metricVal, { color: theme.colors.primary }]}>
-                  Rs. {Math.max(0, totalSales - totalBillsExpense).toLocaleString()}
+                  Rs. {Math.max(0, grossProfit - totalBillsExpense).toLocaleString()}
                 </Text>
-                <Text style={styles.metricSub}>Revenue − Expenses</Text>
+                <Text style={styles.metricSub}>Profit − Expenses</Text>
               </View>
             </View>
 

@@ -134,6 +134,7 @@ interface AppContextType {
   cart: CartItem[];
   addToCart: (product: Product) => void;
   updateCartQty: (productId: string, delta: number) => void;
+  updateCartItemPrice: (productId: string, newPrice: number) => void;
   removeFromCart: (productId: string) => void;
   clearCart: () => void;
   completeCheckout: (mode: PaymentMode, partyId?: string) => Promise<Invoice | null>;
@@ -270,6 +271,7 @@ function mapDbToInvoice(row: any): Invoice {
     name: i.item_name,
     qty: Number(i.quantity) || 1,
     price: Number(i.unit_price) || 0,
+    costPrice: Number(i.cost_price) || 0,
   }));
 
   const seen = new Set<string>();
@@ -2192,6 +2194,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
   };
 
+  const updateCartItemPrice = (productId: string, newPrice: number) => {
+    setCart(
+      cart.map((item) =>
+        item.id === productId ? { ...item, salePrice: Math.max(0, newPrice) } : item
+      )
+    );
+  };
+
   const removeFromCart = (productId: string) => {
     setCart(cart.filter((item) => item.id !== productId));
   };
@@ -2220,6 +2230,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         name: item.name,
         qty: item.qty,
         price: item.salePrice,
+        costPrice: item.costPrice || 0,
       })),
     };
 
@@ -2277,6 +2288,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         item_name: item.name,
         quantity: item.qty,
         unit_price: item.salePrice,
+        cost_price: item.costPrice || 0,
         total_amount: item.salePrice * item.qty,
       }));
       await supabase.from('invoice_items').upsert(invItems);
@@ -3232,6 +3244,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         cart,
         addToCart,
         updateCartQty,
+        updateCartItemPrice,
         removeFromCart,
         clearCart,
         completeCheckout,

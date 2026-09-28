@@ -547,8 +547,20 @@ export const DashboardScreen: React.FC = () => {
     const healthyItems = products.filter((p) => p.stock > 5).length;
     const stockHealth = Math.min(100, Math.max(20, Math.round((healthyItems / totalItems) * 100)));
 
+    const totalCOGS = invoices.reduce((sum, inv) => {
+      let invCost = 0;
+      (inv.items || []).forEach((it: any) => {
+        const prod = products.find((p) => p.name === it.name || p.id === it.id);
+        const buyRate = (it.costPrice && it.costPrice > 0)
+          ? it.costPrice
+          : (prod?.costPrice || (it.price || 0) * 0.75);
+        invCost += buyRate * (it.qty || 1);
+      });
+      return sum + invCost;
+    }, 0);
+
     const marginRatio = metrics.totalSales > 0
-      ? Math.min(100, Math.max(15, Math.round(((metrics.totalSales - metrics.totalPurchases) / metrics.totalSales) * 100)))
+      ? Math.min(100, Math.max(5, Math.round(((metrics.totalSales - totalCOGS) / metrics.totalSales) * 100)))
       : 42;
 
     const compositeScore = Math.round((salesProgress + collectionRate + stockHealth + marginRatio) / 4);
@@ -566,7 +578,7 @@ export const DashboardScreen: React.FC = () => {
         { label: language === 'ne' ? 'नाफा मार्जिन' : 'Net Margin', val: `${marginRatio}% Profit`, pct: marginRatio, color: '#EC4899' },
       ],
     };
-  }, [metrics, ledgerEntries, products, language]);
+  }, [metrics, ledgerEntries, products, invoices, language]);
 
   // Nightingale Rose Chart Data (Category Revenue Distribution)
   const nightingaleData = useMemo(() => {

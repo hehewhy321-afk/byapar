@@ -70,8 +70,12 @@ export const ReportsView: Component = () => {
     let cost = 0;
     filteredInvoices().forEach((inv) => {
       inv.items.forEach((line) => {
-        const product = items.find((i) => i.id === line.itemId || i.name === line.itemName);
-        const buyRate = product?.purchaseCost || product?.costPrice || line.unitPrice * 0.75; // fallback to 75% cost
+        // Prioritize immutable snapshot costPrice recorded on invoice at time of sale;
+        // fallback to catalog purchaseCost or standard estimate only for legacy sales
+        const product = items.find((p) => p.id === line.productId);
+        const buyRate = (line.costPrice && line.costPrice > 0)
+          ? line.costPrice
+          : (product?.purchaseCost || product?.costPrice || line.unitPrice * 0.75);
         cost += buyRate * line.quantity;
       });
     });

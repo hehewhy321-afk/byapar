@@ -5,6 +5,7 @@ import {
   cart,
   addToCart,
   updateCartQuantity,
+  updateCartItemPrice,
   clearCart,
   cartSubtotal,
   cartDiscount,
@@ -266,9 +267,24 @@ export const PosView: Component = () => {
                   <div class="pt-2 flex items-center justify-between gap-2">
                     <div class="flex-1">
                       <h5 class="text-xs font-semibold text-gray-900 dark:text-white leading-tight">{item.name}</h5>
-                      <span class="text-[10px] text-gray-400 dark:text-neutral-400">
-                        {formatNepaliCurrency(item.selectedPrice)} × {item.cartQuantity}
-                      </span>
+                      <div class="flex items-center gap-1 mt-0.5">
+                        <span class="text-[10px] text-gray-400">Rs.</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="any"
+                          value={item.selectedPrice}
+                          onInput={(e) => {
+                            const val = parseFloat(e.currentTarget.value);
+                            if (!isNaN(val) && val >= 0) {
+                              updateCartItemPrice(item.id, val);
+                            }
+                          }}
+                          class="w-16 px-1.5 py-0.5 text-[11px] font-bold bg-white dark:bg-black border border-gray-200 dark:border-neutral-700 rounded text-gray-800 dark:text-neutral-200 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                          title="Custom selling price for this sale"
+                        />
+                        <span class="text-[10px] text-gray-400 dark:text-neutral-500">× {item.cartQuantity}</span>
+                      </div>
                     </div>
                     <div class="flex items-center gap-1.5 bg-gray-50 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 px-2 py-1 rounded-lg">
                       <button

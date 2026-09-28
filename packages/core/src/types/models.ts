@@ -99,6 +99,7 @@ export interface InvoiceItem {
   taxRate: number;
   taxAmount: number;
   totalAmount: number;
+  costPrice?: number;
 }
 
 export interface Invoice {

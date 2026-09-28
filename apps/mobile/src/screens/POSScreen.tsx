@@ -25,6 +25,7 @@ export const POSScreen: React.FC = () => {
     cart,
     addToCart,
     updateCartQty,
+    updateCartItemPrice,
     removeFromCart,
     clearCart,
     completeCheckout,
@@ -58,6 +59,8 @@ export const POSScreen: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [checkoutVisible, setCheckoutVisible] = useState(false);
   const [cartExpanded, setCartExpanded] = useState(false);
+  const [editingPriceItemId, setEditingPriceItemId] = useState<string | null>(null);
+  const [customPriceInput, setCustomPriceInput] = useState('');
 
   const filtered = products.filter((p) => {
     const matchesSearch =
@@ -353,9 +356,56 @@ export const POSScreen: React.FC = () => {
                     >
                       {item.name}
                     </Text>
-                    <Text style={[styles.cartItemUnit, { color: theme.colors.textMuted }]}>
-                      Rs. {item.salePrice.toLocaleString()} / unit
-                    </Text>
+                    {editingPriceItemId === item.id ? (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+                        <Text style={{ fontSize: 11, color: theme.colors.textMuted, marginRight: 2 }}>Rs.</Text>
+                        <TextInput
+                          value={customPriceInput}
+                          onChangeText={setCustomPriceInput}
+                          keyboardType="numeric"
+                          autoFocus
+                          onBlur={() => {
+                            const val = parseFloat(customPriceInput);
+                            if (!isNaN(val) && val >= 0) {
+                              updateCartItemPrice(item.id, val);
+                            }
+                            setEditingPriceItemId(null);
+                          }}
+                          onSubmitEditing={() => {
+                            const val = parseFloat(customPriceInput);
+                            if (!isNaN(val) && val >= 0) {
+                              updateCartItemPrice(item.id, val);
+                            }
+                            setEditingPriceItemId(null);
+                          }}
+                          style={{
+                            fontSize: 12,
+                            fontWeight: '700',
+                            color: theme.colors.textPrimary,
+                            borderWidth: 1,
+                            borderColor: theme.colors.primary,
+                            borderRadius: 6,
+                            paddingHorizontal: 6,
+                            paddingVertical: 1,
+                            minWidth: 55,
+                            backgroundColor: themeMode === 'dark' ? '#222' : '#FFF',
+                          }}
+                        />
+                      </View>
+                    ) : (
+                      <AnimatedPressable
+                        onPress={() => {
+                          setEditingPriceItemId(item.id);
+                          setCustomPriceInput(item.salePrice.toString());
+                        }}
+                        style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 1 }}
+                      >
+                        <Text style={[styles.cartItemUnit, { color: theme.colors.textMuted }]}>
+                          Rs. {item.salePrice.toLocaleString()} / unit
+                        </Text>
+                        <Feather name="edit-2" size={10} color={theme.colors.textMuted} />
+                      </AnimatedPressable>
+                    )}
                   </View>
 
                   <View style={styles.cartRowActions}>
