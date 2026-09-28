@@ -789,10 +789,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
 
       // 9. Bank Accounts
-      if (accountsRes.data) {
+      if (accountsRes.data && accountsRes.data.length > 0) {
         const mapped = accountsRes.data.map(mapDbToAccount);
         setAccounts(mapped);
         storageEntries.push(['accounts', mapped]);
+      } else if (activeBizId) {
+        try {
+          const cashAccId = generateUUID();
+          const { data: newCash } = await supabase
+            .from('bank_accounts')
+            .insert({
+              id: cashAccId,
+              business_id: activeBizId,
+              account_name: 'Cash in Hand',
+              bank_name: 'Cash Counter',
+              account_number: 'CASH-01',
+              branch: 'Main Counter',
+              balance: 0,
+              is_primary: true,
+            })
+            .select()
+            .single();
+          if (newCash) {
+            const mapped = [mapDbToAccount(newCash)];
+            setAccounts(mapped);
+            storageEntries.push(['accounts', mapped]);
+          }
+        } catch (e) {
+          console.warn('[AppContext] Failed to auto-provision cash account:', e);
+        }
       }
 
       // 10. Staff Members

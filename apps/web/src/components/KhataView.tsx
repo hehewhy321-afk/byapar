@@ -632,7 +632,7 @@ export const KhataView: Component = () => {
                         <span class={`font-black text-sm ${
                           entry.entryType === 'liyo' ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'
                         }`}>
-                          {entry.entryType === 'liyo' ? '+' : '-'} {formatNepaliCurrency(entry.amount)}
+                          {entry.entryType === 'diyo' ? '+' : '−'} {formatNepaliCurrency(entry.amount)}
                         </span>
                       </div>
                     )}

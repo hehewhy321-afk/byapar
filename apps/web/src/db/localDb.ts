@@ -1163,8 +1163,31 @@ export async function syncFromCloud() {
       .select('*')
       .eq('business_id', bizId);
 
-    if (dbAccounts) {
+    if (dbAccounts && dbAccounts.length > 0) {
       setAccounts(reconcile(dbAccounts.map(mapDbAccount)));
+    } else if (bizId) {
+      try {
+        const cashId = crypto.randomUUID();
+        const { data: createdAcc } = await supabase
+          .from('bank_accounts')
+          .insert({
+            id: cashId,
+            business_id: bizId,
+            account_name: 'Cash in Hand',
+            bank_name: 'Cash Counter',
+            account_number: 'CASH-01',
+            branch: 'Main Counter',
+            balance: 0,
+            is_primary: true,
+          })
+          .select()
+          .single();
+        if (createdAcc) {
+          setAccounts(reconcile([mapDbAccount(createdAcc)]));
+        }
+      } catch (err) {
+        console.warn('Failed to auto-provision cash account:', err);
+      }
     }
 
     // 7. Account Transactions
@@ -2643,8 +2666,9 @@ export async function addKhataEntry(params: {
   });
 
   const balanceDelta = params.entryType === 'diyo' ? params.amount : -params.amount;
+  const newBal = (party.currentBalance || 0) + balanceDelta;
   setParties((draft) => {
-    draft[partyIdx].currentBalance += balanceDelta;
+    draft[partyIdx].currentBalance = newBal;
   });
   persistState();
 
@@ -2666,7 +2690,7 @@ export async function addKhataEntry(params: {
 
   await supabase
     .from('parties')
-    .update({ current_balance: party.currentBalance + balanceDelta })
+    .update({ current_balance: newBal })
     .eq('id', party.id);
 }
 
@@ -2835,9 +2859,10 @@ export async function checkoutInvoice(params: {
     });
 
     const partyIdx = parties.findIndex((p) => p.id === selectedParty.id);
+    const newBal = (selectedParty.currentBalance || 0) + due;
     if (partyIdx >= 0) {
       setParties((draft) => {
-        draft[partyIdx].currentBalance += due;
+        draft[partyIdx].currentBalance = newBal;
       });
     }
 
@@ -2855,7 +2880,7 @@ export async function checkoutInvoice(params: {
 
     supabase
       .from('parties')
-      .update({ current_balance: selectedParty.currentBalance + due })
+      .update({ current_balance: newBal })
       .eq('id', selectedParty.id);
   }
 
