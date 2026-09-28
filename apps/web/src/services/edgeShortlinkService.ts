@@ -9,7 +9,8 @@ export interface ShortlinkResponse {
 }
 
 const EDGE_WORKER_URL =
-  import.meta.env.VITE_EDGE_SHORTLINK_URL || 'https://pay.byapar.com';
+  (typeof import.meta !== 'undefined' && import.meta.env?.VITE_EDGE_SHORTLINK_URL) ||
+  'https://byapar-edge-shortlinks.hehewhy-321.workers.dev';
 
 /**
  * Creates an edge-cached digital receipt shortlink via Cloudflare Worker + D1
@@ -73,7 +74,7 @@ export async function createEdgeInvoiceShortlink(invoice: Invoice): Promise<Shor
 }
 
 /**
- * Builds standard WhatsApp message with optional Cloudflare edge digital receipt link
+ * Builds standard WhatsApp message with detailed items list and Cloudflare edge digital receipt link
  */
 export async function buildWhatsAppInvoiceMessage(invoice: Invoice): Promise<string> {
   let link = '';
@@ -84,14 +85,32 @@ export async function buildWhatsAppInvoiceMessage(invoice: Invoice): Promise<str
     }
   } catch (_) {}
 
+  // Format line items
+  const itemsList = (invoice.items || [])
+    .map(
+      (item, idx) =>
+        `${idx + 1}. *${item.itemName}*\n   Qty: ${item.quantity} × Rs. ${item.unitPrice} = Rs. ${item.totalAmount}`
+    )
+    .join('\n');
+
+  const itemsSection = itemsList ? `\n*Items Ordered:*\n${itemsList}\n` : '';
+
   return (
     `*${currentBusiness.name || 'Store Receipt'}*\n` +
     `Invoice #: ${invoice.invoiceNumber}\n` +
     `Date: ${invoice.invoiceDateAd || new Date().toISOString().split('T')[0]}\n` +
-    `Total Amount: Rs. ${invoice.totalAmount}\n` +
-    `Payment: ${invoice.paymentMode.toUpperCase()}\n` +
-    (invoice.dueAmount > 0 ? `*Balance Due: Rs. ${invoice.dueAmount}*\n` : '') +
+    (invoice.partyName ? `Customer: ${invoice.partyName}\n` : '') +
+    `--------------------------------\n` +
+    itemsSection +
+    `--------------------------------\n` +
+    `Subtotal: Rs. ${(invoice.subtotal || invoice.totalAmount).toLocaleString()}\n` +
+    (invoice.discountAmount > 0 ? `Discount: -Rs. ${invoice.discountAmount.toLocaleString()}\n` : '') +
+    (invoice.taxAmount > 0 ? `VAT (13%): Rs. ${invoice.taxAmount.toLocaleString()}\n` : '') +
+    `*Grand Total: Rs. ${invoice.totalAmount.toLocaleString()}*\n` +
+    `Payment Mode: ${(invoice.paymentMode || 'CASH').toUpperCase()}\n` +
+    (invoice.dueAmount > 0 ? `*Balance Due: Rs. ${invoice.dueAmount.toLocaleString()}*\n` : '') +
     link +
-    `\nThank you for shopping with us!`
+    `\n\nThank you for shopping with us!`
   );
 }
+

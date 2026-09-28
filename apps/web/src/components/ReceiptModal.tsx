@@ -19,7 +19,14 @@ export const ReceiptModal: Component<ReceiptModalProps> = (props) => {
   const handleShareWhatsApp = async () => {
     const rawText = await buildWhatsAppInvoiceMessage(props.invoice);
     const text = encodeURIComponent(rawText);
-    window.open(`https://wa.me/?text=${text}`, '_blank');
+    const rawPhone = props.invoice.partyPhone || (props.invoice as any).customerPhone || '';
+    const cleanPhone = rawPhone.replace(/\D/g, '');
+    let waUrl = `https://wa.me/?text=${text}`;
+    if (cleanPhone.length >= 10) {
+      const phoneParam = cleanPhone.startsWith('977') ? cleanPhone : `977${cleanPhone.slice(-10)}`;
+      waUrl = `https://wa.me/${phoneParam}?text=${text}`;
+    }
+    window.open(waUrl, '_blank');
   };
 
   const uniqueItems = () => {

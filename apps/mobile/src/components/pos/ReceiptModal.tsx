@@ -6,6 +6,7 @@ import { useApp } from '../../context/AppContext';
 import { Invoice } from '../../types';
 import { AnimatedPressable } from '../common/AnimatedPressable';
 import { FadeInView } from '../common/FadeInView';
+import { sendWhatsAppInvoice } from '../../services/whatsapp';
 
 interface Props {
   invoice: Invoice | null;
@@ -13,7 +14,7 @@ interface Props {
 }
 
 export const ReceiptModal: React.FC<Props> = ({ invoice, onClose }) => {
-  const { store, theme, themeMode } = useApp();
+  const { store, theme, themeMode, parties } = useApp();
   const styles = useMemo(() => createStyles(theme, themeMode), [theme, themeMode]);
 
   if (!invoice) return null;
@@ -22,12 +23,34 @@ export const ReceiptModal: React.FC<Props> = ({ invoice, onClose }) => {
     Alert.alert('Bluetooth Printer', `Printing to ${store.paperWidth} thermal printer...`);
   };
 
-  const handleWhatsAppShare = () => {
-    const text = `*${store.name}*\nTax Invoice: #${invoice.invoiceNumber}\nDate: ${invoice.date}\nTotal: Rs. ${invoice.total.toLocaleString()}\nThank you for shopping with us!`;
-    const url = `whatsapp://send?text=${encodeURIComponent(text)}`;
-    Linking.openURL(url).catch(() => {
-      Alert.alert('WhatsApp', 'WhatsApp is not installed on this device.');
-    });
+  const handleWhatsAppShare = async () => {
+    // Find customer phone if available in parties
+    const matchedParty = parties.find(
+      (p) => p.name.trim().toLowerCase() === (invoice.partyName || '').trim().toLowerCase()
+    );
+    const customerPhone = matchedParty?.phone || '';
+
+    try {
+      await sendWhatsAppInvoice(
+        {
+          invoiceNumber: invoice.invoiceNumber,
+          date: invoice.date,
+          total: invoice.total,
+          paymentMode: invoice.paymentMode,
+          partyName: invoice.partyName,
+          items: invoice.items,
+        },
+        {
+          name: store.name,
+          phone: store.phone,
+          panNumber: store.panNumber,
+          address: store.address,
+        },
+        customerPhone
+      );
+    } catch {
+      Alert.alert('WhatsApp', 'Unable to open WhatsApp on this device.');
+    }
   };
 
   return (

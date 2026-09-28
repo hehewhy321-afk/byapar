@@ -16,9 +16,11 @@ import { PaymentMode } from '../types';
 import { formatNepaliCurrency } from '@byapar/core';
 import { AnimatedPressable } from '../components/common/AnimatedPressable';
 import { ReceiptModal } from '../components/pos/ReceiptModal';
+import { sendWhatsAppInvoice } from '../services/whatsapp';
 
 export const SalesHubScreen: React.FC = () => {
   const {
+    store,
     invoices,
     quotations,
     salesReturns,
@@ -635,6 +637,43 @@ export const SalesHubScreen: React.FC = () => {
 
                   {/* Card Bottom Actions */}
                   <View style={styles.cardActionsRow}>
+                    <TouchableOpacity
+                      style={[
+                        styles.cardActionBtn,
+                        {
+                          borderColor: 'rgba(37, 211, 102, 0.3)',
+                          backgroundColor: theme.colors.whatsappBg,
+                          marginRight: 8,
+                        },
+                      ]}
+                      onPress={async () => {
+                        const matchedParty = parties.find(
+                          (p) => p.name.trim().toLowerCase() === (inv.partyName || '').trim().toLowerCase()
+                        );
+                        await sendWhatsAppInvoice(
+                          {
+                            invoiceNumber: inv.invoiceNumber,
+                            date: inv.date,
+                            total: inv.total,
+                            paymentMode: inv.paymentMode,
+                            partyName: inv.partyName,
+                            items: inv.items,
+                          },
+                          {
+                            name: store.name,
+                            phone: store.phone,
+                            panNumber: store.panNumber,
+                            address: store.address,
+                          },
+                          matchedParty?.phone
+                        );
+                      }}
+                    >
+                      <Feather name="share-2" size={13} color={theme.colors.whatsapp} />
+                      <Text style={[styles.cardActionText, { color: theme.colors.whatsapp }]}>
+                        WhatsApp
+                      </Text>
+                    </TouchableOpacity>
                     <TouchableOpacity
                       style={[styles.cardActionBtn, { borderColor: theme.colors.borderGlass }]}
                       onPress={() => setActiveInvoice(inv)}
