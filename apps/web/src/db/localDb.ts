@@ -1015,6 +1015,8 @@ function mapDbReminder(r: any): Reminder {
     partyName: r.parties?.name,
     amount: Number(r.amount) || 0,
     dueDate: r.due_date_ad || (r.created_at ? r.created_at.split('T')[0] : new Date().toISOString().split('T')[0]),
+    dueTime: r.due_time || '10:00',
+    reminderType: r.reminder_type || 'task_reminder',
     status: r.status || 'upcoming',
     note: r.notes || '',
     createdAt: r.created_at || new Date().toISOString(),
@@ -3088,16 +3090,23 @@ export async function addReminder(reminder: Omit<Reminder, 'id' | 'createdAt'>) 
   });
   persistState();
 
-  await supabase.from('reminders').insert({
-    id: newRem.id,
-    business_id: currentBusiness.id,
-    party_id: newRem.partyId,
-    title: newRem.title,
-    amount: newRem.amount || 0,
-    due_date_ad: newRem.dueDate,
-    due_date_bs: adToBs(new Date(newRem.dueDate)).formatted,
-    status: newRem.status,
-  });
+  try {
+    await supabase.from('reminders').insert({
+      id: newRem.id,
+      business_id: currentBusiness.id,
+      party_id: newRem.partyId || null,
+      title: newRem.title,
+      amount: newRem.amount || 0,
+      due_date_ad: newRem.dueDate,
+      due_date_bs: adToBs(new Date(newRem.dueDate)).formatted,
+      due_time: newRem.dueTime || '10:00',
+      reminder_type: newRem.reminderType || 'task_reminder',
+      notes: newRem.note || null,
+      status: newRem.status,
+    });
+  } catch (err) {
+    console.warn('Failed to insert reminder to cloud:', err);
+  }
 
   return newRem;
 }
@@ -3109,7 +3118,24 @@ export async function updateReminder(id: string, updates: Partial<Reminder>) {
   });
   persistState();
 
-  await supabase.from('reminders').update(updates).eq('id', id);
+  try {
+    const payload: any = {};
+    if (updates.title !== undefined) payload.title = updates.title;
+    if (updates.amount !== undefined) payload.amount = updates.amount;
+    if (updates.dueDate !== undefined) {
+      payload.due_date_ad = updates.dueDate;
+      payload.due_date_bs = adToBs(new Date(updates.dueDate)).formatted;
+    }
+    if (updates.dueTime !== undefined) payload.due_time = updates.dueTime;
+    if (updates.status !== undefined) payload.status = updates.status;
+    if (updates.note !== undefined) payload.notes = updates.note;
+    if (updates.reminderType !== undefined) payload.reminder_type = updates.reminderType;
+    if (Object.keys(payload).length > 0) {
+      await supabase.from('reminders').update(payload).eq('id', id);
+    }
+  } catch (err) {
+    console.warn('Failed to update reminder in cloud:', err);
+  }
 }
 
 export async function deleteReminder(id: string) {

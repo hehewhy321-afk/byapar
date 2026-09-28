@@ -62,8 +62,8 @@ export const ALL_QUICK_ACTION_MODULES: QuickActionItem[] = [
   },
   {
     id: 'reports',
-    labelEn: 'Reports & P&L',
-    labelNe: 'रिपोर्ट तथा नाफा',
+    labelEn: 'Reports',
+    labelNe: 'रिपोर्ट',
     subEn: 'P&L, Daybook & VAT',
     subNe: 'नाफा र स्टेटमेन्ट',
     icon: 'bar-chart-2',

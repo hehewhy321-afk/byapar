@@ -35,7 +35,7 @@ import { ThemeMode, Theme, getTheme } from '../theme';
 import { supabase } from '../config/supabase';
 import { User } from '@supabase/supabase-js';
 import { updateService } from '../services/updateService';
-import { requestNotificationPermission } from '../services/notificationService';
+import { requestNotificationPermission, scheduleReminderNotification } from '../services/notificationService';
 import { adToBs, getNepaliFiscalYear, Language, TranslationDict, getTranslation } from '@byapar/core';
 
 const DEFAULT_BIZ_ID = 'a0000000-0000-0000-0000-000000000001';
@@ -678,7 +678,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         supabase.from('expenses').select('*').eq('business_id', bizId).order('created_at', { ascending: false }),
         supabase.from('incomes').select('*').eq('business_id', bizId).order('created_at', { ascending: false }),
         bizId !== DEFAULT_BIZ_ID ? supabase.from('businesses').select('*').eq('id', bizId).maybeSingle() : Promise.resolve({ data: null, error: null }),
-        supabase.from('reminders').select('*').eq('business_id', bizId).order('created_at', { ascending: false }),
+        supabase.from('reminders').select('*, parties(name)').eq('business_id', bizId).order('created_at', { ascending: false }),
         supabase.from('notes').select('*').eq('business_id', bizId).order('created_at', { ascending: false }),
       ]);
 
@@ -3025,6 +3025,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch (err) {
       console.warn('Failed to insert reminder to cloud:', err);
     }
+
+    // Schedule device notification if future time
+    scheduleReminderNotification(newRem).catch(console.warn);
+
     return newRem;
   };
 
@@ -3048,6 +3052,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       await supabase.from('reminders').update(payload).eq('id', id);
     } catch (err) {
       console.warn('Failed to update reminder in cloud:', err);
+    }
+
+    const updatedItem = reminders.find((r) => r.id === id);
+    if (updatedItem && updatedItem.status === 'upcoming') {
+      scheduleReminderNotification(updatedItem).catch(console.warn);
     }
   };
 

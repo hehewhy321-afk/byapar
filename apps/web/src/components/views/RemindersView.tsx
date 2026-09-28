@@ -9,7 +9,6 @@ import {
   currentBusiness,
   type Reminder,
 } from '../../db/localDb';
-import { createDebtorReminder, createSupplierPayableReminder } from '../../services/notificationService';
 import { formatNepaliCurrency } from '@byapar/core';
 import { currentLang } from '../../services/i18n';
 import { IconPlus, IconCalendar, IconCheck, IconTrash, IconX, IconClock } from '../icons';
@@ -69,20 +68,6 @@ export const RemindersView: Component = () => {
       note: formNote() || undefined,
       status: 'upcoming',
     });
-
-    // Synchronize to cloud notifications
-    if (formReminderType() === 'payment_reminder' && formPartyId() && party) {
-      await createDebtorReminder({
-        businessId: currentBusiness.id,
-        partyId: party.id,
-        partyName: party.name,
-        partyPhone: party.phone,
-        amount: formAmount() || party.currentBalance || 0,
-        dueDate: formDueDate(),
-        frequency: formFrequency(),
-        notes: formNote(),
-      });
-    }
 
     resetForm();
     setShowModal(false);

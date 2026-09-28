@@ -4,6 +4,7 @@
  */
 import { createSignal, createMemo } from 'solid-js';
 import { supabase } from '../db/auth';
+import { reminders } from '../db/localDb';
 import type { AppNotification, NotificationType, NotificationPriority, ReminderType, ReminderFrequency } from '@byapar/core';
 /**
  * Native Browser Notification Dispatcher (Direct Browser HTML5 API)
@@ -99,6 +100,9 @@ export async function initNotificationSync(businessId: string): Promise<void> {
       .subscribe((status) => {
         console.log('[NotificationService] Realtime sync status:', status);
       });
+
+    // 3. Start reminder due scheduler
+    startReminderScheduler(businessId);
   } catch (err) {
     console.error('[NotificationService] Init error:', err);
   } finally {
@@ -372,3 +376,93 @@ function mapDbNotification(row: any): AppNotification {
     updatedAt: row.updated_at,
   };
 }
+
+/**
+ * Background Reminder Due Scheduler for Web
+ * Periodically checks upcoming reminders and dispatches native browser push & synced notifications
+ * exactly when the scheduled time arrives.
+ */
+let reminderSchedulerInterval: any = null;
+const notifiedReminderKeys = new Set<string>();
+
+export function startReminderScheduler(businessId: string): void {
+  if (typeof window === 'undefined') return;
+  if (reminderSchedulerInterval) {
+    clearInterval(reminderSchedulerInterval);
+  }
+
+  // Restore already notified keys in current session
+  try {
+    const saved = sessionStorage.getItem('byapar_notified_reminders');
+    if (saved) {
+      const arr = JSON.parse(saved);
+      if (Array.isArray(arr)) {
+        arr.forEach((k) => notifiedReminderKeys.add(k));
+      }
+    }
+  } catch {}
+
+  const checkDueReminders = async () => {
+    const now = new Date();
+    const activeList = reminders.filter((r) => r.status === 'upcoming');
+
+    for (const rem of activeList) {
+      if (!rem.dueDate) continue;
+
+      const timePart = rem.dueTime && /^\d{2}:\d{2}$/.test(rem.dueTime) ? rem.dueTime : '10:00';
+      const [yearStr, monthStr, dayStr] = rem.dueDate.split('-');
+      const [hoursStr, minutesStr] = timePart.split(':');
+      const year = parseInt(yearStr, 10);
+      const month = parseInt(monthStr, 10);
+      const day = parseInt(dayStr, 10);
+      const hours = parseInt(hoursStr, 10);
+      const minutes = parseInt(minutesStr, 10);
+
+      if (isNaN(year) || isNaN(month) || isNaN(day) || isNaN(hours) || isNaN(minutes)) continue;
+
+      const targetDate = new Date(year, month - 1, day, hours, minutes, 0);
+      const diffMs = now.getTime() - targetDate.getTime();
+
+      // Trigger if current time has reached or passed due time within the last 24 hours
+      const notificationKey = `${rem.id}_${rem.dueDate}_${timePart}`;
+      if (diffMs >= 0 && diffMs < 24 * 60 * 60 * 1000 && !notifiedReminderKeys.has(notificationKey)) {
+        notifiedReminderKeys.add(notificationKey);
+        try {
+          sessionStorage.setItem('byapar_notified_reminders', JSON.stringify([...notifiedReminderKeys]));
+        } catch {}
+
+        const title = `⏰ Reminder: ${rem.title}`;
+        const body = `${rem.partyName ? `Party: ${rem.partyName} • ` : ''}${
+          rem.amount ? `Rs. ${rem.amount.toLocaleString()} • ` : ''
+        }${rem.note || 'Scheduled reminder is now due.'}`;
+
+        // 1. Native browser alert
+        sendBrowserNotification(title, {
+          body,
+          tag: `rem_${rem.id}`,
+        });
+
+        // 2. In-app synced notification alert
+        await createNotification({
+          businessId,
+          title,
+          message: body,
+          type: rem.partyId || rem.reminderType === 'payment_reminder' ? 'debtor_reminder' : 'system',
+          priority: 'high',
+          data: {
+            reminderId: rem.id,
+            partyId: rem.partyId,
+            partyName: rem.partyName,
+            amount: rem.amount,
+            linkScreen: 'reminders',
+          },
+        });
+      }
+    }
+  };
+
+  // Run initial check and set periodic check every 15s
+  checkDueReminders();
+  reminderSchedulerInterval = setInterval(checkDueReminders, 15000);
+}
+

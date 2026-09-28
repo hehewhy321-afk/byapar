@@ -96,6 +96,44 @@ export async function displaySystemNotification(
   } catch (err) {
     console.warn('[NotificationService] Failed to display phone system notification:', err);
   }
+}export async function scheduleReminderNotification(reminder: {
+  id: string;
+  title: string;
+  dueDate: string;
+  dueTime?: string;
+  amount?: number;
+  note?: string;
+}): Promise<string | undefined> {
+  const prefs = await ensurePrefsLoaded();
+  if (!prefs.enabled) return;
+
+  try {
+    const timeStr = reminder.dueTime || '10:00';
+    const targetDate = new Date(`${reminder.dueDate}T${timeStr}:00`);
+    if (isNaN(targetDate.getTime()) || targetDate.getTime() <= Date.now()) {
+      return;
+    }
+
+    await setupAndroidNotificationChannel();
+    const notifId = await Notifications.scheduleNotificationAsync({
+      content: {
+        title: `Reminder: ${reminder.title}`,
+        body: reminder.note || (reminder.amount ? `Amount: Rs. ${reminder.amount.toLocaleString()}` : `Due: ${reminder.dueDate} ${timeStr}`),
+        sound: 'default',
+        priority: Notifications.AndroidNotificationPriority.HIGH,
+        data: { reminderId: reminder.id, screen: 'reminders' },
+        // @ts-ignore - Expo Android specific channel routing
+        channelId: 'byapar_alerts',
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DATE,
+        date: targetDate,
+      },
+    });
+    return notifId;
+  } catch (err) {
+    console.warn('[NotificationService] Failed to schedule reminder notification:', err);
+  }
 }
 
 export async function ensurePrefsLoaded(): Promise<NotificationPreferences> {
