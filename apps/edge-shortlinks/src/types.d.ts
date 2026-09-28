@@ -14,6 +14,15 @@ declare global {
     exec(query: string): Promise<{ count: number; duration: number }>;
   }
 
+  interface Hyperdrive {
+    connectionString: string;
+    host: string;
+    port: number;
+    user: string;
+    password?: string;
+    database: string;
+  }
+
   interface ExecutionContext {
     waitUntil(promise: Promise<any>): void;
     passThroughOnException(): void;
