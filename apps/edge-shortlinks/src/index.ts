@@ -2,6 +2,7 @@ import { renderInvoiceHtml, InvoiceData } from './htmlTemplate';
 
 export interface Env {
   DB: D1Database;
+  HYPERDRIVE?: Hyperdrive;
   ENVIRONMENT: string;
   APP_ORIGIN: string;
 }
@@ -203,7 +204,12 @@ export default {
     }
 
     return new Response(
-      JSON.stringify({ service: 'Byapar Edge Shortlinks Worker', status: 'healthy', version: '2026.1' }),
+      JSON.stringify({
+        service: 'Byapar Edge Shortlinks Worker',
+        status: 'healthy',
+        hyperdrive: env.HYPERDRIVE ? 'active' : 'disabled',
+        version: '2026.1'
+      }),
       {
         status: 200,
         headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },

@@ -8,7 +8,12 @@ compatibility_flags = ["nodejs_compat"]
 binding = "DB"
 database_name = "byapar_shortlinks"
 database_id = "be6235ea-e21e-4524-b046-e6c40b7693a3"
+# Cloudflare Hyperdrive PostgreSQL Accelerator for Supabase
+[[hyperdrive]]
+binding = "HYPERDRIVE"
+id = "4fc28da7fb534cbda5f1f098ee55970d"
 
 [vars]
 ENVIRONMENT = "production"
 APP_ORIGIN = "https://app.byapar.com"
+
