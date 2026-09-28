@@ -215,7 +215,7 @@ export const SettingsView: Component = () => {
   return (
     <div class="p-4 sm:p-6 max-w-6xl mx-auto animate-fade-in space-y-6">
       {/* Top Header Banner */}
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-orange-100/70 dark:border-orange-900/30">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-gray-200 dark:border-neutral-800">
         <div>
           <h1 class="text-2xl font-black font-heading text-gray-900 dark:text-white tracking-tight flex items-center gap-2">
             <span>{currentLang() === 'ne' ? 'सेटिङहरू' : 'System Settings'}</span>
@@ -231,7 +231,7 @@ export const SettingsView: Component = () => {
       {/* Main Settings Two-Column Layout */}
       <div class="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
         {/* Left Sidebar Navigation Menu */}
-        <div class="md:col-span-4 bg-gradient-to-b from-white via-orange-50/20 to-white dark:from-neutral-900 dark:via-[#171412] dark:to-neutral-900 rounded-3xl border border-orange-100 dark:border-orange-950/60 p-3 shadow-md shadow-orange-500/5 space-y-1.5">
+        <div class="md:col-span-4 bg-white dark:bg-neutral-950 rounded-2xl border border-gray-200 dark:border-neutral-800 p-2.5 shadow-xs space-y-1">
           <For each={navItems}>
             {(item) => {
               const isActive = () => activeSettingsTab() === item.id;
@@ -240,17 +240,17 @@ export const SettingsView: Component = () => {
                 <button
                   type="button"
                   onClick={() => setActiveSettingsTab(item.id)}
-                  class={`w-full flex items-center gap-3.5 p-3 rounded-2xl text-left transition-all group ${
+                  class={`w-full flex items-center gap-3.5 p-3 rounded-xl text-left transition-all group ${
                     isActive()
-                      ? 'bg-gradient-to-r from-orange-500/10 via-amber-500/10 to-orange-500/5 dark:from-orange-950/60 dark:via-amber-950/40 dark:to-orange-950/20 border border-orange-300 dark:border-orange-800/80 shadow-sm'
-                      : 'hover:bg-orange-50/40 dark:hover:bg-neutral-800/60 border border-transparent'
+                      ? 'bg-gray-100 dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 shadow-xs'
+                      : 'hover:bg-gray-50 dark:hover:bg-neutral-900/60 border border-transparent'
                   }`}
                 >
                   <div
-                    class={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-all ${
+                    class={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 transition-all ${
                       isActive()
-                        ? `bg-gradient-to-br ${item.activeGradient} text-white shadow-sm shadow-orange-500/30 scale-105`
-                        : 'bg-orange-50 dark:bg-neutral-800 text-gray-500 dark:text-neutral-400 group-hover:text-[#FF4500] group-hover:bg-orange-100/60 dark:group-hover:bg-neutral-700'
+                        ? 'bg-[#FF4500] text-white shadow-xs scale-105'
+                        : 'bg-gray-100 dark:bg-neutral-800 text-gray-600 dark:text-neutral-400 group-hover:text-gray-900 dark:group-hover:text-white'
                     }`}
                   >
                     <IconComp class="w-4 h-4" />
@@ -261,8 +261,8 @@ export const SettingsView: Component = () => {
                       <span
                         class={`text-xs font-bold truncate transition-colors ${
                           isActive()
-                            ? 'text-[#FF4500] dark:text-orange-400'
-                            : 'text-gray-900 dark:text-white group-hover:text-[#FF4500]'
+                            ? 'text-gray-900 dark:text-white'
+                            : 'text-gray-700 dark:text-neutral-300 group-hover:text-gray-900 dark:group-hover:text-white'
                         }`}
                       >
                         {item.label}
@@ -271,13 +271,13 @@ export const SettingsView: Component = () => {
                         <span class={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider ${
                           isActive()
                             ? 'bg-[#FF4500] text-white shadow-xs'
-                            : 'bg-orange-100 text-[#FF4500] dark:bg-orange-950/60 dark:text-orange-300'
+                            : 'bg-gray-100 text-gray-700 dark:bg-neutral-800 dark:text-neutral-300'
                         }`}>
                           {item.badge}
                         </span>
                       </Show>
                     </div>
-                    <p class="text-[11px] truncate mt-0.5 text-gray-400 dark:text-neutral-500">
+                    <p class="text-[11px] truncate mt-0.5 text-gray-500 dark:text-neutral-400">
                       {item.desc}
                     </p>
                   </div>
@@ -285,7 +285,7 @@ export const SettingsView: Component = () => {
                   <IconChevronRight
                     class={`w-4 h-4 shrink-0 transition-transform ${
                       isActive()
-                        ? 'text-[#FF4500] dark:text-orange-400 translate-x-0.5'
+                        ? 'text-gray-900 dark:text-white translate-x-0.5'
                         : 'text-gray-300 dark:text-neutral-600 group-hover:text-gray-500'
                     }`}
                   />
@@ -295,20 +295,16 @@ export const SettingsView: Component = () => {
           </For>
         </div>
 
-        {/* Right Active Content Panel: Rich, warm, colorful aesthetic container */}
+        {/* Right Active Content Panel: Minimal flat black/white container */}
         <div class="md:col-span-8">
-          <div class="bg-gradient-to-br from-white via-orange-50/15 to-white dark:from-[#161311] dark:via-[#191512] dark:to-[#141210] rounded-3xl border border-orange-200/80 dark:border-orange-900/40 p-6 sm:p-7 shadow-xl shadow-orange-500/5 relative overflow-hidden space-y-6">
-            {/* Ambient Warm Gradient Accents */}
-            <div class="absolute -top-24 -right-24 w-80 h-80 bg-gradient-to-br from-orange-400/10 via-amber-400/5 to-transparent rounded-full blur-3xl pointer-events-none" />
-            <div class="absolute -bottom-24 -left-24 w-80 h-80 bg-gradient-to-tr from-amber-400/10 via-orange-400/5 to-transparent rounded-full blur-3xl pointer-events-none" />
-
+          <div class="bg-white dark:bg-neutral-950 rounded-2xl border border-gray-200 dark:border-neutral-800 p-6 sm:p-7 shadow-xs relative overflow-hidden space-y-6">
             {/* =========================================================
                 TAB 1: STORE PROFILE
                 ========================================================= */}
             <Show when={activeSettingsTab() === 'store'}>
               <div class="space-y-6 relative z-10 animate-fade-in">
                 {/* Header */}
-                <div class="flex items-center justify-between pb-4 border-b border-orange-100 dark:border-orange-950/60">
+                <div class="flex items-center justify-between pb-4 border-b border-gray-200 dark:border-neutral-800">
                   <div class="flex items-center gap-3">
                     <div class="w-11 h-11 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center shadow-md shadow-emerald-500/20">
                       <IconStore class="w-5 h-5" />
@@ -374,10 +370,10 @@ export const SettingsView: Component = () => {
                 {/* 4 Detail Info Cards with Clean SVG Icons */}
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
                   {/* Store Name Card */}
-                  <div class="p-4 rounded-2xl bg-white/80 dark:bg-neutral-900/60 border border-orange-100 dark:border-neutral-800 shadow-xs hover:border-orange-300 transition-colors">
+                  <div class="p-4 rounded-xl bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 shadow-xs hover:border-gray-300 dark:hover:border-neutral-700 transition-colors">
                     <div class="flex items-center justify-between">
                       <div class="flex items-center gap-2">
-                        <div class="w-7 h-7 rounded-lg bg-orange-100 text-[#FF4500] dark:bg-orange-950/60 flex items-center justify-center">
+                        <div class="w-7 h-7 rounded-lg bg-gray-100 text-gray-700 dark:bg-neutral-800 dark:text-neutral-300 flex items-center justify-center">
                           <IconStore class="w-3.5 h-3.5" />
                         </div>
                         <span class="text-gray-500 dark:text-neutral-400 font-semibold text-[11px] uppercase tracking-wider">Store Name</span>
@@ -385,7 +381,7 @@ export const SettingsView: Component = () => {
                       <button
                         type="button"
                         onClick={() => copyToClipboard(currentBusiness.name || '', 'name')}
-                        class="p-1 text-gray-400 hover:text-[#FF4500] transition"
+                        class="p-1 text-gray-400 hover:text-gray-700 dark:hover:text-white transition"
                         title="Copy Name"
                       >
                         <Show when={copiedField() === 'name'} fallback={<IconCopy class="w-3.5 h-3.5" />}>
@@ -399,10 +395,10 @@ export const SettingsView: Component = () => {
                   </div>
 
                   {/* PAN/VAT Card */}
-                  <div class="p-4 rounded-2xl bg-white/80 dark:bg-neutral-900/60 border border-orange-100 dark:border-neutral-800 shadow-xs hover:border-orange-300 transition-colors">
+                  <div class="p-4 rounded-xl bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 shadow-xs hover:border-gray-300 dark:hover:border-neutral-700 transition-colors">
                     <div class="flex items-center justify-between">
                       <div class="flex items-center gap-2">
-                        <div class="w-7 h-7 rounded-lg bg-blue-100 text-blue-600 dark:bg-blue-950/60 flex items-center justify-center">
+                        <div class="w-7 h-7 rounded-lg bg-gray-100 text-gray-700 dark:bg-neutral-800 dark:text-neutral-300 flex items-center justify-center">
                           <IconReceipt class="w-3.5 h-3.5" />
                         </div>
                         <span class="text-gray-500 dark:text-neutral-400 font-semibold text-[11px] uppercase tracking-wider">PAN / VAT Registration</span>
@@ -410,7 +406,7 @@ export const SettingsView: Component = () => {
                       <button
                         type="button"
                         onClick={() => copyToClipboard(currentBusiness.pan || '', 'pan')}
-                        class="p-1 text-gray-400 hover:text-[#FF4500] transition"
+                        class="p-1 text-gray-400 hover:text-gray-700 dark:hover:text-white transition"
                         title="Copy PAN"
                       >
                         <Show when={copiedField() === 'pan'} fallback={<IconCopy class="w-3.5 h-3.5" />}>
@@ -424,10 +420,10 @@ export const SettingsView: Component = () => {
                   </div>
 
                   {/* Contact Phone Card */}
-                  <div class="p-4 rounded-2xl bg-white/80 dark:bg-neutral-900/60 border border-orange-100 dark:border-neutral-800 shadow-xs hover:border-orange-300 transition-colors">
+                  <div class="p-4 rounded-xl bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 shadow-xs hover:border-gray-300 dark:hover:border-neutral-700 transition-colors">
                     <div class="flex items-center justify-between">
                       <div class="flex items-center gap-2">
-                        <div class="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-600 dark:bg-emerald-950/60 flex items-center justify-center">
+                        <div class="w-7 h-7 rounded-lg bg-gray-100 text-gray-700 dark:bg-neutral-800 dark:text-neutral-300 flex items-center justify-center">
                           <IconPhone class="w-3.5 h-3.5" />
                         </div>
                         <span class="text-gray-500 dark:text-neutral-400 font-semibold text-[11px] uppercase tracking-wider">Contact Phone</span>
@@ -435,7 +431,7 @@ export const SettingsView: Component = () => {
                       <button
                         type="button"
                         onClick={() => copyToClipboard(currentBusiness.phone || '', 'phone')}
-                        class="p-1 text-gray-400 hover:text-[#FF4500] transition"
+                        class="p-1 text-gray-400 hover:text-gray-700 dark:hover:text-white transition"
                         title="Copy Phone"
                       >
                         <Show when={copiedField() === 'phone'} fallback={<IconCopy class="w-3.5 h-3.5" />}>
@@ -449,10 +445,10 @@ export const SettingsView: Component = () => {
                   </div>
 
                   {/* Store Address Card */}
-                  <div class="p-4 rounded-2xl bg-white/80 dark:bg-neutral-900/60 border border-orange-100 dark:border-neutral-800 shadow-xs hover:border-orange-300 transition-colors">
+                  <div class="p-4 rounded-xl bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 shadow-xs hover:border-gray-300 dark:hover:border-neutral-700 transition-colors">
                     <div class="flex items-center justify-between">
                       <div class="flex items-center gap-2">
-                        <div class="w-7 h-7 rounded-lg bg-purple-100 text-purple-600 dark:bg-purple-950/60 flex items-center justify-center">
+                        <div class="w-7 h-7 rounded-lg bg-gray-100 text-gray-700 dark:bg-neutral-800 dark:text-neutral-300 flex items-center justify-center">
                           <IconMapPin class="w-3.5 h-3.5" />
                         </div>
                         <span class="text-gray-500 dark:text-neutral-400 font-semibold text-[11px] uppercase tracking-wider">Store Location</span>
@@ -460,7 +456,7 @@ export const SettingsView: Component = () => {
                       <button
                         type="button"
                         onClick={() => copyToClipboard(currentBusiness.address || '', 'address')}
-                        class="p-1 text-gray-400 hover:text-[#FF4500] transition"
+                        class="p-1 text-gray-400 hover:text-gray-700 dark:hover:text-white transition"
                         title="Copy Address"
                       >
                         <Show when={copiedField() === 'address'} fallback={<IconCopy class="w-3.5 h-3.5" />}>
@@ -482,7 +478,7 @@ export const SettingsView: Component = () => {
             <Show when={activeSettingsTab() === 'subscription'}>
               <div class="space-y-6 relative z-10 animate-fade-in">
                 {/* Header */}
-                <div class="flex items-center justify-between pb-4 border-b border-orange-100 dark:border-orange-950/60">
+                <div class="flex items-center justify-between pb-4 border-b border-gray-200 dark:border-neutral-800">
                   <div class="flex items-center gap-3">
                     <div class="w-11 h-11 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-500 text-white flex items-center justify-center shadow-md shadow-amber-500/20">
                       <IconCrown class="w-5 h-5" />
@@ -603,7 +599,7 @@ export const SettingsView: Component = () => {
             <Show when={activeSettingsTab() === 'invoices'}>
               <div class="space-y-6 relative z-10 animate-fade-in">
                 {/* Header */}
-                <div class="flex items-center justify-between pb-4 border-b border-orange-100 dark:border-orange-950/60">
+                <div class="flex items-center justify-between pb-4 border-b border-gray-200 dark:border-neutral-800">
                   <div class="flex items-center gap-3">
                     <div class="w-11 h-11 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white flex items-center justify-center shadow-md shadow-blue-500/20">
                       <IconReceipt class="w-5 h-5" />
@@ -718,7 +714,7 @@ export const SettingsView: Component = () => {
             <Show when={activeSettingsTab() === 'fonepay'}>
               <div class="space-y-6 relative z-10 animate-fade-in">
                 {/* Header */}
-                <div class="flex items-center justify-between pb-4 border-b border-orange-100 dark:border-orange-950/60">
+                <div class="flex items-center justify-between pb-4 border-b border-gray-200 dark:border-neutral-800">
                   <div class="flex items-center gap-3">
                     <div class="w-11 h-11 rounded-2xl bg-gradient-to-br from-rose-500 to-red-600 text-white flex items-center justify-center shadow-md shadow-red-500/20">
                       <IconQrCode class="w-5 h-5" />
@@ -821,7 +817,7 @@ export const SettingsView: Component = () => {
             <Show when={activeSettingsTab() === 'hardware'}>
               <div class="space-y-6 relative z-10 animate-fade-in">
                 {/* Header */}
-                <div class="flex items-center justify-between pb-4 border-b border-orange-100 dark:border-orange-950/60">
+                <div class="flex items-center justify-between pb-4 border-b border-gray-200 dark:border-neutral-800">
                   <div class="flex items-center gap-3">
                     <div class="w-11 h-11 rounded-2xl bg-gradient-to-br from-teal-500 to-cyan-600 text-white flex items-center justify-center shadow-md shadow-teal-500/20">
                       <IconPrinter class="w-5 h-5" />
@@ -934,7 +930,7 @@ export const SettingsView: Component = () => {
             <Show when={activeSettingsTab() === 'preferences'}>
               <div class="space-y-6 relative z-10 animate-fade-in">
                 {/* Header */}
-                <div class="flex items-center justify-between pb-4 border-b border-orange-100 dark:border-orange-950/60">
+                <div class="flex items-center justify-between pb-4 border-b border-gray-200 dark:border-neutral-800">
                   <div class="flex items-center gap-3">
                     <div class="w-11 h-11 rounded-2xl bg-gradient-to-br from-purple-600 to-pink-600 text-white flex items-center justify-center shadow-md shadow-purple-500/20">
                       <IconGlobe class="w-5 h-5" />
@@ -1082,7 +1078,7 @@ export const SettingsView: Component = () => {
             <Show when={activeSettingsTab() === 'security'}>
               <div class="space-y-6 relative z-10 animate-fade-in">
                 {/* Header */}
-                <div class="flex items-center justify-between pb-4 border-b border-orange-100 dark:border-orange-950/60">
+                <div class="flex items-center justify-between pb-4 border-b border-gray-200 dark:border-neutral-800">
                   <div class="flex items-center gap-3">
                     <div class="w-11 h-11 rounded-2xl bg-gradient-to-br from-[#FF4500] to-amber-500 text-white flex items-center justify-center shadow-md shadow-orange-500/20">
                       <IconShield class="w-5 h-5" />

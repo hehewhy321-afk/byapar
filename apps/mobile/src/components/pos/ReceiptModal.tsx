@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, Modal, ScrollView, Alert, Linking, TouchableOpacity } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import * as Print from 'expo-print';
 import { Theme } from '../../theme';
 import { useApp } from '../../context/AppContext';
 import { Invoice } from '../../types';
@@ -19,8 +20,172 @@ export const ReceiptModal: React.FC<Props> = ({ invoice, onClose }) => {
 
   if (!invoice) return null;
 
-  const handlePrint = () => {
-    Alert.alert('Bluetooth Printer', `Printing to ${store.paperWidth} thermal printer...`);
+  const generateReceiptHtml = () => {
+    const is80 = store.paperWidth === '80mm';
+    const paperWidth = is80 ? '78mm' : '56mm';
+    const fontSize = is80 ? '13px' : '11px';
+    const titleSize = is80 ? '17px' : '14px';
+
+    const itemsHtml = (invoice.items || [])
+      .map(
+        (it) => `
+        <tr>
+          <td style="padding: 3px 0; text-align: left; word-break: break-word;">${it.name}</td>
+          <td style="padding: 3px 0; text-align: center; white-space: nowrap;">${it.qty}</td>
+          <td style="padding: 3px 0; text-align: right; white-space: nowrap;">${it.price.toLocaleString()}</td>
+          <td style="padding: 3px 0; text-align: right; white-space: nowrap; font-weight: bold;">${(it.qty * it.price).toLocaleString()}</td>
+        </tr>
+      `
+      )
+      .join('');
+
+    return `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+          <style>
+            @page {
+              size: ${paperWidth} auto;
+              margin: 0;
+            }
+            body {
+              font-family: 'Courier New', Courier, monospace;
+              font-size: ${fontSize};
+              line-height: 1.25;
+              color: #000;
+              background: #fff;
+              width: ${paperWidth};
+              margin: 0 auto;
+              padding: 8px 4px;
+              box-sizing: border-box;
+            }
+            .center { text-align: center; }
+            .store-title {
+              font-size: ${titleSize};
+              font-weight: 900;
+              margin: 0 0 2px 0;
+              text-transform: uppercase;
+              letter-spacing: 0.5px;
+            }
+            .meta { font-size: 10px; color: #333; margin: 1px 0; }
+            .dashed-line {
+              border-bottom: 1px dashed #000;
+              margin: 6px 0;
+            }
+            .double-line {
+              border-bottom: 2px solid #000;
+              margin: 6px 0;
+            }
+            .info-table {
+              width: 100%;
+              font-size: 10px;
+              margin: 4px 0;
+              border-collapse: collapse;
+            }
+            .info-table td { padding: 1px 0; }
+            .items-table {
+              width: 100%;
+              border-collapse: collapse;
+              font-size: 10px;
+              margin: 4px 0;
+            }
+            .items-table th {
+              border-bottom: 1px dashed #000;
+              padding: 3px 0;
+              font-size: 10px;
+              font-weight: bold;
+            }
+            .total-row {
+              display: flex;
+              justify-content: space-between;
+              font-size: ${is80 ? '15px' : '13px'};
+              font-weight: 900;
+              padding: 4px 0;
+            }
+            .footer-msg {
+              font-size: 9px;
+              text-align: center;
+              margin-top: 8px;
+              color: #444;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="center">
+            <h1 class="store-title">${store.name || 'STORE RECEIPT'}</h1>
+            ${store.address ? `<div class="meta">${store.address}</div>` : ''}
+            ${store.phone ? `<div class="meta">Tel: ${store.phone}</div>` : ''}
+            ${store.panNumber ? `<div class="meta"><b>PAN / VAT:</b> ${store.panNumber}</div>` : ''}
+            <div class="dashed-line"></div>
+            <div style="font-weight: bold; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;">
+              TAX INVOICE / CASH BILL
+            </div>
+          </div>
+
+          <div class="dashed-line"></div>
+
+          <table class="info-table">
+            <tr>
+              <td><b>Bill No:</b> ${invoice.invoiceNumber}</td>
+              <td style="text-align: right;"><b>Date:</b> ${invoice.date}</td>
+            </tr>
+            ${
+              invoice.partyName
+                ? `<tr><td colspan="2"><b>Customer:</b> ${invoice.partyName}</td></tr>`
+                : ''
+            }
+            <tr>
+              <td colspan="2"><b>Payment:</b> ${(invoice.paymentMode || 'CASH').toUpperCase()}</td>
+            </tr>
+          </table>
+
+          <div class="dashed-line"></div>
+
+          <table class="items-table">
+            <thead>
+              <tr>
+                <th style="text-align: left;">Item</th>
+                <th style="text-align: center;">Qty</th>
+                <th style="text-align: right;">Rate</th>
+                <th style="text-align: right;">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${itemsHtml}
+            </tbody>
+          </table>
+
+          <div class="double-line"></div>
+
+          <div class="total-row">
+            <span>TOTAL:</span>
+            <span>Rs. ${Number(invoice.total).toLocaleString()}</span>
+          </div>
+
+          <div class="dashed-line"></div>
+
+          <div class="footer-msg">
+            <div>Thank you for your visit!</div>
+            <div>Exchange with valid bill within 7 days.</div>
+            <div style="font-family: sans-serif; font-size: 8px; margin-top: 5px; color: #888;">
+              POWERED BY BYAPAR SMART POS
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+  };
+
+  const handlePrint = async () => {
+    try {
+      const html = generateReceiptHtml();
+      await Print.printAsync({ html });
+    } catch (err: any) {
+      console.warn('[ReceiptModal] Print error:', err);
+      Alert.alert('Print Error', 'Could not complete print job. Please check printer connection.');
+    }
   };
 
   const handleWhatsAppShare = async () => {

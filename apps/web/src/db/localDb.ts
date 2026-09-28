@@ -324,11 +324,11 @@ export function setActiveTab(tab: ActiveTab) {
 }
 export const [pricingTier, setPricingTier] = createSignal<'retail' | 'wholesale'>('retail');
 
-// Dark mode state - default to dark theme
+// Dark mode state - default to clean light theme for best contrast
 function initTheme(): boolean {
-  if (typeof window === 'undefined') return true;
+  if (typeof window === 'undefined') return false;
   const stored = localStorage.getItem('byapar_theme');
-  const isDark = stored ? stored === 'dark' : true;
+  const isDark = stored ? stored === 'dark' : false;
   if (isDark) {
     document.documentElement.classList.add('dark');
   } else {

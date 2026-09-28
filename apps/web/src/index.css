@@ -442,3 +442,73 @@
   transform: scale(1.03);
 }
 
+/* =========================================================================
+   COMPREHENSIVE PRINT STYLESHEET (Thermal & Standard Receipts)
+   ========================================================================= */
+@media print {
+  @page {
+    margin: 0;
+    size: auto;
+  }
+
+  body {
+    background: #FFFFFF !important;
+    color: #000000 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    font-size: 11pt !important;
+  }
+
+  /* Hide everything on the page except printable receipt */
+  header,
+  nav,
+  aside,
+  .top-bar,
+  .no-print,
+  button,
+  .modal-overlay:not(:has(.printable-receipt)),
+  [role="dialog"]:not(:has(.printable-receipt)) {
+    display: none !important;
+  }
+
+  .modal-overlay {
+    position: static !important;
+    background: transparent !important;
+    backdrop-filter: none !important;
+    display: block !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    inset: auto !important;
+    width: 100% !important;
+  }
+
+  .printable-receipt {
+    display: block !important;
+    position: static !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-shadow: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+    padding: 8mm 6mm !important;
+    color: #000000 !important;
+    background: #FFFFFF !important;
+    font-family: 'Courier New', Courier, monospace, monospace !important;
+    page-break-inside: avoid;
+  }
+
+  /* Force pure black typography for thermal contrast */
+  .printable-receipt * {
+    color: #000000 !important;
+    background: transparent !important;
+    text-shadow: none !important;
+    box-shadow: none !important;
+  }
+
+  .printable-receipt .dashed-line {
+    border-bottom: 1px dashed #000000 !important;
+    margin: 4px 0 !important;
+  }
+}
+
+

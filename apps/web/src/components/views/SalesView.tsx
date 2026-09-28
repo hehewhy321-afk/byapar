@@ -30,6 +30,7 @@ import {
   IconWhatsApp,
 } from '../icons';
 import { buildWhatsAppInvoiceMessage } from '../../services/edgeShortlinkService';
+import { ReceiptModal } from '../ReceiptModal';
 
 export function SalesView() {
   const [activeSubTab, setActiveSubTab] = createSignal<'invoices' | 'payment_in' | 'quotations' | 'returns'>('invoices');
@@ -40,6 +41,7 @@ export function SalesView() {
   const [showQuotationModal, setShowQuotationModal] = createSignal(false);
   const [showReturnModal, setShowReturnModal] = createSignal(false);
   const [selectedInvoice, setSelectedInvoice] = createSignal<any | null>(null);
+  const [printReceiptInvoice, setPrintReceiptInvoice] = createSignal<any | null>(null);
   const [sharingWaId, setSharingWaId] = createSignal<string | null>(null);
 
   const handleShareWhatsApp = async (inv: any) => {
@@ -481,6 +483,13 @@ export function SalesView() {
                       </td>
                       <td class="px-5 py-4 text-right">
                         <div class="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() => setPrintReceiptInvoice(inv)}
+                            class="p-2 rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-neutral-900 dark:hover:bg-neutral-800 text-gray-700 hover:text-gray-900 dark:text-neutral-300 dark:hover:text-white transition-colors"
+                            title={currentLang() === 'ne' ? 'प्रिन्ट गर्नुहोस्' : 'Print Receipt'}
+                          >
+                            <IconPrint class="w-4 h-4" />
+                          </button>
                           <button
                             onClick={() => handleShareWhatsApp(inv)}
                             class="p-2 rounded-lg bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/50 text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300 transition-colors"
@@ -1153,6 +1162,17 @@ export function SalesView() {
 
             <div class="flex justify-end items-center gap-2 pt-3 border-t border-gray-100 dark:border-neutral-900">
               <button
+                onClick={() => {
+                  const inv = selectedInvoice();
+                  setSelectedInvoice(null);
+                  setPrintReceiptInvoice(inv);
+                }}
+                class="px-3.5 py-2 bg-gray-900 hover:bg-black dark:bg-white dark:hover:bg-neutral-200 text-white dark:text-neutral-900 rounded-lg text-sm font-semibold flex items-center gap-1.5 shadow-xs transition-colors"
+              >
+                <IconPrint class="w-4 h-4" />
+                <span>{currentLang() === 'ne' ? 'प्रिन्ट बिल' : 'Print Receipt'}</span>
+              </button>
+              <button
                 onClick={() => handleShareWhatsApp(selectedInvoice())}
                 class="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-semibold flex items-center gap-1.5 shadow-xs transition-colors"
                 disabled={sharingWaId() === selectedInvoice()?.id}
@@ -1169,6 +1189,14 @@ export function SalesView() {
             </div>
           </div>
         </div>
+      </Show>
+
+      {/* MODAL: Printable Receipt Modal */}
+      <Show when={printReceiptInvoice()}>
+        <ReceiptModal
+          invoice={printReceiptInvoice()!}
+          onClose={() => setPrintReceiptInvoice(null)}
+        />
       </Show>
     </div>
   );

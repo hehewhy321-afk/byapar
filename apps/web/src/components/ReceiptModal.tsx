@@ -45,7 +45,7 @@ export const ReceiptModal: Component<ReceiptModalProps> = (props) => {
 
   return (
     <div class="modal-overlay">
-      <div class="relative w-full max-w-sm bg-white text-gray-900 rounded-2xl shadow-2xl p-5 font-receipt text-xs max-h-[90vh] overflow-y-auto">
+      <div class="printable-receipt relative w-full max-w-sm bg-white text-gray-900 rounded-2xl shadow-2xl p-5 font-receipt text-xs max-h-[90vh] overflow-y-auto">
         {/* Controls Header (Hidden during print) */}
         <div class="flex justify-between items-center mb-4 pb-2 border-b border-slate-200 no-print font-sans">
           <span class="font-bold text-slate-700 text-sm">Thermal Receipt Preview</span>
