@@ -279,7 +279,7 @@ export const OtpVerifyPage: Component = () => {
                     ref={(el) => (inputRefs[idx] = el)}
                     type="text"
                     inputmode="numeric"
-                    maxLength={1}
+                    maxlength={1}
                     autocomplete="one-time-code"
                     value={digits()[idx]}
                     onInput={(e) => handleDigitChange(idx, e.currentTarget.value)}
