@@ -58,7 +58,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
   onClose,
   fullscreen = false,
 }) => {
-  const { user, login, signUp, verifyEmailOtp, resendVerificationEmail, logout, themeMode, store } = useApp();
+  const { user, login, signUp, verifyEmailOtp, resendVerificationEmail, updateStoreProfile, logout, themeMode, store } = useApp();
   const [tab, setTab] = useState<'signin' | 'signup'>('signin');
   const [signupStep, setSignupStep] = useState<1 | 2>(1);
   const [selectedBusinessType, setSelectedBusinessType] = useState<BusinessType>('general');
@@ -179,7 +179,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
     }
   };
 
-  const handleProceedToCategory = () => {
+  const handleCreateAccountAndVerify = async () => {
     if (!storeName.trim()) {
       setErrorMsg('Please enter your business or store name.');
       return;
@@ -199,37 +199,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
     const cleanPhone = phone.replace(/[^0-9]/g, '');
     if (cleanPhone.length < 10) {
       setErrorMsg('Please enter a valid 10-digit mobile phone number.');
-      return;
-    }
-    setErrorMsg(null);
-    setSignupStep(2);
-  };
-
-  const handleSignUp = async () => {
-    if (!email.trim() || !password.trim()) {
-      setErrorMsg('Please enter your email and password.');
-      setSignupStep(1);
-      return;
-    }
-    if (password.length < 6) {
-      setErrorMsg('Password must be at least 6 characters.');
-      setSignupStep(1);
-      return;
-    }
-    if (!storeName.trim()) {
-      setErrorMsg('Please enter your store name.');
-      setSignupStep(1);
-      return;
-    }
-    if (!phone.trim()) {
-      setErrorMsg('Mobile phone number is compulsory for account registration.');
-      setSignupStep(1);
-      return;
-    }
-    const cleanPhone = phone.replace(/[^0-9]/g, '');
-    if (cleanPhone.length < 10) {
-      setErrorMsg('Please enter a valid 10-digit mobile phone number.');
-      setSignupStep(1);
       return;
     }
 
@@ -255,16 +224,35 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
           setOtpCooldown(60);
           setOtpModalVisible(true);
         } else {
-          setSuccessMsg('Store registered successfully! Preloaded category suggestions.');
-          if (onClose) {
-            setTimeout(() => {
-              onClose();
-            }, 600);
-          }
+          // Auto-confirmed, advance directly to choose business category
+          setSignupStep(2);
         }
       }
     } catch (err: any) {
       setErrorMsg(err.message || 'An unexpected error occurred.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleFinalizeCategory = async () => {
+    setLoading(true);
+    setErrorMsg(null);
+    try {
+      await updateStoreProfile({
+        name: storeName.trim() || store.name,
+        ownerName: ownerName.trim() || store.ownerName,
+        phone: phone.trim() || store.phone,
+        businessType: selectedBusinessType,
+      });
+      setSuccessMsg('Store registered successfully! Preloaded category suggestions.');
+      if (onClose) {
+        setTimeout(() => {
+          onClose();
+        }, 500);
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Failed to save store category.');
     } finally {
       setLoading(false);
     }
@@ -284,11 +272,16 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
       if (res.error) {
         setOtpError(res.error.message || 'Invalid or expired code. Please try again.');
       } else {
-        setOtpSuccess('Email verified successfully! Setting up your store...');
+        setOtpSuccess('Email verified successfully!');
         setTimeout(() => {
           setOtpModalVisible(false);
-          if (onClose) onClose();
-        }, 700);
+          if (tab === 'signup') {
+            // TRANSITION TO SELECTING CATEGORIES / STORE TYPE SCREEN
+            setSignupStep(2);
+          } else if (onClose) {
+            onClose();
+          }
+        }, 600);
       }
     } catch (err: any) {
       setOtpError(err.message || 'Verification failed. Please try again.');
@@ -826,13 +819,20 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
 
               <AnimatedPressable
                 style={[styles.submitBtn, { backgroundColor: colors.buttonBg }]}
-                onPress={handleProceedToCategory}
+                onPress={handleCreateAccountAndVerify}
+                disabled={loading}
                 activeScale={0.96}
               >
-                <Text style={[styles.submitBtnText, { color: colors.buttonText }]}>
-                  Continue: Business Category
-                </Text>
-                <Feather name="arrow-right" size={17} color={colors.buttonText} />
+                {loading ? (
+                  <ActivityIndicator color={colors.buttonText} size="small" />
+                ) : (
+                  <>
+                    <Text style={[styles.submitBtnText, { color: colors.buttonText }]}>
+                      Create Account & Verify
+                    </Text>
+                    <Feather name="arrow-right" size={17} color={colors.buttonText} />
+                  </>
+                )}
               </AnimatedPressable>
             </>
           )}
@@ -934,7 +934,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
               {/* Complete Registration Button */}
               <AnimatedPressable
                 style={[styles.submitBtn, { backgroundColor: colors.buttonBg, marginTop: 18 }]}
-                onPress={handleSignUp}
+                onPress={handleFinalizeCategory}
                 disabled={loading}
                 activeScale={0.96}
               >
