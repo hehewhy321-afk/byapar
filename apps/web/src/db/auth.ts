@@ -288,6 +288,24 @@ supabase.auth.onAuthStateChange(async (event, session) => {
   }
 });
 
+// Handle custom domain token_hash email verification on load (?token_hash=...&type=email|signup)
+if (typeof window !== 'undefined' && window.location) {
+  const urlParams = new URLSearchParams(window.location.search);
+  const tokenHash = urlParams.get('token_hash');
+  const type = (urlParams.get('type') || 'email') as any;
+  if (tokenHash) {
+    supabase.auth.verifyOtp({ token_hash: tokenHash, type }).then(({ data, error }) => {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('token_hash');
+      url.searchParams.delete('type');
+      window.history.replaceState({}, document.title, url.pathname + (url.search ? url.search : ''));
+      if (!error && data.user) {
+        syncUserBusiness(data.user);
+      }
+    });
+  }
+}
+
 // Check session on load
 supabase.auth.getSession().then(({ data: { session } }) => {
   const isConfirmed = !!(session?.user?.email_confirmed_at || (session?.user as any)?.confirmed_at);
