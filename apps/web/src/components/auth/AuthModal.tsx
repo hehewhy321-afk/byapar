@@ -1,5 +1,5 @@
 import { Component, createSignal, Show, For } from 'solid-js';
-import { signIn, signUp } from '../../db/auth';
+import { signIn, signUp, resendVerificationEmail } from '../../db/auth';
 import { showAuthModal, setShowAuthModal, updateBusinessProfile } from '../../db/localDb';
 import { IconX, IconAlertCircle, IconCheck } from '../icons';
 import { BUSINESS_TYPES, BusinessType } from '@byapar/core';
@@ -10,6 +10,9 @@ export const AuthModal: Component = () => {
   const [loading, setLoading] = createSignal(false);
   const [errorMsg, setErrorMsg] = createSignal('');
   const [successMsg, setSuccessMsg] = createSignal('');
+  const [verificationPending, setVerificationPending] = createSignal<string | null>(null);
+  const [resendingEmail, setResendingEmail] = createSignal(false);
+  const [resendStatusMsg, setResendStatusMsg] = createSignal('');
   const [turnstileToken, setTurnstileToken] = createSignal('');
 
   // Login form
@@ -29,6 +32,7 @@ export const AuthModal: Component = () => {
   const handleLogin = async (e: Event) => {
     e.preventDefault();
     setErrorMsg('');
+    setSuccessMsg('');
     setLoading(true);
 
     const res = await signIn(loginEmail(), loginPass());
@@ -38,15 +42,29 @@ export const AuthModal: Component = () => {
       setShowAuthModal(false);
     } else {
       setErrorMsg(res.error || 'Invalid credentials');
+      if (res.needsVerification) {
+        setVerificationPending(loginEmail());
+      }
     }
   };
 
   const handleSignup = async (e: Event) => {
     e.preventDefault();
     setErrorMsg('');
+    setSuccessMsg('');
 
     if (signupPass() !== signupConfirmPass()) {
       setErrorMsg('Passwords do not match');
+      return;
+    }
+
+    if (!signupPhone().trim()) {
+      setErrorMsg('Mobile phone number is compulsory');
+      return;
+    }
+    const cleanPhone = signupPhone().replace(/[^0-9]/g, '');
+    if (cleanPhone.length < 10) {
+      setErrorMsg('Please enter a valid 10-digit mobile phone number');
       return;
     }
 
@@ -63,21 +81,42 @@ export const AuthModal: Component = () => {
     setLoading(false);
 
     if (res.success) {
-      updateBusinessProfile({
-        name: signupStore(),
-        nameEn: signupStore(),
-        ownerName: signupOwner(),
-        businessType: signupBusinessType(),
-        phone: signupPhone(),
-        pan: signupPan(),
-      });
-      setSuccessMsg('Account created successfully!');
-      setTimeout(() => {
-        setShowAuthModal(false);
+      if (res.needsVerification) {
+        setVerificationPending(signupEmail());
+        setErrorMsg('');
         setSuccessMsg('');
-      }, 1000);
+      } else {
+        updateBusinessProfile({
+          name: signupStore(),
+          nameEn: signupStore(),
+          ownerName: signupOwner(),
+          businessType: signupBusinessType(),
+          phone: signupPhone(),
+          pan: signupPan(),
+        });
+        setSuccessMsg('Account created successfully!');
+        setTimeout(() => {
+          setShowAuthModal(false);
+          setSuccessMsg('');
+        }, 1000);
+      }
     } else {
       setErrorMsg(res.error || 'Registration failed');
+    }
+  };
+
+  const handleResend = async () => {
+    const targetEmail = verificationPending() || signupEmail() || loginEmail();
+    if (!targetEmail) return;
+    setResendingEmail(true);
+    setResendStatusMsg('');
+    const res = await resendVerificationEmail(targetEmail);
+    setResendingEmail(false);
+    if (res.success) {
+      setResendStatusMsg('✓ Verification email resent! Please check your inbox.');
+      setTimeout(() => setResendStatusMsg(''), 6000);
+    } else {
+      setErrorMsg(res.error || 'Failed to resend verification email');
     }
   };
 
@@ -133,6 +172,44 @@ export const AuthModal: Component = () => {
             <div class="p-2.5 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/50 text-red-700 dark:text-red-300 text-xs mb-3 font-medium flex items-center gap-2">
               <IconAlertCircle size={14} class="w-4 h-4 shrink-0" />
               <span>{errorMsg()}</span>
+            </div>
+          </Show>
+
+          <Show when={verificationPending()}>
+            <div class="p-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/50 text-stone-800 dark:text-stone-200 text-xs mb-3 space-y-2.5">
+              <div class="flex items-start gap-2.5">
+                <span class="text-base shrink-0">✉️</span>
+                <div class="flex-1">
+                  <h4 class="font-bold text-stone-900 dark:text-white text-xs">Verify Your Email</h4>
+                  <p class="text-stone-600 dark:text-stone-300 mt-0.5 leading-relaxed text-[11px]">
+                    We've sent a link to <strong class="text-stone-900 dark:text-white">{verificationPending()}</strong>.
+                    Please verify your email before logging in.
+                  </p>
+                </div>
+              </div>
+              <Show when={resendStatusMsg()}>
+                <p class="text-emerald-700 dark:text-emerald-300 font-semibold text-[11px] bg-emerald-50 dark:bg-emerald-950/40 p-1.5 rounded-lg border border-emerald-200 dark:border-emerald-800/40">
+                  {resendStatusMsg()}
+                </p>
+              </Show>
+              <div class="flex items-center gap-2 pt-1 border-t border-amber-200/50 dark:border-amber-900/50 text-[11px]">
+                <button
+                  type="button"
+                  disabled={resendingEmail()}
+                  onClick={handleResend}
+                  class="font-semibold text-amber-900 dark:text-amber-300 hover:underline disabled:opacity-50"
+                >
+                  {resendingEmail() ? 'Resending...' : 'Resend Link'}
+                </button>
+                <span class="text-stone-300 dark:text-stone-700">|</span>
+                <button
+                  type="button"
+                  onClick={() => { setMode('login'); setVerificationPending(null); }}
+                  class="font-semibold text-stone-600 dark:text-stone-400 hover:underline"
+                >
+                  Back to Sign In
+                </button>
+              </div>
             </div>
           </Show>
 
@@ -237,9 +314,10 @@ export const AuthModal: Component = () => {
                   />
                 </div>
                 <div>
-                  <label class="block text-xs font-semibold text-neutral-700 dark:text-neutral-300 mb-1">Mobile Phone</label>
+                  <label class="block text-xs font-semibold text-neutral-700 dark:text-neutral-300 mb-1">Mobile Phone *</label>
                   <input
                     type="tel"
+                    required
                     placeholder="98XXXXXXXX"
                     value={signupPhone()}
                     onInput={(e) => setSignupPhone(e.currentTarget.value)}

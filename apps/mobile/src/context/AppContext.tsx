@@ -90,6 +90,7 @@ interface AppContextType {
   refreshData: () => Promise<void>;
   login: (email: string, pass: string) => Promise<{ data?: any; error?: any }>;
   signUp: (email: string, pass: string, storeName: string, phone: string, businessType?: BusinessType) => Promise<{ data?: any; error?: any }>;
+  resendVerificationEmail: (email: string) => Promise<{ data?: any; error?: any }>;
   logout: () => Promise<void>;
   changePassword: (oldPassword: string, newPassword: string) => Promise<{ error?: string }>;
   showAuthModal: boolean;
@@ -1219,11 +1220,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       (async () => {
         try {
           const { data: sessionData } = await supabase.auth.getSession();
-          if (sessionData?.session?.user) {
-            setUser(sessionData.session.user);
+          const sessionUser = sessionData?.session?.user;
+          const isVerified = !!(sessionUser?.email_confirmed_at || (sessionUser as any)?.confirmed_at);
+          if (sessionUser && isVerified) {
+            setUser(sessionUser);
             const metaName =
-              sessionData.session.user.user_metadata?.business_name ||
-              sessionData.session.user.user_metadata?.store_name;
+              sessionUser.user_metadata?.business_name ||
+              sessionUser.user_metadata?.store_name;
             if (metaName) {
               setStore((prev) => {
                 if (!prev.name || prev.name.includes('Shrestha Mart') || prev.name.includes('श्रेष्ठ किराना')) {
@@ -1232,8 +1235,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 return prev;
               });
             }
-            await resolveUserBusiness(sessionData.session.user);
+            await resolveUserBusiness(sessionUser);
           } else {
+            setUser(null);
             if (storedBizId && storedBizId !== DEFAULT_BIZ_ID) {
               await hydrateFromCloud(storedBizId);
             }
@@ -1251,7 +1255,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       // Listen for auth state changes
       const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
-        if (session?.user) {
+        const isVerified = !!(session?.user?.email_confirmed_at || (session?.user as any)?.confirmed_at);
+        if (session?.user && isVerified) {
           setUser(session.user);
           const metaName =
             session.user.user_metadata?.business_name ||
@@ -1696,7 +1701,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Auth Operations
   const login = async (email: string, pass: string) => {
-    const res = await supabase.auth.signInWithPassword({ email, password: pass });
+    const res = await supabase.auth.signInWithPassword({ email: email.trim(), password: pass });
+    if (res.error) {
+      if (res.error.message?.toLowerCase().includes('email not confirmed')) {
+        return {
+          ...res,
+          error: new Error('Your email is not verified yet. Please check your inbox and verify before signing in.'),
+        };
+      }
+      return res;
+    }
+    const isVerified = !!(res.data?.user?.email_confirmed_at || (res.data?.user as any)?.confirmed_at);
+    if (!isVerified) {
+      await supabase.auth.signOut();
+      setUser(null);
+      return {
+        data: { user: null, session: null },
+        error: new Error('Your email is not verified yet. Please check your inbox and click the verification link before logging in.'),
+      } as any;
+    }
     if (res.data?.user) {
       setUser(res.data.user);
       const metaName =
@@ -1710,6 +1733,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return res;
   };
 
+  const getMobileAuthRedirectUrl = (): string | undefined => {
+    return process.env.EXPO_PUBLIC_AUTH_REDIRECT_URL || process.env.EXPO_PUBLIC_APP_URL || undefined;
+  };
+
   const signUp = async (
     email: string,
     pass: string,
@@ -1717,14 +1744,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     phone: string,
     businessType: BusinessType = 'general'
   ) => {
+    if (!phone || !phone.trim()) {
+      return { error: new Error('Mobile phone number is compulsory for registration') };
+    }
+    const cleanPhone = phone.replace(/[^0-9]/g, '');
+    if (cleanPhone.length < 10) {
+      return { error: new Error('Please enter a valid 10-digit mobile phone number') };
+    }
+
+    const redirectUrl = getMobileAuthRedirectUrl();
     const res = await supabase.auth.signUp({
-      email,
+      email: email.trim(),
       password: pass,
       options: {
-        data: { store_name: storeName, phone, business_type: businessType },
+        ...(redirectUrl ? { emailRedirectTo: redirectUrl } : {}),
+        data: { store_name: storeName, phone: phone.trim(), business_type: businessType },
       },
     });
-    if (res.data?.user) {
+
+    const isConfirmed = !!(res.data?.session || res.data?.user?.email_confirmed_at || (res.data?.user as any)?.confirmed_at);
+
+    if (isConfirmed && res.data?.user) {
       setUser(res.data.user);
       const updatedStore = {
         ...store,
@@ -1743,6 +1783,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }, 700);
     }
     return res;
+  };
+
+  const resendVerificationEmail = async (email: string) => {
+    const redirectUrl = getMobileAuthRedirectUrl();
+    return await supabase.auth.resend({
+      type: 'signup',
+      email: email.trim(),
+      options: {
+        ...(redirectUrl ? { emailRedirectTo: redirectUrl } : {}),
+      },
+    });
   };
 
   const changePassword = async (oldPassword: string, newPassword: string): Promise<{ error?: string }> => {
@@ -3218,6 +3269,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         refreshData: refreshFromCloud,
         login,
         signUp,
+        resendVerificationEmail,
         logout,
         changePassword,
         showAuthModal,

@@ -1,5 +1,5 @@
 import { Component, createSignal, Show, For } from 'solid-js';
-import { signIn, signUp } from '../../db/auth';
+import { signIn, signUp, resendVerificationEmail } from '../../db/auth';
 import { setCurrentPage, updateBusinessProfile } from '../../db/localDb';
 import { IconAlertCircle, IconCheck } from '../icons';
 import { BUSINESS_TYPES, BusinessType } from '@byapar/core';
@@ -10,6 +10,9 @@ export const AuthPage: Component = () => {
   const [loading, setLoading] = createSignal(false);
   const [errorMsg, setErrorMsg] = createSignal('');
   const [successMsg, setSuccessMsg] = createSignal('');
+  const [verificationPending, setVerificationPending] = createSignal<string | null>(null);
+  const [resendingEmail, setResendingEmail] = createSignal(false);
+  const [resendStatusMsg, setResendStatusMsg] = createSignal('');
 
   // Login form
   const [loginEmail, setLoginEmail] = createSignal('');
@@ -29,19 +32,33 @@ export const AuthPage: Component = () => {
   const handleLogin = async (e: Event) => {
     e.preventDefault();
     setErrorMsg('');
+    setSuccessMsg('');
     setLoading(true);
     const res = await signIn(loginEmail(), loginPass());
     setLoading(false);
     if (!res.success) {
       setErrorMsg(res.error || 'Invalid credentials');
+      if (res.needsVerification) {
+        setVerificationPending(loginEmail());
+      }
     }
   };
 
   const handleSignup = async (e: Event) => {
     e.preventDefault();
     setErrorMsg('');
+    setSuccessMsg('');
     if (signupPass() !== signupConfirmPass()) {
       setErrorMsg('Passwords do not match');
+      return;
+    }
+    if (!signupPhone().trim()) {
+      setErrorMsg('Mobile phone number is compulsory');
+      return;
+    }
+    const cleanPhone = signupPhone().replace(/[^0-9]/g, '');
+    if (cleanPhone.length < 10) {
+      setErrorMsg('Please enter a valid 10-digit mobile phone number');
       return;
     }
     setLoading(true);
@@ -56,17 +73,38 @@ export const AuthPage: Component = () => {
     });
     setLoading(false);
     if (res.success) {
-      updateBusinessProfile({
-        name: signupStore(),
-        nameEn: signupStore(),
-        ownerName: signupOwner(),
-        businessType: signupBusinessType(),
-        phone: signupPhone(),
-        pan: signupPan(),
-      });
-      setSuccessMsg('Account created successfully!');
+      if (res.needsVerification) {
+        setVerificationPending(signupEmail());
+        setErrorMsg('');
+        setSuccessMsg('');
+      } else {
+        updateBusinessProfile({
+          name: signupStore(),
+          nameEn: signupStore(),
+          ownerName: signupOwner(),
+          businessType: signupBusinessType(),
+          phone: signupPhone(),
+          pan: signupPan(),
+        });
+        setSuccessMsg('Account created successfully!');
+      }
     } else {
       setErrorMsg(res.error || 'Registration failed');
+    }
+  };
+
+  const handleResend = async () => {
+    const targetEmail = verificationPending() || signupEmail() || loginEmail();
+    if (!targetEmail) return;
+    setResendingEmail(true);
+    setResendStatusMsg('');
+    const res = await resendVerificationEmail(targetEmail);
+    setResendingEmail(false);
+    if (res.success) {
+      setResendStatusMsg('✓ Verification email resent! Please check your inbox.');
+      setTimeout(() => setResendStatusMsg(''), 6000);
+    } else {
+      setErrorMsg(res.error || 'Failed to resend verification email');
     }
   };
 
@@ -219,6 +257,47 @@ export const AuthPage: Component = () => {
             </div>
           </Show>
 
+          {/* Verification Pending Notice */}
+          <Show when={verificationPending()}>
+            <div class="p-4 rounded-2xl bg-amber-50/90 border border-amber-200 text-stone-800 text-xs mb-5 font-heading space-y-3">
+              <div class="flex items-start gap-3">
+                <div class="w-8 h-8 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center text-sm shrink-0">
+                  ✉️
+                </div>
+                <div class="flex-1">
+                  <h4 class="font-bold text-stone-900 text-sm">Please Verify Your Email</h4>
+                  <p class="text-stone-600 mt-1 leading-relaxed">
+                    We've sent a verification link to <strong class="text-stone-900">{verificationPending()}</strong>.
+                    Please check your inbox and click the link to activate your account before accessing the portal.
+                  </p>
+                </div>
+              </div>
+              <Show when={resendStatusMsg()}>
+                <p class="text-emerald-700 font-semibold text-[11px] bg-emerald-50 p-2 rounded-xl border border-emerald-200">
+                  {resendStatusMsg()}
+                </p>
+              </Show>
+              <div class="flex items-center gap-3 pt-2 border-t border-amber-200/60 text-xs">
+                <button
+                  type="button"
+                  disabled={resendingEmail()}
+                  onClick={handleResend}
+                  class="font-semibold text-amber-900 hover:text-amber-950 underline disabled:opacity-50"
+                >
+                  {resendingEmail() ? 'Resending verification...' : 'Resend verification link'}
+                </button>
+                <span class="text-stone-300">|</span>
+                <button
+                  type="button"
+                  onClick={() => { setMode('login'); setVerificationPending(null); }}
+                  class="font-semibold text-stone-600 hover:text-stone-900"
+                >
+                  Go to Sign In →
+                </button>
+              </div>
+            </div>
+          </Show>
+
           {/* Success */}
           <Show when={successMsg()}>
             <div class="p-3 rounded-2xl bg-[#E8EFE8] border border-[#A7F3D0] text-[#065F46] text-xs mb-4 font-medium flex items-center gap-2 font-heading">
@@ -314,9 +393,10 @@ export const AuthPage: Component = () => {
                   />
                 </div>
                 <div>
-                  <label class="block text-[11px] font-heading font-semibold text-[#292524] mb-1">Mobile</label>
+                  <label class="block text-[11px] font-heading font-semibold text-[#292524] mb-1">Mobile Phone *</label>
                   <input
                     type="tel"
+                    required
                     placeholder="98XXXXXXXX"
                     value={signupPhone()}
                     onInput={(e) => setSignupPhone(e.currentTarget.value)}

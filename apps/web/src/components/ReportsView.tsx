@@ -72,7 +72,7 @@ export const ReportsView: Component = () => {
       inv.items.forEach((line) => {
         // Prioritize immutable snapshot costPrice recorded on invoice at time of sale;
         // fallback to catalog purchaseCost or standard estimate only for legacy sales
-        const product = items.find((p) => p.id === line.productId);
+        const product = items.find((p) => p.id === (line.itemId || (line as any).productId));
         const buyRate = (line.costPrice && line.costPrice > 0)
           ? line.costPrice
           : (product?.purchaseCost || product?.costPrice || line.unitPrice * 0.75);

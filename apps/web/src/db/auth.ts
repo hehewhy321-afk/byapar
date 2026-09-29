@@ -64,7 +64,15 @@ export const [userStores, setUserStores] = createSignal<UserStoreMembership[]>([
 export const [showCreateStoreModal, setShowCreateStoreModal] = createSignal(false);
 
 // Fetch profile & business details for authenticated Supabase user
-export async function syncUserBusiness(user: User): Promise<AuthUser> {
+export async function syncUserBusiness(user: User): Promise<AuthUser | null> {
+  const isConfirmed = !!(user.email_confirmed_at || (user as any)?.confirmed_at);
+  if (!isConfirmed) {
+    console.warn('[Auth] Cannot sync business: Email verification required for user', user.email);
+    setCurrentUser(null);
+    localStorage.removeItem(STORAGE_KEY);
+    return null;
+  }
+
   let name = user.user_metadata?.full_name || user.email?.split('@')[0] || 'व्यापारी';
   let businessId = 'a0000000-0000-0000-0000-000000000001';
   let businessName = user.user_metadata?.business_name || '';
@@ -266,34 +274,72 @@ export async function createNewUserStore(params: {
 
 // Listen for Supabase Auth state changes
 supabase.auth.onAuthStateChange(async (event, session) => {
-  if (event === 'SIGNED_IN' && session?.user) {
+  const isConfirmed = !!(session?.user?.email_confirmed_at || (session?.user as any)?.confirmed_at);
+  if (event === 'SIGNED_IN' && session?.user && isConfirmed) {
     await syncUserBusiness(session.user);
-  } else if (event === 'SIGNED_OUT') {
+  } else if (event === 'SIGNED_OUT' || (session?.user && !isConfirmed)) {
     setCurrentUser(null);
     localStorage.removeItem(STORAGE_KEY);
-    import('./localDb').then(({ resetAllLocalData }) => {
-      if (resetAllLocalData) resetAllLocalData();
-    });
+    if (event === 'SIGNED_OUT') {
+      import('./localDb').then(({ resetAllLocalData }) => {
+        if (resetAllLocalData) resetAllLocalData();
+      });
+    }
   }
 });
 
 // Check session on load
 supabase.auth.getSession().then(({ data: { session } }) => {
-  if (session?.user) {
+  const isConfirmed = !!(session?.user?.email_confirmed_at || (session?.user as any)?.confirmed_at);
+  if (session?.user && isConfirmed) {
     syncUserBusiness(session.user);
+  } else {
+    // If unverified or no active Supabase session, clear any stale stored user
+    const stored = getStoredUser();
+    if (stored && !stored.isGuest) {
+      setCurrentUser(null);
+      localStorage.removeItem(STORAGE_KEY);
+    }
   }
 });
 
-export async function signIn(email: string, pass: string): Promise<{ success: boolean; error?: string }> {
+export async function signIn(
+  email: string,
+  pass: string
+): Promise<{ success: boolean; needsVerification?: boolean; error?: string }> {
   try {
     if (!email || !pass) {
       return { success: false, error: 'Email and password are required' };
     }
 
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
-    if (error) throw error;
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password: pass,
+    });
+
+    if (error) {
+      if (error.message?.toLowerCase().includes('email not confirmed')) {
+        return {
+          success: false,
+          needsVerification: true,
+          error: 'Your email is not verified yet. Please check your inbox and click the verification link.',
+        };
+      }
+      throw error;
+    }
 
     if (data.user) {
+      const isConfirmed = !!(data.user.email_confirmed_at || (data.user as any)?.confirmed_at);
+      if (!isConfirmed) {
+        await supabase.auth.signOut();
+        setCurrentUser(null);
+        localStorage.removeItem(STORAGE_KEY);
+        return {
+          success: false,
+          needsVerification: true,
+          error: 'Your email is not verified yet. Please check your inbox and click the verification link before logging in.',
+        };
+      }
       await syncUserBusiness(data.user);
       return { success: true };
     }
@@ -303,26 +349,53 @@ export async function signIn(email: string, pass: string): Promise<{ success: bo
   }
 }
 
+/**
+ * Resolves the authentication redirect URL following standard 12-factor principles:
+ * 1. Build-time/Deploy-time environment variable (e.g. VITE_AUTH_REDIRECT_URL in Cloudflare Pages / CI)
+ * 2. Active browser origin (automatically adapts to localhost, preview deploys, or production)
+ * 3. Returns undefined if running outside a browser, allowing Supabase's configured Site URL to be the single source of truth.
+ */
+export function getAuthRedirectUrl(): string | undefined {
+  if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_AUTH_REDIRECT_URL) {
+    return import.meta.env.VITE_AUTH_REDIRECT_URL;
+  }
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    return window.location.origin;
+  }
+  return undefined;
+}
+
 export async function signUp(params: {
   email: string;
   pass: string;
   name: string;
   businessName: string;
+  phone: string;
   businessType?: BusinessType;
-  phone?: string;
   pan?: string;
   address?: string;
-}): Promise<{ success: boolean; error?: string }> {
+}): Promise<{ success: boolean; needsVerification?: boolean; error?: string }> {
   try {
+    if (!params.phone || !params.phone.trim()) {
+      return { success: false, error: 'Mobile phone number is compulsory for account registration' };
+    }
+    const cleanPhone = params.phone.replace(/[^0-9]/g, '');
+    if (cleanPhone.length < 10) {
+      return { success: false, error: 'Please enter a valid 10-digit mobile phone number' };
+    }
+
+    const redirectUrl = getAuthRedirectUrl();
+
     const { data, error } = await supabase.auth.signUp({
-      email: params.email,
+      email: params.email.trim(),
       password: params.pass,
       options: {
+        ...(redirectUrl ? { emailRedirectTo: redirectUrl } : {}),
         data: {
           full_name: params.name,
           business_name: params.businessName,
           business_type: params.businessType || 'general',
-          phone: params.phone,
+          phone: params.phone.trim(),
           pan: params.pan,
           address: params.address,
         },
@@ -331,16 +404,40 @@ export async function signUp(params: {
 
     if (error) throw error;
 
-    if (data.user) {
-      // Give trigger moment to create business
+    // Check if email confirmation is required
+    const isConfirmed = !!(data.user?.email_confirmed_at || (data.user as any)?.confirmed_at || data.session);
+
+    if (isConfirmed && data.user) {
+      // Auto-confirmed user (e.g. if email confirmation is disabled)
       setTimeout(async () => {
         if (data.user) await syncUserBusiness(data.user);
       }, 700);
-      return { success: true };
+      return { success: true, needsVerification: false };
     }
-    return { success: true };
+
+    // Email verification required: DO NOT log the user in!
+    return { success: true, needsVerification: true };
   } catch (err: any) {
     return { success: false, error: err.message || 'Registration failed' };
+  }
+}
+
+export async function resendVerificationEmail(email: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const redirectUrl = getAuthRedirectUrl();
+
+    const { error } = await supabase.auth.resend({
+      type: 'signup',
+      email: email.trim(),
+      options: {
+        ...(redirectUrl ? { emailRedirectTo: redirectUrl } : {}),
+      },
+    });
+
+    if (error) throw error;
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Failed to resend verification email' };
   }
 }
 

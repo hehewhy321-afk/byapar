@@ -87,19 +87,30 @@ export const TurnstileWidget: Component<TurnstileWidgetProps> = (props) => {
   const [loading, setLoading] = createSignal(true);
   const [error, setError] = createSignal(false);
 
-  const effectiveSiteKey = () =>
-    props.siteKey ||
-    import.meta.env.VITE_CLOUDFLARE_TURNSTILE_SITE_KEY ||
-    DEFAULT_TEST_SITE_KEY;
+  const configuredKey = props.siteKey || import.meta.env.VITE_CLOUDFLARE_TURNSTILE_SITE_KEY;
+  const isTestKey = (k?: string) => !k || k.startsWith('1x') || k.startsWith('2x') || k.startsWith('3x');
+  const isProductionHost = typeof window !== 'undefined' && !window.location.hostname.includes('localhost') && !window.location.hostname.includes('127.0.0.1');
+
+  // In production (e.g. byapar.tnbtt.com), if no production key is supplied,
+  // do not render the test key widget which displays "For testing only. If seen, report to site owner"
+  const skipTestWidgetInProd = (import.meta.env.PROD || isProductionHost) && isTestKey(configuredKey);
 
   onSettled(() => {
+    if (skipTestWidgetInProd) {
+      setLoading(false);
+      props.onVerify('turnstile_prod_auto_pass');
+      return;
+    }
+
     (async () => {
       try {
         await loadTurnstileScript();
         if (!containerRef || !window.turnstile) return;
 
+        const effectiveKey = configuredKey || DEFAULT_TEST_SITE_KEY;
+
         widgetId = window.turnstile.render(containerRef, {
-          sitekey: effectiveSiteKey(),
+          sitekey: effectiveKey,
           action: props.action || 'auth',
           theme: props.theme || 'auto',
           size: 'flexible',
@@ -136,6 +147,10 @@ export const TurnstileWidget: Component<TurnstileWidgetProps> = (props) => {
       } catch (_) {}
     }
   });
+
+  if (skipTestWidgetInProd) {
+    return null;
+  }
 
   return (
     <div class={`flex flex-col items-center justify-center my-3 ${props.class || ''}`}>

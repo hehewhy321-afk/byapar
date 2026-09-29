@@ -58,10 +58,12 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
   onClose,
   fullscreen = false,
 }) => {
-  const { user, login, signUp, logout, themeMode, store } = useApp();
+  const { user, login, signUp, resendVerificationEmail, logout, themeMode, store } = useApp();
   const [tab, setTab] = useState<'signin' | 'signup'>('signin');
   const [signupStep, setSignupStep] = useState<1 | 2>(1);
   const [selectedBusinessType, setSelectedBusinessType] = useState<BusinessType>('general');
+  const [verificationSentEmail, setVerificationSentEmail] = useState<string | null>(null);
+  const [resendingVerification, setResendingVerification] = useState(false);
 
   // Form Fields - Fresh and clean, never populated with previous session details
   const [email, setEmail] = useState('');
@@ -129,7 +131,13 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
     try {
       const res = await login(email.trim(), password);
       if (res.error) {
-        setErrorMsg(res.error.message || 'Failed to sign in. Please verify credentials.');
+        const msg = res.error.message || '';
+        if (msg.toLowerCase().includes('email not confirmed') || msg.toLowerCase().includes('verify your email')) {
+          setVerificationSentEmail(email.trim());
+          setErrorMsg('Your email is not verified yet. Please check your inbox and click the verification link before signing in.');
+        } else {
+          setErrorMsg(msg || 'Failed to sign in. Please verify credentials.');
+        }
       } else {
         setSuccessMsg('Signed in successfully!');
         if (onClose) {
@@ -158,6 +166,15 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
       setErrorMsg('Password must be at least 6 characters.');
       return;
     }
+    if (!phone.trim()) {
+      setErrorMsg('Mobile phone number is compulsory for account registration.');
+      return;
+    }
+    const cleanPhone = phone.replace(/[^0-9]/g, '');
+    if (cleanPhone.length < 10) {
+      setErrorMsg('Please enter a valid 10-digit mobile phone number.');
+      return;
+    }
     setErrorMsg(null);
     setSignupStep(2);
   };
@@ -178,6 +195,17 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
       setSignupStep(1);
       return;
     }
+    if (!phone.trim()) {
+      setErrorMsg('Mobile phone number is compulsory for account registration.');
+      setSignupStep(1);
+      return;
+    }
+    const cleanPhone = phone.replace(/[^0-9]/g, '');
+    if (cleanPhone.length < 10) {
+      setErrorMsg('Please enter a valid 10-digit mobile phone number.');
+      setSignupStep(1);
+      return;
+    }
 
     setLoading(true);
     setErrorMsg(null);
@@ -192,11 +220,18 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
       if (res.error) {
         setErrorMsg(res.error.message || 'Failed to create account.');
       } else {
-        setSuccessMsg('Store registered successfully! Preloaded category suggestions.');
-        if (onClose) {
-          setTimeout(() => {
-            onClose();
-          }, 600);
+        const isConfirmed = !!(res.data?.session || res.data?.user?.email_confirmed_at || (res.data?.user as any)?.confirmed_at);
+        if (!isConfirmed) {
+          setVerificationSentEmail(email.trim());
+          setErrorMsg(null);
+          setSuccessMsg('Account created! Please check your email to verify your account before signing in.');
+        } else {
+          setSuccessMsg('Store registered successfully! Preloaded category suggestions.');
+          if (onClose) {
+            setTimeout(() => {
+              onClose();
+            }, 600);
+          }
         }
       }
     } catch (err: any) {
@@ -365,6 +400,68 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
               </Text>
             </TouchableOpacity>
           </View>
+
+          {/* Verification Required Banner */}
+          {verificationSentEmail && (
+            <View
+              style={[
+                styles.verificationBox,
+                {
+                  backgroundColor: isDark ? '#1C1917' : '#FFFBEB',
+                  borderColor: isDark ? '#78350F' : '#FDE68A',
+                },
+              ]}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+                <Feather name="mail" size={20} color="#D97706" style={{ marginTop: 2, marginRight: 10 }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.verificationTitle, { color: isDark ? '#FDE68A' : '#92400E' }]}>
+                    Email Verification Required
+                  </Text>
+                  <Text style={[styles.verificationBody, { color: isDark ? '#D6D3D1' : '#78350F' }]}>
+                    We sent a verification link to <Text style={{ fontWeight: 'bold' }}>{verificationSentEmail}</Text>.
+                    Please click the link in your email to activate your account before accessing Byapar.
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.verificationBtnRow}>
+                <TouchableOpacity
+                  style={[styles.resendActionBtn, resendingVerification && { opacity: 0.6 }]}
+                  disabled={resendingVerification}
+                  onPress={async () => {
+                    setResendingVerification(true);
+                    try {
+                      const res = await resendVerificationEmail(verificationSentEmail);
+                      if (res.error) throw res.error;
+                      Alert.alert('Verification Sent', `A new verification email has been sent to ${verificationSentEmail}.`);
+                    } catch (e: any) {
+                      Alert.alert('Error', e.message || 'Could not resend email.');
+                    } finally {
+                      setResendingVerification(false);
+                    }
+                  }}
+                >
+                  <Text style={styles.resendActionBtnText}>
+                    {resendingVerification ? 'Resending...' : 'Resend Verification Email'}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.switchLoginActionBtn}
+                  onPress={() => {
+                    setTab('signin');
+                    setVerificationSentEmail(null);
+                    setErrorMsg(null);
+                  }}
+                >
+                  <Text style={[styles.switchLoginActionBtnText, { color: colors.textPrimary }]}>
+                    Go to Sign In →
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
 
           {/* Status Alerts */}
           {errorMsg && (
@@ -552,7 +649,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
 
               <View style={styles.inputGroup}>
                 <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
-                  Contact Phone
+                  Mobile Phone *
                 </Text>
                 <View
                   style={[
@@ -1369,5 +1466,48 @@ const styles = StyleSheet.create({
   sheetSubmitBtnText: {
     fontSize: 14,
     fontWeight: '800',
+  },
+  verificationBox: {
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 16,
+  },
+  verificationTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  verificationBody: {
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 4,
+  },
+  verificationBtnRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(217, 119, 6, 0.2)',
+    paddingTop: 10,
+    marginTop: 10,
+  },
+  resendActionBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: '#D97706',
+  },
+  resendActionBtnText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  switchLoginActionBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+  },
+  switchLoginActionBtnText: {
+    fontSize: 11,
+    fontWeight: '600',
   },
 });

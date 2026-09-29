@@ -135,6 +135,18 @@ export const App: Component = () => {
     // Initialize Offline Resilience and Outbox Sync Queue
     initOfflineSync();
 
+    // Clean up Supabase Auth tokens from URL after email verification redirect
+    if (typeof window !== 'undefined') {
+      const href = window.location.href;
+      if (href.includes('type=signup') || href.includes('access_token=')) {
+        setTimeout(() => {
+          if (window.location.hash.includes('access_token') || window.location.hash.includes('type=')) {
+            window.history.replaceState({}, '', window.location.pathname);
+          }
+        }, 1000);
+      }
+    }
+
     // Handle eSewa Callback if returning from payment gateway
     (async () => {
       try {
