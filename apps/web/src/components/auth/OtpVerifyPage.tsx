@@ -1,4 +1,4 @@
-import { Component, createSignal, createEffect, onCleanup, Show, For } from 'solid-js';
+import { Component, createSignal, onSettled, onCleanup, Show, For } from 'solid-js';
 import { pendingOtpEmail, setPendingOtpEmail, verifyEmailOtp, resendVerificationEmail } from '../../db/auth';
 import { setCurrentPage } from '../../db/localDb';
 import { IconAlertCircle, IconCheck, IconShield, IconSparkles } from '../icons';
@@ -17,7 +17,7 @@ export const OtpVerifyPage: Component = () => {
   let inputRefs: HTMLInputElement[] = [];
   let timerInterval: any = null;
 
-  createEffect(() => {
+  onSettled(() => {
     // Start countdown timer for resend
     timerInterval = setInterval(() => {
       setResendCooldown((prev) => (prev > 0 ? prev - 1 : 0));
@@ -29,10 +29,10 @@ export const OtpVerifyPage: Component = () => {
         inputRefs[0].focus();
       }
     }, 100);
+  });
 
-    onCleanup(() => {
-      if (timerInterval) clearInterval(timerInterval);
-    });
+  onCleanup(() => {
+    if (timerInterval) clearInterval(timerInterval);
   });
 
   const getCombinedCode = () => digits().join('').trim();
@@ -278,9 +278,9 @@ export const OtpVerifyPage: Component = () => {
                   <input
                     ref={(el) => (inputRefs[idx] = el)}
                     type="text"
-                    inputMode="numeric"
+                    inputmode="numeric"
                     maxLength={1}
-                    autoComplete="one-time-code"
+                    autocomplete="one-time-code"
                     value={digits()[idx]}
                     onInput={(e) => handleDigitChange(idx, e.currentTarget.value)}
                     onKeyDown={(e) => handleKeyDown(idx, e)}
