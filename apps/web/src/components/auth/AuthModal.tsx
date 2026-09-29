@@ -1,6 +1,6 @@
 import { Component, createSignal, Show, For } from 'solid-js';
-import { signIn, signUp, resendVerificationEmail } from '../../db/auth';
-import { showAuthModal, setShowAuthModal, updateBusinessProfile } from '../../db/localDb';
+import { signIn, signUp, resendVerificationEmail, setPendingOtpEmail } from '../../db/auth';
+import { showAuthModal, setShowAuthModal, updateBusinessProfile, setCurrentPage } from '../../db/localDb';
 import { IconX, IconAlertCircle, IconCheck } from '../icons';
 import { BUSINESS_TYPES, BusinessType } from '@byapar/core';
 import { TurnstileWidget } from './TurnstileWidget';
@@ -41,10 +41,13 @@ export const AuthModal: Component = () => {
     if (res.success) {
       setShowAuthModal(false);
     } else {
-      setErrorMsg(res.error || 'Invalid credentials');
       if (res.needsVerification) {
-        setVerificationPending(loginEmail());
+        setPendingOtpEmail(loginEmail());
+        setShowAuthModal(false);
+        setCurrentPage('verify-otp');
+        return;
       }
+      setErrorMsg(res.error || 'Invalid credentials');
     }
   };
 
@@ -82,9 +85,10 @@ export const AuthModal: Component = () => {
 
     if (res.success) {
       if (res.needsVerification) {
-        setVerificationPending(signupEmail());
-        setErrorMsg('');
-        setSuccessMsg('');
+        setPendingOtpEmail(signupEmail());
+        setShowAuthModal(false);
+        setCurrentPage('verify-otp');
+        return;
       } else {
         updateBusinessProfile({
           name: signupStore(),

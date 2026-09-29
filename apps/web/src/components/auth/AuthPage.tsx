@@ -1,5 +1,5 @@
 import { Component, createSignal, Show, For } from 'solid-js';
-import { signIn, signUp, resendVerificationEmail } from '../../db/auth';
+import { signIn, signUp, resendVerificationEmail, setPendingOtpEmail } from '../../db/auth';
 import { setCurrentPage, updateBusinessProfile } from '../../db/localDb';
 import { IconAlertCircle, IconCheck } from '../icons';
 import { BUSINESS_TYPES, BusinessType } from '@byapar/core';
@@ -37,10 +37,12 @@ export const AuthPage: Component = () => {
     const res = await signIn(loginEmail(), loginPass());
     setLoading(false);
     if (!res.success) {
-      setErrorMsg(res.error || 'Invalid credentials');
       if (res.needsVerification) {
-        setVerificationPending(loginEmail());
+        setPendingOtpEmail(loginEmail());
+        setCurrentPage('verify-otp');
+        return;
       }
+      setErrorMsg(res.error || 'Invalid credentials');
     }
   };
 
@@ -74,9 +76,9 @@ export const AuthPage: Component = () => {
     setLoading(false);
     if (res.success) {
       if (res.needsVerification) {
-        setVerificationPending(signupEmail());
-        setErrorMsg('');
-        setSuccessMsg('');
+        setPendingOtpEmail(signupEmail());
+        setCurrentPage('verify-otp');
+        return;
       } else {
         updateBusinessProfile({
           name: signupStore(),

@@ -58,12 +58,34 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
   onClose,
   fullscreen = false,
 }) => {
-  const { user, login, signUp, resendVerificationEmail, logout, themeMode, store } = useApp();
+  const { user, login, signUp, verifyEmailOtp, resendVerificationEmail, logout, themeMode, store } = useApp();
   const [tab, setTab] = useState<'signin' | 'signup'>('signin');
   const [signupStep, setSignupStep] = useState<1 | 2>(1);
   const [selectedBusinessType, setSelectedBusinessType] = useState<BusinessType>('general');
   const [verificationSentEmail, setVerificationSentEmail] = useState<string | null>(null);
   const [resendingVerification, setResendingVerification] = useState(false);
+
+  // OTP Verification shift-up popup state
+  const [otpModalVisible, setOtpModalVisible] = useState(false);
+  const [otpEmail, setOtpEmail] = useState('');
+  const [otpCode, setOtpCode] = useState('');
+  const [otpLoading, setOtpLoading] = useState(false);
+  const [otpError, setOtpError] = useState<string | null>(null);
+  const [otpSuccess, setOtpSuccess] = useState<string | null>(null);
+  const [otpCooldown, setOtpCooldown] = useState(60);
+
+  // Countdown timer for OTP resend cooldown
+  useEffect(() => {
+    let interval: any = null;
+    if (otpModalVisible && otpCooldown > 0) {
+      interval = setInterval(() => {
+        setOtpCooldown((prev) => (prev > 0 ? prev - 1 : 0));
+      }, 1000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [otpModalVisible, otpCooldown]);
 
   // Form Fields - Fresh and clean, never populated with previous session details
   const [email, setEmail] = useState('');
@@ -133,8 +155,12 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
       if (res.error) {
         const msg = res.error.message || '';
         if (msg.toLowerCase().includes('email not confirmed') || msg.toLowerCase().includes('verify your email')) {
-          setVerificationSentEmail(email.trim());
-          setErrorMsg('Your email is not verified yet. Please check your inbox and click the verification link before signing in.');
+          setOtpEmail(email.trim());
+          setOtpCode('');
+          setOtpError(null);
+          setOtpSuccess(null);
+          setOtpCooldown(60);
+          setOtpModalVisible(true);
         } else {
           setErrorMsg(msg || 'Failed to sign in. Please verify credentials.');
         }
@@ -222,9 +248,12 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
       } else {
         const isConfirmed = !!(res.data?.session || res.data?.user?.email_confirmed_at || (res.data?.user as any)?.confirmed_at);
         if (!isConfirmed) {
-          setVerificationSentEmail(email.trim());
-          setErrorMsg(null);
-          setSuccessMsg('Account created! Please check your email to verify your account before signing in.');
+          setOtpEmail(email.trim());
+          setOtpCode('');
+          setOtpError(null);
+          setOtpSuccess(null);
+          setOtpCooldown(60);
+          setOtpModalVisible(true);
         } else {
           setSuccessMsg('Store registered successfully! Preloaded category suggestions.');
           if (onClose) {
@@ -238,6 +267,53 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
       setErrorMsg(err.message || 'An unexpected error occurred.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleVerifyOtp = async () => {
+    const clean = otpCode.trim().replace(/\s+/g, '');
+    if (clean.length !== 6) {
+      setOtpError('Please enter a valid 6-digit confirmation code.');
+      return;
+    }
+    setOtpLoading(true);
+    setOtpError(null);
+    setOtpSuccess(null);
+    try {
+      const res = await verifyEmailOtp(otpEmail, clean);
+      if (res.error) {
+        setOtpError(res.error.message || 'Invalid or expired code. Please try again.');
+      } else {
+        setOtpSuccess('Email verified successfully! Setting up your store...');
+        setTimeout(() => {
+          setOtpModalVisible(false);
+          if (onClose) onClose();
+        }, 700);
+      }
+    } catch (err: any) {
+      setOtpError(err.message || 'Verification failed. Please try again.');
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    if (otpCooldown > 0 || resendingVerification) return;
+    setResendingVerification(true);
+    setOtpError(null);
+    setOtpSuccess(null);
+    try {
+      const res = await resendVerificationEmail(otpEmail);
+      if (res.error) {
+        setOtpError(res.error.message || 'Failed to resend code.');
+      } else {
+        setOtpSuccess(`A new 6-digit code was sent to ${otpEmail}`);
+        setOtpCooldown(60);
+      }
+    } catch (err: any) {
+      setOtpError(err.message || 'Failed to resend code.');
+    } finally {
+      setResendingVerification(false);
     }
   };
 
@@ -1013,6 +1089,177 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                 </>
               )}
             </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* SHIFT-UP POPUP MODAL FOR OTP VERIFICATION */}
+      <Modal
+        visible={otpModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setOtpModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.sheetOverlay}
+        >
+          <TouchableOpacity
+            style={styles.sheetBackdrop}
+            activeOpacity={1}
+            onPress={() => setOtpModalVisible(false)}
+          />
+
+          <View
+            style={[
+              styles.sheetContent,
+              {
+                backgroundColor: colors.card,
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            {/* Sheet Handle */}
+            <View style={styles.sheetHandleRow}>
+              <View
+                style={[
+                  styles.sheetHandle,
+                  { backgroundColor: isDark ? '#333333' : '#CBD5E1' },
+                ]}
+              />
+            </View>
+
+            <View style={styles.sheetHeader}>
+              <View style={styles.sheetTitleGroup}>
+                <View
+                  style={[
+                    styles.sheetIconBox,
+                    { backgroundColor: isDark ? '#1F1F1F' : '#FFF7ED' },
+                  ]}
+                >
+                  <Feather name="shield" size={18} color="#FF4500" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.sheetTitle, { color: colors.textPrimary }]}>
+                    Verify Your Email
+                  </Text>
+                  <Text style={[styles.sheetSub, { color: colors.textMuted }]} numberOfLines={1}>
+                    Code sent to {otpEmail}
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                onPress={() => setOtpModalVisible(false)}
+                style={styles.sheetCloseBtn}
+              >
+                <Feather name="x" size={18} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Notification alert within shift-up sheet */}
+            {otpError && (
+              <View style={[styles.statusCard, styles.statusError]}>
+                <Feather name="alert-circle" size={15} color="#EF4444" />
+                <Text style={[styles.statusText, { color: '#EF4444' }]}>{otpError}</Text>
+              </View>
+            )}
+            {otpSuccess && (
+              <View style={[styles.statusCard, styles.statusSuccess]}>
+                <Feather name="check-circle" size={15} color="#10B981" />
+                <Text style={[styles.statusText, { color: '#10B981' }]}>{otpSuccess}</Text>
+              </View>
+            )}
+
+            <View style={styles.inputGroup}>
+              <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
+                6-Digit Confirmation Code
+              </Text>
+              <View
+                style={[
+                  styles.inputContainer,
+                  {
+                    backgroundColor: colors.inputBg,
+                    borderColor: colors.border,
+                    height: 52,
+                  },
+                ]}
+              >
+                <Feather
+                  name="lock"
+                  size={16}
+                  color={colors.textMuted}
+                  style={styles.inputIcon}
+                />
+                <TextInput
+                  style={[
+                    styles.input,
+                    {
+                      color: colors.textPrimary,
+                      letterSpacing: 8,
+                      fontSize: 22,
+                      fontWeight: '800',
+                      textAlign: 'center',
+                    },
+                  ]}
+                  placeholder="••••••"
+                  placeholderTextColor={colors.textMuted}
+                  keyboardType="number-pad"
+                  maxLength={6}
+                  value={otpCode}
+                  onChangeText={(text) => {
+                    const clean = text.replace(/[^0-9]/g, '');
+                    setOtpCode(clean);
+                    setOtpError(null);
+                  }}
+                  autoFocus
+                />
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={[
+                styles.sheetSubmitBtn,
+                {
+                  backgroundColor: colors.buttonBg,
+                  opacity: otpCode.length === 6 && !otpLoading ? 1 : 0.6,
+                },
+              ]}
+              onPress={handleVerifyOtp}
+              disabled={otpCode.length !== 6 || otpLoading}
+            >
+              {otpLoading ? (
+                <ActivityIndicator color={colors.buttonText} size="small" />
+              ) : (
+                <>
+                  <Feather name="check-circle" size={16} color={colors.buttonText} />
+                  <Text style={[styles.sheetSubmitBtnText, { color: colors.buttonText }]}>
+                    Verify Code & Launch Store
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+
+            <View style={{ marginTop: 16, alignItems: 'center' }}>
+              <TouchableOpacity
+                disabled={otpCooldown > 0 || resendingVerification}
+                onPress={handleResendOtp}
+                style={{ padding: 6 }}
+              >
+                <Text
+                  style={{
+                    fontSize: 13,
+                    fontWeight: '700',
+                    color: otpCooldown > 0 ? colors.textMuted : '#FF4500',
+                  }}
+                >
+                  {resendingVerification
+                    ? 'Sending new code...'
+                    : otpCooldown > 0
+                    ? `Resend code in ${otpCooldown}s`
+                    : 'Resend 6-Digit Code'}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </KeyboardAvoidingView>
       </Modal>

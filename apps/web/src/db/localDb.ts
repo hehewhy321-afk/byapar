@@ -424,8 +424,8 @@ export const [customExpenseCategories, setCustomExpenseCategories] = createStore
 export const [customIncomeCategories, setCustomIncomeCategories] = createStore<string[]>(loadStored('custom_income_cats', []));
 
 // Page routing for unauthenticated users
-export type AppPage = 'landing' | 'auth' | 'about' | 'faq' | 'pricing' | 'privacy' | 'terms';
-export const VALID_PAGES: AppPage[] = ['landing', 'auth', 'about', 'faq', 'pricing', 'privacy', 'terms'];
+export type AppPage = 'landing' | 'auth' | 'verify-otp' | 'about' | 'faq' | 'pricing' | 'privacy' | 'terms';
+export const VALID_PAGES: AppPage[] = ['landing', 'auth', 'verify-otp', 'about', 'faq', 'pricing', 'privacy', 'terms'];
 
 function getInitialPage(): AppPage {
   if (typeof window === 'undefined') return 'landing';

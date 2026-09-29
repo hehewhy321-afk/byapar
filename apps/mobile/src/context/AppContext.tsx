@@ -90,6 +90,7 @@ interface AppContextType {
   refreshData: () => Promise<void>;
   login: (email: string, pass: string) => Promise<{ data?: any; error?: any }>;
   signUp: (email: string, pass: string, storeName: string, phone: string, businessType?: BusinessType) => Promise<{ data?: any; error?: any }>;
+  verifyEmailOtp: (email: string, token: string) => Promise<{ data?: any; error?: any }>;
   resendVerificationEmail: (email: string) => Promise<{ data?: any; error?: any }>;
   logout: () => Promise<void>;
   changePassword: (oldPassword: string, newPassword: string) => Promise<{ error?: string }>;
@@ -1785,6 +1786,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return res;
   };
 
+  const verifyEmailOtp = async (email: string, token: string) => {
+    const cleanToken = token.trim().replace(/\s+/g, '');
+    let res = await supabase.auth.verifyOtp({
+      email: email.trim(),
+      token: cleanToken,
+      type: 'signup',
+    });
+
+    if (res.error && (res.error.message?.toLowerCase().includes('type') || res.error.message?.toLowerCase().includes('invalid'))) {
+      const fallbackRes = await supabase.auth.verifyOtp({
+        email: email.trim(),
+        token: cleanToken,
+        type: 'email',
+      });
+      if (!fallbackRes.error) {
+        res = fallbackRes;
+      }
+    }
+
+    if (!res.error && res.data?.user) {
+      setUser(res.data.user);
+      await resolveUserBusiness(res.data.user);
+    }
+    return res;
+  };
+
   const resendVerificationEmail = async (email: string) => {
     const redirectUrl = getMobileAuthRedirectUrl();
     return await supabase.auth.resend({
@@ -3269,6 +3296,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         refreshData: refreshFromCloud,
         login,
         signUp,
+        verifyEmailOtp,
         resendVerificationEmail,
         logout,
         changePassword,

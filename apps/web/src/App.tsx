@@ -30,6 +30,7 @@ import { SubscriptionModal } from './components/modals/SubscriptionModal';
 import { CreateStoreModal } from './components/modals/CreateStoreModal';
 import { AuthModal } from './components/auth/AuthModal';
 import { AuthPage } from './components/auth/AuthPage';
+import { OtpVerifyPage } from './components/auth/OtpVerifyPage';
 import { LandingPage } from './components/landing/LandingPage';
 import { AboutPage } from './components/pages/AboutPage';
 import { FaqPage } from './components/pages/FaqPage';
@@ -212,6 +213,9 @@ export const App: Component = () => {
           </Match>
           <Match when={currentPage() === 'auth'}>
             <AuthPage />
+          </Match>
+          <Match when={currentPage() === 'verify-otp'}>
+            <OtpVerifyPage />
           </Match>
           <Match when={currentPage() === 'about'}>
             <AboutPage />

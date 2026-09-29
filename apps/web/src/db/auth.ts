@@ -48,6 +48,21 @@ function getStoredUser(): AuthUser | null {
 export const [currentUser, setCurrentUser] = createSignal<AuthUser | null>(getStoredUser());
 export const isAuthenticated = () => !!currentUser();
 
+const PENDING_OTP_EMAIL_KEY = 'byapar_pending_otp_email';
+export const [pendingOtpEmail, _setPendingOtpEmail] = createSignal<string>(
+  typeof window !== 'undefined' ? localStorage.getItem(PENDING_OTP_EMAIL_KEY) || '' : ''
+);
+export function setPendingOtpEmail(email: string) {
+  _setPendingOtpEmail(email);
+  if (typeof window !== 'undefined') {
+    if (email) {
+      localStorage.setItem(PENDING_OTP_EMAIL_KEY, email);
+    } else {
+      localStorage.removeItem(PENDING_OTP_EMAIL_KEY);
+    }
+  }
+}
+
 
 export interface UserStoreMembership {
   businessId: string;
@@ -337,10 +352,11 @@ export async function signIn(
 
     if (error) {
       if (error.message?.toLowerCase().includes('email not confirmed')) {
+        setPendingOtpEmail(email.trim());
         return {
           success: false,
           needsVerification: true,
-          error: 'Your email is not verified yet. Please check your inbox and click the verification link.',
+          error: 'Your email is not verified yet. Please enter the 6-digit verification code sent to your email.',
         };
       }
       throw error;
@@ -352,12 +368,14 @@ export async function signIn(
         await supabase.auth.signOut();
         setCurrentUser(null);
         localStorage.removeItem(STORAGE_KEY);
+        setPendingOtpEmail(email.trim());
         return {
           success: false,
           needsVerification: true,
-          error: 'Your email is not verified yet. Please check your inbox and click the verification link before logging in.',
+          error: 'Your email is not verified yet. Please enter the 6-digit verification code sent to your email before logging in.',
         };
       }
+      setPendingOtpEmail('');
       await syncUserBusiness(data.user);
       return { success: true };
     }
@@ -427,35 +445,84 @@ export async function signUp(params: {
 
     if (isConfirmed && data.user) {
       // Auto-confirmed user (e.g. if email confirmation is disabled)
+      setPendingOtpEmail('');
       setTimeout(async () => {
         if (data.user) await syncUserBusiness(data.user);
       }, 700);
       return { success: true, needsVerification: false };
     }
 
-    // Email verification required: DO NOT log the user in!
+    // Email verification required: store pending OTP email and DO NOT log the user in!
+    setPendingOtpEmail(params.email.trim());
     return { success: true, needsVerification: true };
   } catch (err: any) {
     return { success: false, error: err.message || 'Registration failed' };
   }
 }
 
+/**
+ * Verifies email using 6-digit OTP code sent by Supabase
+ */
+export async function verifyEmailOtp(
+  email: string,
+  token: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const cleanEmail = email.trim();
+    const cleanToken = token.trim().replace(/\s+/g, '');
+    if (!cleanEmail) {
+      return { success: false, error: 'Email address is required' };
+    }
+    if (!cleanToken || cleanToken.length !== 6) {
+      return { success: false, error: 'Please enter a valid 6-digit verification code' };
+    }
+
+    // Try 'signup' verification type first
+    let res = await supabase.auth.verifyOtp({
+      email: cleanEmail,
+      token: cleanToken,
+      type: 'signup',
+    });
+
+    // If 'signup' fails with type mismatch, try 'email'
+    if (res.error && (res.error.message?.toLowerCase().includes('type') || res.error.message?.toLowerCase().includes('invalid'))) {
+      const fallbackRes = await supabase.auth.verifyOtp({
+        email: cleanEmail,
+        token: cleanToken,
+        type: 'email',
+      });
+      if (!fallbackRes.error) {
+        res = fallbackRes;
+      }
+    }
+
+    if (res.error) throw res.error;
+
+    if (res.data?.user) {
+      setPendingOtpEmail('');
+      await syncUserBusiness(res.data.user);
+      return { success: true };
+    }
+    return { success: false, error: 'Verification failed. Please check the code and try again.' };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Invalid or expired verification code' };
+  }
+}
+
 export async function resendVerificationEmail(email: string): Promise<{ success: boolean; error?: string }> {
   try {
-    const redirectUrl = getAuthRedirectUrl();
+    const cleanEmail = email.trim();
+    if (!cleanEmail) return { success: false, error: 'Email is required' };
 
     const { error } = await supabase.auth.resend({
       type: 'signup',
-      email: email.trim(),
-      options: {
-        ...(redirectUrl ? { emailRedirectTo: redirectUrl } : {}),
-      },
+      email: cleanEmail,
     });
 
     if (error) throw error;
     return { success: true };
   } catch (err: any) {
-    return { success: false, error: err.message || 'Failed to resend verification email' };
+    return { success: false, error: err.message || 'Failed to resend verification code' };
   }
 }
 
